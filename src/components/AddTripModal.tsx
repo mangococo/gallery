@@ -62,6 +62,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
         endDate: formData.endDate,
         photos,
         tags: formData.tags.split(',').map((t) => t.trim()).filter((t) => t),
+        coverPhotoIndex: 0,
+        isFavorite: false,
       };
 
       await storageService.saveTrip(newTrip);

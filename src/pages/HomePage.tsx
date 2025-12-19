@@ -7,12 +7,15 @@ import TimelineAddButton from '../components/TimelineAddButton';
 import AddTripModal from '../components/AddTripModal';
 import FilterBar from '../components/FilterBar';
 import SettingsModal from '../components/SettingsModal';
+import AuthModal from '../components/AuthModal';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [allTrips, setAllTrips] = React.useState<Trip[]>([]);
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
+  const [needsAuth, setNeedsAuth] = React.useState(false);
+  const [showAuthModal, setShowAuthModal] = React.useState(false);
 
   // 加载旅行数据
   React.useEffect(() => {
@@ -21,22 +24,29 @@ const HomePage: React.FC = () => {
       if (storagePath) {
         const hasAccess = await storageService.hasDirectoryAccess();
         if (!hasAccess) {
-          try {
-            await storageService.requestDirectoryAccess();
-          } catch (error) {
-            if (error.message?.includes('目录不存在')) {
-              alert('存储目录不存在，请重新配置全局存储目录');
-              setShowSettingsModal(true);
-            }
-            return;
-          }
+          setNeedsAuth(true);
+          setShowAuthModal(true);
+          return;
         }
+        
         const trips = await storageService.getTrips();
         setAllTrips(trips);
       }
     };
     loadTrips();
   }, []);
+
+  const handleAuthorizeAccess = async () => {
+    try {
+      await storageService.requestDirectoryAccess();
+      setNeedsAuth(false);
+      setShowAuthModal(false);
+      const trips = await storageService.getTrips();
+      setAllTrips(trips);
+    } catch (error) {
+      // User cancelled authorization
+    }
+  };
 
   const handleStoragePathChanged = async () => {
     const trips = await storageService.getTrips();
@@ -228,15 +238,33 @@ const HomePage: React.FC = () => {
             </div>
           )}
 
-          {allTrips.length === 0 && (
+          {allTrips.length === 0 && !needsAuth && (
             <div className="text-center py-20">
-              <p className="text-text-tertiary mb-6">还没有旅行记录</p>
-              <button
-                onClick={handleAddTrip}
-                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
-              >
-                创建第一次旅行
-              </button>
+              {!storageService.getStoragePath() ? (
+                <>
+                  <p className="text-text-tertiary mb-6">
+                    {window.location.protocol === 'file:' 
+                      ? '请在设置中选择当前 HTML 文件所在的目录作为存储目录' 
+                      : '请先设置存储目录'}
+                  </p>
+                  <button
+                    onClick={() => setShowSettingsModal(true)}
+                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    打开设置
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-text-tertiary mb-6">还没有旅行记录</p>
+                  <button
+                    onClick={handleAddTrip}
+                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    创建第一次旅行
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -255,6 +283,14 @@ const HomePage: React.FC = () => {
         <SettingsModal
           onClose={() => setShowSettingsModal(false)}
           onStoragePathChanged={handleStoragePathChanged}
+        />
+      )}
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onAuthorize={handleAuthorizeAccess}
         />
       )}
     </div>

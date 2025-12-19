@@ -18,7 +18,6 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   // 为每张照片生成随机的动画参数
   const getRandomAnimation = (index: number) => {
     const baseDelay = index * 0.1;
-    const randomDelay = Math.random() * 2;
     return {
       initial: { opacity: 0, scale: 0.8, rotate: Math.random() * 10 - 5 },
       animate: {
@@ -34,7 +33,7 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   };
 
   // 风吹动画
-  const swayAnimation = (index: number) => {
+  const swayAnimation = () => {
     const duration = 3 + Math.random() * 2;
     const delay = Math.random() * 2;
     return {
@@ -55,7 +54,7 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
     <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
       {photos.map((photo, index) => {
         const animation = getRandomAnimation(index);
-        const sway = swayAnimation(index);
+        const sway = swayAnimation();
 
         return (
           <motion.div

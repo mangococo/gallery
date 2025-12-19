@@ -2,7 +2,8 @@ export interface Photo {
   id: string;
   url: string;
   thumbnail: string;
-  timestamp: number;
+  timestamp?: number;
+  caption?: string;
   type?: 'image' | 'video';
 }
 

@@ -5,14 +5,14 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { storageService } from '../storage';
 import PhotoWall from '../components/PhotoWall';
-import { Photo } from '../types';
+import { Photo, Trip } from '../types';
 
 const TripPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [trip, setTrip] = React.useState(null);
+  const [trip, setTrip] = React.useState<Trip | null>(null);
   const [isEditing, setIsEditing] = React.useState(false);
-  const [editedTrip, setEditedTrip] = React.useState(null);
+  const [editedTrip, setEditedTrip] = React.useState<Trip | null>(null);
   const [selectedPhoto, setSelectedPhoto] = React.useState<Photo | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = React.useState<number>(0);
   const [tagInput, setTagInput] = React.useState('');
@@ -26,7 +26,7 @@ const TripPage: React.FC = () => {
         if (!hasAccess) {
           try {
             await storageService.requestDirectoryAccess();
-          } catch (error) {
+          } catch (error: any) {
             if (error.message?.includes('目录不存在')) {
               alert('存储目录不存在，请重新配置全局存储目录');
               navigate('/');
@@ -47,43 +47,91 @@ const TripPage: React.FC = () => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    // 检测是否为单文件模式（file:// 协议）
+    const isStandaloneMode = window.location.protocol === 'file:';
+    
+    if (isStandaloneMode) {
+      // 单文件模式下提示用户手动操作
+      const fileNames = Array.from(files).map(f => f.name).join('\n');
+      alert(`单文件模式下无法自动上传文件。\n\n请手动将以下文件复制到旅行目录中：\n${fileNames}\n\n旅行目录：${trip?.title || '当前旅行'}\n\n复制完成后请刷新页面。`);
+      event.target.value = '';
+      return;
+    }
+
+    console.log('开始上传照片，文件数量:', files.length);
     setIsUploading(true);
     const newPhotos: Photo[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        
-        await new Promise<void>((resolve) => {
-          reader.onload = (e) => {
-            const url = e.target?.result as string;
-            const photo: Photo = {
-              id: Date.now().toString() + i,
-              url,
-              thumbnail: url, // 简化处理，实际应用中可以生成缩略图
-              caption: '',
-            };
-            newPhotos.push(photo);
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        });
-      }
-    }
-
-    if (editedTrip) {
-      const updatedTrip = {
-        ...editedTrip,
-        photos: [...editedTrip.photos, ...newPhotos],
-      };
-      setEditedTrip(updatedTrip);
+    // 获取旅行目录句柄
+    try {
+      const rootDirHandle = await storageService.getDirectoryHandle();
+      let tripDirHandle = null;
       
-      // 如果不在编辑模式，直接保存
-      if (!isEditing) {
-        await storageService.updateTrip(updatedTrip);
-        setTrip(updatedTrip);
+      // 找到当前旅行的目录
+      for await (const [, handle] of rootDirHandle.entries()) {
+        if (handle.kind === 'directory') {
+          try {
+            const settingsHandle = await handle.getFileHandle('.settings.json');
+            const settingsFile = await settingsHandle.getFile();
+            const settings = JSON.parse(await settingsFile.text());
+            if (settings.id === trip?.id) {
+              tripDirHandle = handle;
+              break;
+            }
+          } catch {
+            // 跳过没有配置文件的目录
+          }
+        }
       }
+
+      if (!tripDirHandle) {
+        throw new Error('找不到旅行目录');
+      }
+
+      // 保存文件到目录
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        console.log('处理文件:', file.name, file.type);
+        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+          const fileName = `${Date.now()}_${i}_${file.name}`;
+          const fileHandle = await tripDirHandle.getFileHandle(fileName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(file);
+          await writable.close();
+
+          // 创建 URL 用于显示
+          const url = URL.createObjectURL(file);
+          const photo: Photo = {
+            id: fileName,
+            url,
+            thumbnail: url,
+            caption: '',
+            type: file.type.startsWith('video/') ? 'video' : 'image',
+          };
+          newPhotos.push(photo);
+          console.log('文件保存完成:', fileName);
+        }
+      }
+
+      console.log('新照片数量:', newPhotos.length);
+      if (editedTrip) {
+        const updatedTrip = {
+          ...editedTrip,
+          photos: [...(editedTrip.photos || []), ...newPhotos],
+        };
+        console.log('更新后照片总数:', updatedTrip.photos.length);
+        setEditedTrip(updatedTrip);
+        
+        // 如果不在编辑模式，直接保存
+        if (!isEditing) {
+          console.log('保存到存储');
+          await storageService.updateTrip(updatedTrip);
+          setTrip(updatedTrip);
+        }
+      }
+    } catch (error: any) {
+      console.error('上传照片失败:', error);
+      alert('上传照片失败: ' + error.message);
     }
 
     setIsUploading(false);
@@ -95,7 +143,7 @@ const TripPage: React.FC = () => {
     if (editedTrip) {
       const updatedTrip = {
         ...editedTrip,
-        photos: editedTrip.photos.filter(p => p.id !== photoId),
+        photos: editedTrip.photos.filter((p: Photo) => p.id !== photoId),
       };
       setEditedTrip(updatedTrip);
       
@@ -105,13 +153,6 @@ const TripPage: React.FC = () => {
         setTrip(updatedTrip);
       }
     }
-  };
-
-  const validateDate = (dateString: string): boolean => {
-    const regex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regex.test(dateString)) return false;
-    const date = new Date(dateString);
-    return date instanceof Date && !isNaN(date.getTime()) && date.toISOString().split('T')[0] === dateString;
   };
 
   const handleSave = async () => {
@@ -124,7 +165,7 @@ const TripPage: React.FC = () => {
 
   const handlePhotoClick = (photo: Photo) => {
     const photos = editedTrip?.photos || trip?.photos || [];
-    const index = photos.findIndex(p => p.id === photo.id);
+    const index = photos.findIndex((p: Photo) => p.id === photo.id);
     setSelectedPhoto(photo);
     setSelectedPhotoIndex(index);
   };
@@ -251,7 +292,7 @@ const TripPage: React.FC = () => {
                   </label>
                   <DatePicker
                     selected={editedTrip?.startDate ? new Date(editedTrip.startDate) : null}
-                    onChange={(date) => {
+                    onChange={(date: Date | null) => {
                       if (editedTrip && date) {
                         setEditedTrip({ ...editedTrip, startDate: date.toISOString().split('T')[0] });
                       }
@@ -267,7 +308,7 @@ const TripPage: React.FC = () => {
                   </label>
                   <DatePicker
                     selected={editedTrip?.endDate ? new Date(editedTrip.endDate) : null}
-                    onChange={(date) => {
+                    onChange={(date: Date | null) => {
                       if (editedTrip && date) {
                         setEditedTrip({ ...editedTrip, endDate: date.toISOString().split('T')[0] });
                       }
@@ -316,7 +357,7 @@ const TripPage: React.FC = () => {
                   />
                   {editedTrip?.tags && editedTrip.tags.length > 0 && editedTrip.tags[0] !== '' && (
                     <div className="flex flex-wrap gap-2 pt-2">
-                      {editedTrip.tags.map((tag, index) => (
+                      {editedTrip.tags.map((tag: string, index: number) => (
                         <span
                           key={index}
                           className="px-3 py-1.5 bg-primary/15 text-primary text-sm rounded-full border border-primary/30"
@@ -346,7 +387,7 @@ const TripPage: React.FC = () => {
               </p>
               {trip.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {trip.tags.map((tag, index) => (
+                  {trip.tags.map((tag: string, index: number) => (
                     <span
                       key={index}
                       className="px-3 py-1 bg-primary/10 text-primary text-sm rounded-full"

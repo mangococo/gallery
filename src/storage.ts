@@ -9,6 +9,22 @@ class StorageService {
 
   constructor() {
     this.initDB();
+    this.initDefaultDirectory();
+  }
+
+  private async initDefaultDirectory(): Promise<void> {
+    // 如果已经有存储路径，不需要设置默认值
+    if (this.getStoragePath()) return;
+    
+    // 检查是否是通过 file:// 协议打开的 HTML 文件
+    if (window.location.protocol === 'file:' && 'showDirectoryPicker' in window) {
+      try {
+        // 设置一个默认的存储路径名称，实际目录需要用户授权选择
+        localStorage.setItem(this.STORAGE_PATH_KEY, '旅游记录');
+      } catch (error) {
+        console.log('无法设置默认存储目录:', error);
+      }
+    }
   }
 
   private async initDB(): Promise<void> {
@@ -48,7 +64,6 @@ class StorageService {
       request.onerror = () => reject(request.error);
     });
   }
-  private dirHandle: any = null;
 
   // 获取全局存储目录
   getStoragePath(): string | null {
@@ -80,7 +95,12 @@ class StorageService {
     try {
       this.dirHandle = await (window as any).showDirectoryPicker();
       await this.saveDirectoryHandle(this.dirHandle);
-    } catch (error) {
+      
+      // 如果是 file:// 协议，同时更新存储路径为选中的目录名
+      if (window.location.protocol === 'file:') {
+        localStorage.setItem(this.STORAGE_PATH_KEY, this.dirHandle.name);
+      }
+    } catch (error: any) {
       if (error.name === 'NotFoundError') {
         throw new Error('目录不存在，请重新配置全局存储目录');
       }
@@ -89,7 +109,7 @@ class StorageService {
   }
 
   // 获取目录句柄（缓存机制）
-  private async getDirectoryHandle(): Promise<any> {
+  async getDirectoryHandle(): Promise<any> {
     if (!this.dirHandle) {
       // 先尝试从 IndexedDB 加载
       try {
@@ -100,6 +120,10 @@ class StorageService {
         }
       } catch (error) {
         // 句柄无效或不存在，需要重新授权
+        // 如果是 file:// 协议，提示用户选择当前目录
+        if (window.location.protocol === 'file:') {
+          throw new Error('请在设置中选择当前 HTML 文件所在的目录作为存储目录');
+        }
         this.dirHandle = await (window as any).showDirectoryPicker();
         await this.saveDirectoryHandle(this.dirHandle);
       }
@@ -273,7 +297,7 @@ class StorageService {
   }
 
   // 更新旅行信息
-  async updateTrip(trip: Trip, oldTitle?: string): Promise<void> {
+  async updateTrip(trip: Trip): Promise<void> {
     console.log('开始更新旅行:', trip.id, trip.title);
     const storagePath = this.getStoragePath();
     if (!storagePath) {
