@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+/* 语义色板（亮色基线；暗色主题在里程碑 5 引入 [data-theme] 切换）
+   颜色取自方案 §5.3，顺带消除旧 tailwind.config.js 与 index.css 两处冲突定义 */
+@theme {
+  --color-primary: #c08a52;
+  --color-primary-soft: #f3e7d8;
+  --color-secondary: #8b7355;
+  --color-background: #faf8f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f0e9;
+  --color-border-soft: #ece5dc;
+  --color-text-primary: #3b342e;
+  --color-text-secondary: #7c7065;
+  --color-text-tertiary: #a89b8d;
+  --color-danger: #c2543e;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI',
+    'Roboto', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-background);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 防止意外选中文本 */
+button,
+.cursor-pointer {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+mark {
+  background-color: transparent;
+  color: inherit;
+}
+
+::selection {
+  background-color: rgba(192, 138, 82, 0.3);
+  color: inherit;
+}
+
+/* DatePicker 自定义样式 */
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker__input-container input {
+  width: 100% !important;
+}
+
+.react-datepicker {
+  border: 2px solid rgba(192, 138, 82, 0.2) !important;
+  border-radius: 12px !important;
+  font-family: inherit !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.react-datepicker__header {
+  background-color: rgba(192, 138, 82, 0.8) !important;
+  border-bottom: none !important;
+  border-radius: 10px 10px 0 0 !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name {
+  color: white !important;
+}
+
+.react-datepicker__day {
+  color: var(--color-text-primary) !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: rgba(192, 138, 82, 0.08) !important;
+  border-radius: 6px !important;
+}
+
+.react-datepicker__day--selected {
+  background-color: rgba(192, 138, 82, 0.7) !important;
+  color: white !important;
+  border-radius: 6px !important;
+}
+
+.react-datepicker__day--today {
+  background-color: rgba(192, 138, 82, 0.15) !important;
+  border-radius: 6px !important;
+}

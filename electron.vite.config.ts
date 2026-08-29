@@ -1,0 +1,28 @@
+import { resolve } from 'path'
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  main: {
+    plugins: [externalizeDepsPlugin({ exclude: ['nanoid', 'chokidar'] })],
+    resolve: {
+      alias: { '@shared': resolve('src/shared') },
+    },
+  },
+  preload: {
+    plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: { '@shared': resolve('src/shared') },
+    },
+  },
+  renderer: {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@shared': resolve('src/shared'),
+        '@': resolve('src/renderer/src'),
+      },
+    },
+  },
+})

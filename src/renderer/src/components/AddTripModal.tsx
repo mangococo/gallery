@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { storageService } from '../storage';
-import { Trip, Photo } from '../types';
+import { api } from '../lib/api';
 
 interface AddTripModalProps {
   onClose: () => void;
@@ -18,6 +17,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
   });
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,6 +26,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
     // 生成预览
     files.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
       const reader = new FileReader();
       reader.onload = (e) => {
         setPreviewUrls((prev) => [...prev, e.target?.result as string]);
@@ -41,35 +42,28 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
 
     try {
-      // 创建旅行目录
-      const tripDirHandle = await storageService.createTripDirectory(formData.title);
-      
-      // 复制照片到旅行目录
-      const photos: Photo[] = [];
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const photo = await storageService.copyPhotoToTrip(tripDirHandle, selectedFiles[i]);
-        photos.push(photo);
-      }
-
-      // 创建旅行对象
-      const newTrip: Trip = {
-        id: Date.now().toString(),
+      const trip = await api.createTrip({
         title: formData.title,
         description: formData.description,
         startDate: formData.startDate,
         endDate: formData.endDate,
-        photos,
         tags: formData.tags.split(',').map((t) => t.trim()).filter((t) => t),
-        coverPhotoIndex: 0,
-        isFavorite: false,
-      };
+      });
 
-      await storageService.saveTrip(newTrip);
+      // 文件经主进程复制进旅行目录
+      const paths = selectedFiles.map((f) => api.getPathForFile(f));
+      if (paths.length > 0) {
+        await api.importPhotos(trip.id, paths);
+      }
+
       onSuccess();
     } catch (error: any) {
-      alert(error.message || '创建旅行失败，请确保已设置全局存储目录');
+      alert(error.message || '创建旅行失败');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -117,7 +111,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 100px)' }}>
           {/* 时间范围 */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-secondary mb-3">
+            <div className="flex items-center gap-2 text-text-secondary mb-3">
               <span className="text-lg">📅</span>
               <span className="font-medium">旅行时间</span>
             </div>
@@ -131,7 +125,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   onChange={(e) =>
                     setFormData({ ...formData, startDate: e.target.value })
                   }
-                  className="w-full px-4 py-3 bg-white rounded-2xl text-text-primary border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
+                  className="w-full px-4 py-3 bg-surface rounded-2xl text-text-primary border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
                 />
               </div>
               <div className="relative">
@@ -143,7 +137,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   onChange={(e) =>
                     setFormData({ ...formData, endDate: e.target.value })
                   }
-                  className="w-full px-4 py-3 bg-white rounded-2xl text-text-primary border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
+                  className="w-full px-4 py-3 bg-surface rounded-2xl text-text-primary border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
                 />
               </div>
             </div>
@@ -154,7 +148,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 标题 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-secondary">
+            <div className="flex items-center gap-2 text-text-secondary">
               <span className="text-lg">🎯</span>
               <span className="font-medium">旅行主题</span>
             </div>
@@ -164,13 +158,13 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="给这次旅行起个名字..."
-              className="w-full px-5 py-4 bg-white rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm text-lg"
+              className="w-full px-5 py-4 bg-surface rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm text-lg"
             />
           </div>
 
           {/* 描述 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-secondary">
+            <div className="flex items-center gap-2 text-text-secondary">
               <span className="text-lg">✍️</span>
               <span className="font-medium">旅行故事</span>
             </div>
@@ -181,14 +175,14 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               }
               rows={5}
               placeholder="写下你的旅行感受和难忘瞬间..."
-              className="w-full px-5 py-4 bg-white rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm resize-none leading-relaxed"
+              className="w-full px-5 py-4 bg-surface rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm resize-none leading-relaxed"
               style={{ lineHeight: '1.8' }}
             />
           </div>
 
           {/* 照片 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-secondary">
+            <div className="flex items-center gap-2 text-text-secondary">
               <span className="text-lg">📸</span>
               <span className="font-medium">精彩瞬间</span>
             </div>
@@ -200,7 +194,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   animate={{ opacity: 1, scale: 1, rotate: 0 }}
                   className="relative group"
                 >
-                  <div className="w-28 h-28 bg-white p-2 rounded-xl shadow-md transform hover:scale-105 hover:rotate-2 transition-all">
+                  <div className="w-28 h-28 bg-surface p-2 rounded-xl shadow-md transform hover:scale-105 hover:rotate-2 transition-all">
                     <img
                       src={url}
                       alt=""
@@ -210,7 +204,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   <button
                     type="button"
                     onClick={() => removeFile(index)}
-                    className="absolute -top-2 -right-2 w-7 h-7 bg-red-400 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:bg-red-500 flex items-center justify-center text-sm"
+                    className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:opacity-80 flex items-center justify-center text-sm"
                   >
                     ×
                   </button>
@@ -227,7 +221,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 multiple
                 onChange={handleFileSelect}
                 className="hidden"
@@ -237,7 +231,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 标签 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-secondary">
+            <div className="flex items-center gap-2 text-text-secondary">
               <span className="text-lg">🏷️</span>
               <span className="font-medium">旅行标签</span>
             </div>
@@ -246,7 +240,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               value={formData.tags}
               onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
               placeholder="用逗号分隔标签"
-              className="w-full px-5 py-3 bg-white rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
+              className="w-full px-5 py-3 bg-surface rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
             />
             {formData.tags && (
               <div className="flex flex-wrap gap-2 pt-2">
@@ -271,15 +265,16 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 text-text-secondary hover:text-text-primary transition-colors rounded-2xl hover:bg-white/50"
+              className="px-6 py-3 text-text-secondary hover:text-text-primary transition-colors rounded-2xl hover:bg-surface/50"
             >
               取消
             </button>
             <button
               type="submit"
-              className="px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-2xl hover:shadow-lg transition-all transform hover:scale-105 font-medium"
+              disabled={submitting}
+              className="px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-2xl hover:shadow-lg transition-all transform hover:scale-105 font-medium disabled:opacity-60"
             >
-              ✨ 创建旅行
+              {submitting ? '创建中…' : '✨ 创建旅行'}
             </button>
           </div>
         </form>

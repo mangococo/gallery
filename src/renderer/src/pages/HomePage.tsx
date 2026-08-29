@@ -1,57 +1,28 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { storageService } from '../storage';
+import { api } from '../lib/api';
 import { Trip } from '../types';
 import TimelineItem from '../components/TimelineItem';
 import TimelineAddButton from '../components/TimelineAddButton';
 import AddTripModal from '../components/AddTripModal';
 import FilterBar from '../components/FilterBar';
-import SettingsModal from '../components/SettingsModal';
-import AuthModal from '../components/AuthModal';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [allTrips, setAllTrips] = React.useState<Trip[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
   const [showAddModal, setShowAddModal] = React.useState(false);
-  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
-  const [needsAuth, setNeedsAuth] = React.useState(false);
-  const [showAuthModal, setShowAuthModal] = React.useState(false);
 
-  // 加载旅行数据
+  // 加载旅行数据（经 IPC 取激活相册的时间线）
   React.useEffect(() => {
     const loadTrips = async () => {
-      const storagePath = storageService.getStoragePath();
-      if (storagePath) {
-        const hasAccess = await storageService.hasDirectoryAccess();
-        if (!hasAccess) {
-          setNeedsAuth(true);
-          setShowAuthModal(true);
-          return;
-        }
-        
-        const trips = await storageService.getTrips();
-        setAllTrips(trips);
-      }
+      const state = await api.bootstrap();
+      const trips = state.activeAlbumId ? await api.listTrips(state.activeAlbumId) : [];
+      setAllTrips(trips);
+      setLoaded(true);
     };
     loadTrips();
   }, []);
-
-  const handleAuthorizeAccess = async () => {
-    try {
-      await storageService.requestDirectoryAccess();
-      setNeedsAuth(false);
-      setShowAuthModal(false);
-      const trips = await storageService.getTrips();
-      setAllTrips(trips);
-    } catch (error) {
-      // User cancelled authorization
-    }
-  };
-
-  const handleStoragePathChanged = async () => {
-    const trips = await storageService.getTrips();
-    setAllTrips(trips);
-  };
 
   // 筛选状态
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
@@ -105,8 +76,8 @@ const HomePage: React.FC = () => {
         const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
         if (totalDays > 0) {
-        const startTime = startDay.getTime() + timeRange[0] * 24 * 60 * 60 * 1000;
-        const endTime = startDay.getTime() + timeRange[1] * 24 * 60 * 60 * 1000;
+          const startTime = startDay.getTime() + timeRange[0] * 24 * 60 * 60 * 1000;
+          const endTime = startDay.getTime() + timeRange[1] * 24 * 60 * 60 * 1000;
 
           filtered = filtered.filter((trip) => {
             const tripTime = new Date(trip.startDate);
@@ -129,29 +100,29 @@ const HomePage: React.FC = () => {
   };
 
   const handleTripAdded = async () => {
-    const trips = await storageService.getTrips();
+    const state = await api.bootstrap();
+    const trips = state.activeAlbumId ? await api.listTrips(state.activeAlbumId) : [];
     setAllTrips(trips);
   };
 
   const handleToggleFavorite = async (tripId: string) => {
-    const updatedTrips = allTrips.map(trip => 
-      trip.id === tripId 
+    const updatedTrips = allTrips.map(trip =>
+      trip.id === tripId
         ? { ...trip, isFavorite: !trip.isFavorite }
         : trip
     );
     setAllTrips(updatedTrips);
-    
-    // 保存到存储
+
     const tripToUpdate = updatedTrips.find(trip => trip.id === tripId);
     if (tripToUpdate) {
-      await storageService.updateTrip(tripToUpdate);
+      await api.updateTrip(tripId, { isFavorite: tripToUpdate.isFavorite });
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-gray-200">
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border-soft">
         <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-primary">画廊</h1>
           <div className="flex items-center gap-6">
@@ -159,13 +130,6 @@ const HomePage: React.FC = () => {
               <span>{filteredTrips.length} 次旅行</span>
               <span>{filteredTrips.reduce((acc, t) => acc + (t.photos || []).length, 0)} 张照片</span>
             </div>
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="p-2 text-text-tertiary hover:text-primary transition-colors"
-              title="系统设置"
-            >
-              ⚙️
-            </button>
           </div>
         </div>
       </header>
@@ -188,7 +152,7 @@ const HomePage: React.FC = () => {
           {/* 连续的时间线 */}
           {filteredTrips.length > 0 && (
             <div
-              className="absolute left-14 top-2 bottom-0 w-0.5 bg-gray-300"
+              className="absolute left-14 top-2 bottom-0 w-0.5 bg-border-soft"
               style={{ height: 'calc(100% - 80px)' }}
             />
           )}
@@ -238,33 +202,15 @@ const HomePage: React.FC = () => {
             </div>
           )}
 
-          {allTrips.length === 0 && !needsAuth && (
+          {allTrips.length === 0 && loaded && (
             <div className="text-center py-20">
-              {!storageService.getStoragePath() ? (
-                <>
-                  <p className="text-text-tertiary mb-6">
-                    {window.location.protocol === 'file:' 
-                      ? '请在设置中选择当前 HTML 文件所在的目录作为存储目录' 
-                      : '请先设置存储目录'}
-                  </p>
-                  <button
-                    onClick={() => setShowSettingsModal(true)}
-                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
-                  >
-                    打开设置
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-text-tertiary mb-6">还没有旅行记录</p>
-                  <button
-                    onClick={handleAddTrip}
-                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
-                  >
-                    创建第一次旅行
-                  </button>
-                </>
-              )}
+              <p className="text-text-tertiary mb-6">还没有旅行记录，先在左侧注册一个相册目录</p>
+              <button
+                onClick={handleAddTrip}
+                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+              >
+                创建第一次旅行
+              </button>
             </div>
           )}
         </div>
@@ -275,22 +221,6 @@ const HomePage: React.FC = () => {
         <AddTripModal
           onClose={() => setShowAddModal(false)}
           onSuccess={handleTripAdded}
-        />
-      )}
-
-      {/* Settings Modal */}
-      {showSettingsModal && (
-        <SettingsModal
-          onClose={() => setShowSettingsModal(false)}
-          onStoragePathChanged={handleStoragePathChanged}
-        />
-      )}
-
-      {/* Auth Modal */}
-      {showAuthModal && (
-        <AuthModal
-          onClose={() => setShowAuthModal(false)}
-          onAuthorize={handleAuthorizeAccess}
         />
       )}
     </div>

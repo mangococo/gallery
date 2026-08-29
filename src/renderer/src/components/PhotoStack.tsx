@@ -1,10 +1,21 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Trip } from '../types';
+import { Trip, PhotoDTO } from '../types';
+import { displaySrc } from '../lib/api';
 
 interface PhotoStackProps {
   trip: Trip;
   onClick: () => void;
+}
+
+/** 堆叠/网格内的媒体缩略块：视频优先用已生成的海报帧 */
+function StackMedia({ photo, className }: { photo: PhotoDTO; className?: string }) {
+  const src = displaySrc(photo);
+  if (photo.type === 'video' && !src) {
+    // 视频缩略图未就绪：降级为元数据预览
+    return <video src={photo.mediaUrl} className={className} muted preload="metadata" />;
+  }
+  return <img src={src} alt="" className={className} loading="lazy" />;
 }
 
 const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
@@ -34,24 +45,15 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
                 y: index * 4,
                 scale: 1,
               }}
-              transition={{ 
+              transition={{
                 duration: 0.4,
                 ease: "easeOut"
               }}
             >
-              {photo.type === 'video' ? (
-                <video
-                  src={photo.url}
-                  className="w-full h-full object-cover rounded-lg shadow-lg"
-                  muted
-                />
-              ) : (
-                <img
-                  src={photo.thumbnail}
-                  alt=""
-                  className="w-full h-full object-cover rounded-lg shadow-lg"
-                />
-              )}
+              <StackMedia
+                photo={photo}
+                className="w-full h-full object-cover rounded-lg shadow-lg"
+              />
             </motion.div>
           ))}
         </div>
@@ -61,13 +63,13 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
           {displayPhotos.map((photo, index) => (
             <motion.div
               key={`spread-${photo.id}`}
-              initial={{ 
+              initial={{
                 scale: 0.8,
                 rotate: (index % 2 === 0 ? -1 : 1) * 15,
                 opacity: 0
               }}
-              animate={{ 
-                scale: 1, 
+              animate={{
+                scale: 1,
                 rotate: 0,
                 opacity: 1
               }}
@@ -78,19 +80,7 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
               }}
               className="relative overflow-hidden rounded-md shadow-md"
             >
-              {photo.type === 'video' ? (
-                <video
-                  src={photo.url}
-                  className="w-full h-full object-cover"
-                  muted
-                />
-              ) : (
-                <img
-                  src={photo.thumbnail}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              )}
+              <StackMedia photo={photo} className="w-full h-full object-cover" />
             </motion.div>
           ))}
         </div>

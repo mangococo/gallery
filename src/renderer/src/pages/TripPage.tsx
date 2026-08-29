@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { storageService } from '../storage';
+import { api } from '../lib/api';
 import PhotoWall from '../components/PhotoWall';
 import { Photo, Trip } from '../types';
 
@@ -20,122 +20,34 @@ const TripPage: React.FC = () => {
 
   React.useEffect(() => {
     const loadTrip = async () => {
-      const storagePath = storageService.getStoragePath();
-      if (storagePath) {
-        const hasAccess = await storageService.hasDirectoryAccess();
-        if (!hasAccess) {
-          try {
-            await storageService.requestDirectoryAccess();
-          } catch (error: any) {
-            if (error.message?.includes('目录不存在')) {
-              alert('存储目录不存在，请重新配置全局存储目录');
-              navigate('/');
-            }
-            return;
-          }
-        }
-        const tripData = await storageService.getTripById(id!);
-        setTrip(tripData);
-        setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null);
-        setTagInput((tripData?.tags || []).join(', '));
-      }
+      const tripData = await api.getTrip(id!);
+      setTrip(tripData);
+      setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null);
+      setTagInput((tripData?.tags || []).join(', '));
     };
     loadTrip();
-  }, [id, navigate]);
+  }, [id]);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !trip) return;
 
-    // 检测是否为单文件模式（file:// 协议）
-    const isStandaloneMode = window.location.protocol === 'file:';
-    
-    if (isStandaloneMode) {
-      // 单文件模式下提示用户手动操作
-      const fileNames = Array.from(files).map(f => f.name).join('\n');
-      alert(`单文件模式下无法自动上传文件。\n\n请手动将以下文件复制到旅行目录中：\n${fileNames}\n\n旅行目录：${trip?.title || '当前旅行'}\n\n复制完成后请刷新页面。`);
-      event.target.value = '';
-      return;
-    }
-
-    console.log('开始上传照片，文件数量:', files.length);
     setIsUploading(true);
-    const newPhotos: Photo[] = [];
-
-    // 获取旅行目录句柄
     try {
-      const rootDirHandle = await storageService.getDirectoryHandle();
-      let tripDirHandle = null;
-      
-      // 找到当前旅行的目录
-      for await (const [, handle] of rootDirHandle.entries()) {
-        if (handle.kind === 'directory') {
-          try {
-            const settingsHandle = await handle.getFileHandle('.settings.json');
-            const settingsFile = await settingsHandle.getFile();
-            const settings = JSON.parse(await settingsFile.text());
-            if (settings.id === trip?.id) {
-              tripDirHandle = handle;
-              break;
-            }
-          } catch {
-            // 跳过没有配置文件的目录
-          }
-        }
-      }
-
-      if (!tripDirHandle) {
-        throw new Error('找不到旅行目录');
-      }
-
-      // 保存文件到目录
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        console.log('处理文件:', file.name, file.type);
-        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
-          const fileName = `${Date.now()}_${i}_${file.name}`;
-          const fileHandle = await tripDirHandle.getFileHandle(fileName, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(file);
-          await writable.close();
-
-          // 创建 URL 用于显示
-          const url = URL.createObjectURL(file);
-          const photo: Photo = {
-            id: fileName,
-            url,
-            thumbnail: url,
-            caption: '',
-            type: file.type.startsWith('video/') ? 'video' : 'image',
-          };
-          newPhotos.push(photo);
-          console.log('文件保存完成:', fileName);
-        }
-      }
-
-      console.log('新照片数量:', newPhotos.length);
-      if (editedTrip) {
-        const updatedTrip = {
-          ...editedTrip,
-          photos: [...(editedTrip.photos || []), ...newPhotos],
-        };
-        console.log('更新后照片总数:', updatedTrip.photos.length);
+      const paths = Array.from(files)
+        .filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
+        .map(f => api.getPathForFile(f));
+      const newPhotos = await api.importPhotos(trip.id, paths);
+      if (editedTrip && newPhotos.length > 0) {
+        const updatedTrip = { ...editedTrip, photos: [...editedTrip.photos, ...newPhotos] };
         setEditedTrip(updatedTrip);
-        
-        // 如果不在编辑模式，直接保存
-        if (!isEditing) {
-          console.log('保存到存储');
-          await storageService.updateTrip(updatedTrip);
-          setTrip(updatedTrip);
-        }
+        if (!isEditing) setTrip(updatedTrip);
       }
     } catch (error: any) {
-      console.error('上传照片失败:', error);
-      alert('上传照片失败: ' + error.message);
+      alert('导入照片失败: ' + error.message);
     }
 
     setIsUploading(false);
-    // 清空input
     event.target.value = '';
   };
 
@@ -146,10 +58,8 @@ const TripPage: React.FC = () => {
         photos: editedTrip.photos.filter((p: Photo) => p.id !== photoId),
       };
       setEditedTrip(updatedTrip);
-      
-      // 如果不在编辑模式，直接保存
       if (!isEditing) {
-        await storageService.updateTrip(updatedTrip);
+        await api.deletePhoto(photoId);
         setTrip(updatedTrip);
       }
     }
@@ -157,8 +67,14 @@ const TripPage: React.FC = () => {
 
   const handleSave = async () => {
     if (editedTrip) {
-      await storageService.updateTrip(editedTrip);
-      setTrip(editedTrip);
+      const saved = await api.updateTrip(editedTrip.id, {
+        title: editedTrip.title,
+        description: editedTrip.description,
+        startDate: editedTrip.startDate,
+        endDate: editedTrip.endDate,
+        tags: editedTrip.tags,
+      });
+      if (saved) setTrip(saved);
       setIsEditing(false);
     }
   };
@@ -219,7 +135,7 @@ const TripPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-gray-200">
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border-soft">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate('/')}
@@ -265,12 +181,12 @@ const TripPage: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-md p-8 mb-12"
+          className="bg-surface rounded-xl shadow-md p-8 mb-12"
         >
           {isEditing ? (
             <div className="space-y-8">
               <div>
-                <label className="block text-base font-medium text-secondary mb-3">
+                <label className="block text-base font-medium text-text-secondary mb-3">
                   标题
                 </label>
                 <input
@@ -281,13 +197,13 @@ const TripPage: React.FC = () => {
                       setEditedTrip({ ...editedTrip, title: e.target.value });
                     }
                   }}
-                  className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-white transition-all text-lg"
+                  className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-surface transition-all text-lg"
                   placeholder="输入旅行标题"
                 />
               </div>
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-base font-medium text-secondary mb-3">
+                  <label className="block text-base font-medium text-text-secondary mb-3">
                     开始日期
                   </label>
                   <DatePicker
@@ -299,11 +215,11 @@ const TripPage: React.FC = () => {
                     }}
                     dateFormat="yyyy-MM-dd"
                     placeholderText="选择开始日期"
-                    className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-white transition-all"
+                    className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-surface transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-base font-medium text-secondary mb-3">
+                  <label className="block text-base font-medium text-text-secondary mb-3">
                     结束日期
                   </label>
                   <DatePicker
@@ -315,12 +231,12 @@ const TripPage: React.FC = () => {
                     }}
                     dateFormat="yyyy-MM-dd"
                     placeholderText="选择结束日期"
-                    className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-white transition-all"
+                    className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-surface transition-all"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-base font-medium text-secondary mb-3">
+                <label className="block text-base font-medium text-text-secondary mb-3">
                   描述
                 </label>
                 <textarea
@@ -331,12 +247,12 @@ const TripPage: React.FC = () => {
                     }
                   }}
                   rows={5}
-                  className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-white transition-all resize-none leading-relaxed"
+                  className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-surface transition-all resize-none leading-relaxed"
                   placeholder="记录这次旅行的美好回忆..."
                 />
               </div>
               <div>
-                <label className="block text-base font-medium text-secondary mb-3">
+                <label className="block text-base font-medium text-text-secondary mb-3">
                   标签
                 </label>
                 <div className="space-y-3">
@@ -353,14 +269,14 @@ const TripPage: React.FC = () => {
                       }
                     }}
                     placeholder="用逗号分隔标签"
-                    className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-white transition-all"
+                    className="w-full px-5 py-3 bg-background border-2 border-primary/20 rounded-xl text-text-primary placeholder-text-tertiary focus:outline-none focus:border-primary focus:bg-surface transition-all"
                   />
                   {editedTrip?.tags && editedTrip.tags.length > 0 && editedTrip.tags[0] !== '' && (
                     <div className="flex flex-wrap gap-2 pt-2">
                       {editedTrip.tags.map((tag: string, index: number) => (
                         <span
                           key={index}
-                          className="px-3 py-1.5 bg-primary/15 text-primary text-sm rounded-full border border-primary/30"
+                          className="px-3 py-1.5 bg-primary-soft text-primary text-sm rounded-full border border-primary/30"
                         >
                           #{tag}
                         </span>
@@ -390,7 +306,7 @@ const TripPage: React.FC = () => {
                   {trip.tags.map((tag: string, index: number) => (
                     <span
                       key={index}
-                      className="px-3 py-1 bg-primary/10 text-primary text-sm rounded-full"
+                      className="px-3 py-1 bg-primary-soft text-primary text-sm rounded-full"
                     >
                       #{tag}
                     </span>
@@ -415,11 +331,11 @@ const TripPage: React.FC = () => {
               </span>
               <label className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors cursor-pointer flex items-center gap-2">
                 <span>+</span>
-                <span>{isUploading ? '上传中...' : '添加照片'}</span>
+                <span>{isUploading ? '导入中...' : '添加照片'}</span>
                 <input
                   type="file"
                   multiple
-                  accept="image/*"
+                  accept="image/*,video/*"
                   onChange={handlePhotoUpload}
                   className="hidden"
                   disabled={isUploading}
@@ -427,8 +343,8 @@ const TripPage: React.FC = () => {
               </label>
             </div>
           </div>
-          <PhotoWall 
-            photos={editedTrip?.photos || trip.photos} 
+          <PhotoWall
+            photos={editedTrip?.photos || trip.photos}
             onPhotoClick={handlePhotoClick}
             onDeletePhoto={isEditing ? handleDeletePhoto : undefined}
             showDeleteButton={isEditing}
@@ -478,14 +394,14 @@ const TripPage: React.FC = () => {
             >
               {selectedPhoto.type === 'video' ? (
                 <video
-                  src={selectedPhoto.url}
+                  src={selectedPhoto.mediaUrl}
                   controls
                   autoPlay
                   className="h-full w-auto"
                 />
               ) : (
                 <img
-                  src={selectedPhoto.url}
+                  src={selectedPhoto.mediaUrl}
                   alt=""
                   className="h-full w-auto"
                 />
