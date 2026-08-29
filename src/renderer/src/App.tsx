@@ -1,17 +1,43 @@
-import React from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import TripPage from './pages/TripPage';
+import React from 'react'
+import { HashRouter, Routes, Route } from 'react-router-dom'
+import { AppProvider, useApp } from './lib/store'
+import Sidebar from './components/Sidebar'
+import HomePage from './pages/HomePage'
+import TripPage from './pages/TripPage'
+
+/** 应用外壳：左侧常驻侧栏 + 右侧内容区（方案 §5.1） */
+function Shell() {
+  const { ready } = useApp()
+
+  if (!ready) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <span className="font-display text-2xl text-primary animate-pulse">画廊</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <main className="flex-1 min-w-0 overflow-y-auto">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/trip/:id" element={<TripPage />} />
+        </Routes>
+      </main>
+    </div>
+  )
+}
 
 const App: React.FC = () => {
   return (
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/trip/:id" element={<TripPage />} />
-      </Routes>
-    </HashRouter>
-  );
-};
+    <AppProvider>
+      <HashRouter>
+        <Shell />
+      </HashRouter>
+    </AppProvider>
+  )
+}
 
-export default App;
+export default App

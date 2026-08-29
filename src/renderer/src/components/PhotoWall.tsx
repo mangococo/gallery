@@ -1,25 +1,27 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Photo, PhotoDTO } from '../types';
-import { displaySrc } from '../lib/api';
+import React from 'react'
+import { motion } from 'framer-motion'
+import { Photo, PhotoDTO } from '../types'
+import { displaySrc } from '../lib/api'
 
 interface PhotoWallProps {
-  photos: Photo[];
-  onPhotoClick?: (photo: Photo) => void;
-  onDeletePhoto?: (photoId: string) => void;
-  showDeleteButton?: boolean;
+  photos: Photo[]
+  onPhotoClick?: (photo: Photo) => void
+  onDeletePhoto?: (photoId: string) => void
+  showDeleteButton?: boolean
+  coverPhotoId?: string | null
+  onSetCover?: (photoId: string) => void
 }
 
 /** 照片墙单元：图片用缩略图；视频用海报帧 + 播放角标 */
 function WallMedia({ photo }: { photo: PhotoDTO }) {
-  const src = displaySrc(photo);
+  const src = displaySrc(photo)
   if (photo.type === 'video' && !src) {
     return (
-      <div className="relative">
-        <video src={photo.mediaUrl} className="w-full h-auto" muted preload="metadata" />
+      <div className="relative aspect-[4/3]">
+        <PlaceholderBackdrop />
         <PlayBadge />
       </div>
-    );
+    )
   }
   if (photo.type === 'video') {
     return (
@@ -27,100 +29,96 @@ function WallMedia({ photo }: { photo: PhotoDTO }) {
         <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
         <PlayBadge />
       </div>
-    );
+    )
   }
-  return <img src={src} alt="" className="w-full h-auto" loading="lazy" />;
+  return <img src={src} alt="" className="w-full h-auto" loading="lazy" />
+}
+
+function PlaceholderBackdrop() {
+  return (
+    <div className="absolute inset-0 bg-surface-2 flex items-center justify-center">
+      <span className="font-display text-ink-3 text-xs">视频海报生成中…</span>
+    </div>
+  )
 }
 
 function PlayBadge() {
   return (
     <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-      <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
-        <div className="w-0 h-0 border-l-[12px] border-l-primary border-y-[8px] border-y-transparent ml-1"></div>
+      <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+        <div className="w-0 h-0 border-l-[11px] border-l-primary border-y-[7px] border-y-transparent ml-1"></div>
       </div>
     </div>
-  );
+  )
 }
 
 const PhotoWall: React.FC<PhotoWallProps> = ({
   photos,
   onPhotoClick,
   onDeletePhoto,
-  showDeleteButton = false
+  showDeleteButton = false,
+  coverPhotoId = null,
+  onSetCover,
 }) => {
-  // 为每张照片生成随机的动画参数
-  const getRandomAnimation = (index: number) => {
-    const baseDelay = index * 0.1;
-    return {
-      initial: { opacity: 0, scale: 0.8, rotate: Math.random() * 10 - 5 },
-      animate: {
-        opacity: 1,
-        scale: 1,
-        rotate: 0,
-      },
-      transition: {
-        duration: 0.6,
-        delay: Math.min(baseDelay, 1.5),
-      },
-    };
-  };
-
-  // 风吹动画
-  const swayAnimation = () => {
-    const duration = 3 + Math.random() * 2;
-    const delay = Math.random() * 2;
-    return {
-      animate: {
-        rotate: [0, 0.8, -0.8, 0],
-        y: [0, -3, 3, 0],
-      },
-      transition: {
-        duration,
-        delay,
-        repeat: Infinity,
-        ease: 'easeInOut',
-      },
-    };
-  };
-
   return (
     <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
-      {photos.map((photo, index) => {
-        const animation = getRandomAnimation(index);
-        const sway = swayAnimation();
+      {photos.map((photo, index) => (
+        <motion.div
+          key={photo.id}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.8) }}
+          whileHover={{ scale: 1.03, zIndex: 10 }}
+          className="break-inside-avoid cursor-pointer relative group"
+          onClick={() => onPhotoClick?.(photo)}
+        >
+          <div className="relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border border-line">
+            <WallMedia photo={photo} />
 
-        return (
-          <motion.div
-            key={photo.id}
-            {...animation}
-            whileHover={{ scale: 1.05, zIndex: 10 }}
-            className="break-inside-avoid cursor-pointer relative group"
-            onClick={() => onPhotoClick?.(photo)}
-          >
-            <motion.div
-              {...sway}
-              className="relative overflow-hidden rounded-lg shadow-lg hover:shadow-2xl transition-shadow"
-            >
-              <WallMedia photo={photo} />
+            {/* 封面徽标 */}
+            {coverPhotoId === photo.id && (
+              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm">
+                ★ 封面
+              </div>
+            )}
 
-              {/* Delete button */}
+            {/* 悬停操作 */}
+            <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onSetCover && coverPhotoId !== photo.id && (
+                <button
+                  title="设为封面"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSetCover(photo.id)
+                  }}
+                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center text-sm"
+                >
+                  ★
+                </button>
+              )}
               {showDeleteButton && onDeletePhoto && (
                 <button
+                  title="删除（移入废纸篓）"
                   onClick={(e) => {
-                    e.stopPropagation();
-                    onDeletePhoto(photo.id);
+                    e.stopPropagation()
+                    if (confirm('把这张照片移入废纸篓？')) onDeletePhoto(photo.id)
                   }}
-                  className="absolute top-2 right-2 w-8 h-8 bg-danger text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:opacity-80 text-sm font-bold"
+                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center text-sm"
                 >
                   ×
                 </button>
               )}
-            </motion.div>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-};
+            </div>
 
-export default PhotoWall;
+            {/* 图注 */}
+            {photo.caption && (
+              <div className="px-3 py-2 bg-surface text-xs text-ink-2">{photo.caption}</div>
+            )}
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  )
+}
+
+export default PhotoWall

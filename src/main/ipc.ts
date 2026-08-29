@@ -164,10 +164,11 @@ export function registerIpcHandlers(): void {
           return []
         }
         if (album.status !== 'ok') setAlbumStatus(albumId, 'ok')
+        // 附带完整照片列表（时间线堆叠与计数需要）
         return listTripRows(albumId).map((t) => ({
           ...t,
           tags: getTagsOfTrip(t.id),
-          photos: [],
+          photos: photosOfTrip(t),
         }))
       })
   })

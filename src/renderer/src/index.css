@@ -1,19 +1,57 @@
 @import "tailwindcss";
 
-/* 语义色板（亮色基线；暗色主题在里程碑 5 引入 [data-theme] 切换）
-   颜色取自方案 §5.3，顺带消除旧 tailwind.config.js 与 index.css 两处冲突定义 */
-@theme {
-  --color-primary: #c08a52;
-  --color-primary-soft: #f3e7d8;
-  --color-secondary: #8b7355;
-  --color-background: #faf8f5;
-  --color-surface: #ffffff;
-  --color-surface-2: #f5f0e9;
-  --color-border-soft: #ece5dc;
-  --color-text-primary: #3b342e;
-  --color-text-secondary: #7c7065;
-  --color-text-tertiary: #a89b8d;
-  --color-danger: #c2543e;
+/*
+ * 画廊语义色板（方案 §5.3）
+ * 亮色 = 延续米白暖棕手账风；暗色 = 暖褐「烛光」调（非冷灰）。
+ * [data-theme] 换 --g-* 变量；@theme inline 让工具类直接引用变量，
+ * 组件零 dark: 前缀，切换即时生效。
+ * 命名映射：plan 的 text-1/2/3 → ink/ink-2/ink-3；border → line。
+ */
+:root,
+[data-theme='light'] {
+  --g-background: #faf8f5;
+  --g-surface: #ffffff;
+  --g-surface-2: #f5f0e9;
+  --g-line: #ece5dc;
+  --g-primary: #c08a52;
+  --g-primary-soft: #f3e7d8;
+  --g-ink: #3b342e;
+  --g-ink-2: #7c7065;
+  --g-ink-3: #a89b8d;
+  --g-danger: #c2543e;
+}
+
+[data-theme='dark'] {
+  --g-background: #1c1916;
+  --g-surface: #26211d;
+  --g-surface-2: #332c28;
+  --g-line: #3a332c;
+  --g-primary: #d4a574;
+  --g-primary-soft: #3a2f24;
+  --g-ink: #f0e9e1;
+  --g-ink-2: #b3a495;
+  --g-ink-3: #7e7062;
+  --g-danger: #e06b52;
+}
+
+@theme inline {
+  --color-background: var(--g-background);
+  --color-surface: var(--g-surface);
+  --color-surface-2: var(--g-surface-2);
+  --color-line: var(--g-line);
+  --color-primary: var(--g-primary);
+  --color-primary-soft: var(--g-primary-soft);
+  --color-ink: var(--g-ink);
+  --color-ink-2: var(--g-ink-2);
+  --color-ink-3: var(--g-ink-3);
+  --color-danger: var(--g-danger);
+
+  /* 手账气质的展示字体：macOS 自带楷体 */
+  --font-display: 'Kaiti SC', 'STKaiti', 'Kai', 'Songti SC', serif;
+}
+
+html {
+  background-color: var(--g-background);
 }
 
 body {
@@ -22,7 +60,8 @@ body {
     'Roboto', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-background);
+  background-color: var(--g-background);
+  color: var(--g-ink);
 }
 
 #root {
@@ -42,11 +81,68 @@ mark {
 }
 
 ::selection {
-  background-color: rgba(192, 138, 82, 0.3);
+  background-color: color-mix(in srgb, var(--g-primary) 30%, transparent);
   color: inherit;
 }
 
-/* DatePicker 自定义样式 */
+/* —— 窗口拖拽区（hiddenInset 顶栏） —— */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* —— 手账签名元素 —— */
+
+/* 时间线书脊：缝线式虚线 */
+.stitch-line {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--g-primary) 55%, transparent) 0 7px,
+    transparent 7px 14px
+  );
+}
+
+/* 和纸胶带日期贴：轻微旋转 + 两端深一档的胶带条纹 */
+.washi-label {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--g-primary) 18%, var(--g-primary-soft)) 0 3px,
+    var(--g-primary-soft) 3px calc(100% - 3px),
+    color-mix(in srgb, var(--g-primary) 18%, var(--g-primary-soft)) calc(100% - 3px) 100%
+  );
+  color: var(--g-primary);
+  font-family: var(--font-display);
+  transform: rotate(-2deg);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+/* 拍立得白边 */
+.polaroid-frame {
+  background: var(--g-surface);
+  padding: 5px 5px 10px;
+  border-radius: 6px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.1),
+    0 6px 16px rgb(0 0 0 / 0.12);
+}
+
+/* 隐藏滚动条但保留滚动（侧栏中部） */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-line) transparent;
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 5px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: var(--g-line);
+  border-radius: 3px;
+}
+
+/* —— DatePicker 自定义样式 —— */
 .react-datepicker-wrapper {
   width: 100%;
 }
@@ -56,14 +152,16 @@ mark {
 }
 
 .react-datepicker {
-  border: 2px solid rgba(192, 138, 82, 0.2) !important;
+  border: 2px solid color-mix(in srgb, var(--g-primary) 25%, transparent) !important;
   border-radius: 12px !important;
   font-family: inherit !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+  background: var(--g-surface) !important;
+  box-shadow: 0 10px 25px rgb(0 0 0 / 0.12) !important;
+  color: var(--g-ink);
 }
 
 .react-datepicker__header {
-  background-color: rgba(192, 138, 82, 0.8) !important;
+  background: color-mix(in srgb, var(--g-primary) 80%, black) !important;
   border-bottom: none !important;
   border-radius: 10px 10px 0 0 !important;
 }
@@ -74,21 +172,35 @@ mark {
 }
 
 .react-datepicker__day {
-  color: var(--color-text-primary) !important;
+  color: var(--g-ink) !important;
 }
 
 .react-datepicker__day:hover {
-  background-color: rgba(192, 138, 82, 0.08) !important;
+  background-color: color-mix(in srgb, var(--g-primary) 10%, transparent) !important;
   border-radius: 6px !important;
 }
 
 .react-datepicker__day--selected {
-  background-color: rgba(192, 138, 82, 0.7) !important;
+  background-color: color-mix(in srgb, var(--g-primary) 75%, black) !important;
   color: white !important;
   border-radius: 6px !important;
 }
 
 .react-datepicker__day--today {
-  background-color: rgba(192, 138, 82, 0.15) !important;
+  background-color: color-mix(in srgb, var(--g-primary) 16%, transparent) !important;
   border-radius: 6px !important;
+}
+
+.react-datepicker__triangle {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

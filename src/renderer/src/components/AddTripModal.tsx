@@ -82,8 +82,8 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         className="bg-background rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, #FAF8F5 0%, #F5F0E8 100%)',
-          border: '3px solid rgba(212, 165, 116, 0.2)',
+          background: 'linear-gradient(135deg, var(--g-background) 0%, var(--g-surface-2) 100%)',
+          border: '3px solid color-mix(in srgb, var(--g-primary) 25%, transparent)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -98,7 +98,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-text-secondary hover:text-primary transition-all shadow-sm flex items-center justify-center text-xl"
+              className="w-8 h-8 rounded-full bg-surface/80 hover:bg-surface text-text-ink-2 hover:text-primary transition-all shadow-sm flex items-center justify-center text-xl"
             >
               ×
             </button>
@@ -111,7 +111,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 100px)' }}>
           {/* 时间范围 */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-text-secondary mb-3">
+            <div className="flex items-center gap-2 text-text-ink-2 mb-3">
               <span className="text-lg">📅</span>
               <span className="font-medium">旅行时间</span>
             </div>
@@ -148,7 +148,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 标题 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-secondary">
+            <div className="flex items-center gap-2 text-text-ink-2">
               <span className="text-lg">🎯</span>
               <span className="font-medium">旅行主题</span>
             </div>
@@ -164,7 +164,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 描述 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-secondary">
+            <div className="flex items-center gap-2 text-text-ink-2">
               <span className="text-lg">✍️</span>
               <span className="font-medium">旅行故事</span>
             </div>
@@ -182,7 +182,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 照片 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-secondary">
+            <div className="flex items-center gap-2 text-text-ink-2">
               <span className="text-lg">📸</span>
               <span className="font-medium">精彩瞬间</span>
             </div>
@@ -231,7 +231,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 标签 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-secondary">
+            <div className="flex items-center gap-2 text-text-ink-2">
               <span className="text-lg">🏷️</span>
               <span className="font-medium">旅行标签</span>
             </div>
@@ -265,7 +265,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 text-text-secondary hover:text-text-primary transition-colors rounded-2xl hover:bg-surface/50"
+              className="px-6 py-3 text-text-ink-2 hover:text-text-primary transition-colors rounded-2xl hover:bg-surface/50"
             >
               取消
             </button>
