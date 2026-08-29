@@ -8,6 +8,8 @@ interface E2EStep {
   script?: string
   /** 执行后等待毫秒数（默认 800） */
   wait?: number
+  /** 打印脚本的返回值（用于数据断言） */
+  log?: boolean
 }
 
 /**
@@ -38,13 +40,15 @@ export async function runE2EIfEnabled(win: Electron.BrowserWindow): Promise<void
     })
 
     for (const step of steps) {
+      let value: unknown
       if (step.script) {
-        await win.webContents.executeJavaScript(
+        value = await win.webContents.executeJavaScript(
           `(async () => { ${step.script} })()`,
           true,
         )
       }
       await new Promise((r) => setTimeout(r, step.wait ?? 800))
+      if (step.log) console.log(`[e2e] ${step.name}:`, JSON.stringify(value))
       const image = await win.webContents.capturePage()
       const file = join(outDir, `${step.name}.png`)
       await fs.writeFile(file, image.toPNG())

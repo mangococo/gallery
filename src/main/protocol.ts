@@ -1,7 +1,7 @@
 import { app, protocol } from 'electron'
 import { join, normalize, sep } from 'path'
 import { createReadStream, promises as fs } from 'fs'
-import type { Readable } from 'stream'
+import { Readable } from 'stream'
 
 export const MEDIA_SCHEME = 'gallery-media'
 
@@ -33,7 +33,13 @@ export function registerMediaScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: MEDIA_SCHEME,
-      privileges: { standard: true, stream: true, supportFetchAPI: true },
+      privileges: {
+          standard: true,
+          stream: true,
+          supportFetchAPI: true,
+          corsEnabled: true,
+          bypassCSP: true,
+        },
     },
   ])
 }
@@ -60,15 +66,22 @@ export function attachMediaProtocol(opts: MediaProtocolOptions): void {
       return json(404, { error: 'unknown host' })
     } catch (err: any) {
       if (err?.code === 'ENOENT') return json(404, { error: 'not found' })
+      console.error('[gallery-media] 处理失败:', request.url, err)
       return json(500, { error: String(err?.message ?? err) })
     }
   })
 }
 
+const CORS_HEADERS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': '*',
+  'access-control-expose-headers': 'content-length, content-range, content-type, accept-ranges',
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...CORS_HEADERS },
   })
 }
 
@@ -79,12 +92,13 @@ async function serveThumb(url: URL, thumbsDir: string): Promise<Response> {
   const abs = join(thumbsDir, name)
   const stat = await fs.stat(abs)
   const stream = createReadStream(abs)
-  return new Response(stream as unknown as ReadableStream, {
+  return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
     status: 200,
     headers: {
       'content-type': mimeOf(name),
       'content-length': String(stat.size),
       'cache-control': 'max-age=3600',
+      ...CORS_HEADERS,
     },
   })
 }
@@ -123,26 +137,28 @@ async function serveMedia(
         })
       }
       const stream = createReadStream(abs, { start, end })
-      return new Response(stream as unknown as ReadableStream, {
+      return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
         status: 206,
         headers: {
           'content-type': contentType,
           'content-length': String(end - start + 1),
           'content-range': `bytes ${start}-${end}/${stat.size}`,
           'accept-ranges': 'bytes',
+          ...CORS_HEADERS,
         },
       })
     }
   }
 
   const stream = createReadStream(abs)
-  return new Response(stream as unknown as ReadableStream, {
+  return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
     status: 200,
     headers: {
       'content-type': contentType,
       'content-length': String(stat.size),
       'accept-ranges': 'bytes',
       'cache-control': 'no-cache',
+      ...CORS_HEADERS,
     },
   })
 }

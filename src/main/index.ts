@@ -1,8 +1,12 @@
 import { app, BrowserWindow, Menu, nativeTheme, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
+import { mkdirSync } from 'fs'
 import { registerMediaScheme, attachMediaProtocol, ensureThumbsDir } from './protocol'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, registerAlbumAt } from './ipc'
 import { runE2EIfEnabled } from './e2e'
+import { closeWatcher } from './services/watcher'
+import { disposeThumbResources } from './services/thumbnails'
+import { getAlbumPath, getSetting, setSetting, closeDb } from './db'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -21,13 +25,18 @@ if (!gotLock) {
   })
 
   app.setName('画廊')
+  // 固定数据目录为「画廊」（dev 模式默认跟随 package name）
+  const userDataDir = join(app.getPath('appData'), '画廊')
+  try {
+    mkdirSync(userDataDir, { recursive: true })
+  } catch {
+    // 已存在
+  }
+  app.setPath('userData', userDataDir)
 
   app.whenReady().then(async () => {
     attachMediaProtocol({
-      // M1 阶段数据层未就绪，一律返回 null（渲染层拿不到文件）
-      async resolveAlbumRoot() {
-        return null
-      },
+      resolveAlbumRoot: async (albumId) => getAlbumPath(albumId),
       thumbsDir() {
         return join(app.getPath('userData'), 'thumbnails')
       },
@@ -37,9 +46,27 @@ if (!gotLock) {
     registerIpcHandlers()
     installChineseMenu()
 
+    // E2E 钩子：跳过目录选择对话框直接注册指定路径
+    if (process.env.GALLERY_E2E === '1' && process.env.GALLERY_E2E_ALBUM) {
+      void registerAlbumAt(process.env.GALLERY_E2E_ALBUM, true).then((album) => {
+        if (album) setSetting('active_album_id', album.id)
+      })
+    }
+
+    // 恢复上次窗口尺寸位置
+    let bounds: { width: number; height: number; x?: number; y?: number } | undefined
+    try {
+      const raw = getSetting('window_bounds')
+      if (raw) bounds = JSON.parse(raw)
+    } catch {
+      // 忽略损坏的窗口状态
+    }
+
     mainWindow = new BrowserWindow({
-      width: 1280,
-      height: 820,
+      width: bounds?.width ?? 1280,
+      height: bounds?.height ?? 820,
+      x: bounds?.x,
+      y: bounds?.y,
       minWidth: 960,
       minHeight: 600,
       show: false,
@@ -54,6 +81,16 @@ if (!gotLock) {
     })
 
     mainWindow.once('ready-to-show', () => mainWindow?.show())
+
+    // 记忆窗口位置尺寸
+    const saveBounds = (): void => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      setSetting('window_bounds', JSON.stringify(mainWindow.getBounds()))
+    }
+    mainWindow.on('resized', saveBounds)
+    mainWindow.on('moved', saveBounds)
+    mainWindow.on('close', saveBounds)
+
     mainWindow.on('closed', () => {
       mainWindow = null
     })
@@ -77,6 +114,12 @@ if (!gotLock) {
 
   app.on('window-all-closed', () => {
     app.quit()
+  })
+
+  app.on('will-quit', () => {
+    closeWatcher()
+    disposeThumbResources()
+    closeDb()
   })
 }
 
