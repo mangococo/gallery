@@ -56,7 +56,7 @@ function pushChanged(albumId: string): void {
 }
 
 /** 对相册执行完整扫描 + 缩略图生成 + watcher 更新，并通知渲染层 */
-async function fullRescan(albumId: string, pushEvents = true): Promise<ScanProgress | null> {
+export async function fullRescan(albumId: string, pushEvents = true): Promise<ScanProgress | null> {
   const album = getAlbumRow(albumId)
   if (!album) return null
   const counters = await scanAlbum(albumId, {
@@ -76,12 +76,29 @@ async function fullRescan(albumId: string, pushEvents = true): Promise<ScanProgr
   return { albumId, albumName: album.name, phase: 'thumb', done: 1, total: 1 }
 }
 
+/** 相册列表 + 实时可访问性校对（外置卷拔出 → missing） */
+async function listAlbumsWithStatusCheck(): Promise<Album[]> {
+  const albums = listAlbumRows()
+  await Promise.all(
+    albums.map(async (album) => {
+      const accessible = await fs
+        .access(album.path)
+        .then(() => true)
+        .catch(() => false)
+      const stored = getAlbumRow(album.id)?.status
+      if (accessible && stored !== 'ok') setAlbumStatus(album.id, 'ok')
+      if (!accessible && stored !== 'missing') setAlbumStatus(album.id, 'missing')
+    }),
+  )
+  return listAlbumRows()
+}
+
 export function registerIpcHandlers(): void {
   initDb()
 
   // —— 应用 ——
-  ipcMain.handle(IPC.bootstrap, () => {
-    const albums = listAlbumRows()
+  ipcMain.handle(IPC.bootstrap, async () => {
+    const albums = await listAlbumsWithStatusCheck()
     return {
       theme: (getSetting('theme_mode') as ThemeMode) ?? 'system',
       systemDark: nativeTheme.shouldUseDarkColors,
@@ -92,7 +109,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.stats, () => getStats())
 
   // —— 相册 ——
-  ipcMain.handle(IPC.albumsList, () => listAlbumRows())
+  ipcMain.handle(IPC.albumsList, () => listAlbumsWithStatusCheck())
 
   ipcMain.handle(IPC.albumsRegister, async (e): Promise<Album | null> => {
     const win = BrowserWindow.fromWebContents(e.sender)
@@ -236,7 +253,7 @@ export function registerIpcHandlers(): void {
     if (!album) throw new Error('相册不存在')
     const destDir = join(album.path, t.folderName)
 
-    const imported = []
+    const importedIds: string[] = []
     for (const src of paths) {
       const type = mediaTypeOf(basename(src))
       if (!type) continue
@@ -250,8 +267,9 @@ export function registerIpcHandlers(): void {
       }
       await fs.copyFile(src, join(destDir, name))
       const st = await fs.stat(join(destDir, name))
+      const photoId = nanoid(12)
       insertPhotoRow({
-        id: nanoid(12),
+        id: photoId,
         tripId,
         fileName: name,
         relPath: `${t.folderName}/${name}`,
@@ -259,7 +277,7 @@ export function registerIpcHandlers(): void {
         caption: '',
         takenAt: Math.round(st.mtimeMs),
       })
-      imported.push(name)
+      importedIds.push(photoId)
     }
 
     // 后台补缩略图并通知
@@ -268,8 +286,10 @@ export function registerIpcHandlers(): void {
       pushChanged(album.id)
     })()
 
-    const row = getTripRow(tripId)!
-    return photosOfTrip(row)
+    // 只返回本次新增的照片
+    return importedIds
+      .map((id) => getPhotoRow(id))
+      .filter((p): p is NonNullable<typeof p> => p !== null)
   })
 
   ipcMain.handle(IPC.photosDelete, async (_e, photoId: string) => {

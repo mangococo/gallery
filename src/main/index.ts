@@ -2,11 +2,12 @@ import { app, BrowserWindow, Menu, nativeTheme, type MenuItemConstructorOptions 
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { registerMediaScheme, attachMediaProtocol, ensureThumbsDir } from './protocol'
-import { registerIpcHandlers, registerAlbumAt } from './ipc'
+import { registerIpcHandlers, registerAlbumAt, fullRescan } from './ipc'
 import { runE2EIfEnabled } from './e2e'
 import { closeWatcher } from './services/watcher'
 import { disposeThumbResources } from './services/thumbnails'
-import { getAlbumPath, getSetting, setSetting, closeDb } from './db'
+import { getAlbumPath, getAlbumRow, getSetting, setSetting, closeDb, initDb } from './db'
+import type { ThemeMode } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -35,6 +36,14 @@ if (!gotLock) {
   app.setPath('userData', userDataDir)
 
   app.whenReady().then(async () => {
+    initDb()
+
+    // 启动即恢复持久化主题（窗口背景色与 nativeTheme 同步，防首帧闪烁）
+    const savedTheme = (getSetting('theme_mode') as ThemeMode | null) ?? 'system'
+    if (savedTheme !== 'system') nativeTheme.themeSource = savedTheme
+    const darkAtBoot =
+      savedTheme === 'dark' || (savedTheme === 'system' && nativeTheme.shouldUseDarkColors)
+
     attachMediaProtocol({
       resolveAlbumRoot: async (albumId) => getAlbumPath(albumId),
       thumbsDir() {
@@ -46,11 +55,25 @@ if (!gotLock) {
     registerIpcHandlers()
     installChineseMenu()
 
-    // E2E 钩子：跳过目录选择对话框直接注册指定路径
+    // 启动时对激活相册做增量校对并附加 watcher（覆盖关机期间的外部变更）
+    const activeId = getSetting('active_album_id')
+    if (activeId && getAlbumRow(activeId)) {
+      void fullRescan(activeId)
+    }
+
+    // E2E 钩子：跳过目录选择对话框直接注册指定路径（多个用 | 分隔，第一个设为激活）
     if (process.env.GALLERY_E2E === '1' && process.env.GALLERY_E2E_ALBUM) {
-      void registerAlbumAt(process.env.GALLERY_E2E_ALBUM, true).then((album) => {
-        if (album) setSetting('active_album_id', album.id)
-      })
+      const paths = process.env.GALLERY_E2E_ALBUM.split('|')
+      void (async () => {
+        let first = true
+        for (const p of paths) {
+          const album = await registerAlbumAt(p, true)
+          if (album && first) {
+            setSetting('active_album_id', album.id)
+            first = false
+          }
+        }
+      })()
     }
 
     // 恢复上次窗口尺寸位置
@@ -72,7 +95,7 @@ if (!gotLock) {
       show: false,
       title: '画廊',
       titleBarStyle: 'hiddenInset',
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#1C1916' : '#FAF8F5',
+      backgroundColor: darkAtBoot ? '#1C1916' : '#FAF8F5',
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,

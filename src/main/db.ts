@@ -5,8 +5,9 @@ import type { Album, PhotoDTO, PhotoType, ThumbStatus, TripDTO } from '../shared
 
 let db: Database.Database
 
-/** 初始化 SQLite（userData/gallery.db），建表迁移 */
+/** 初始化 SQLite（userData/gallery.db），建表迁移（幂等） */
 export function initDb(): void {
+  if (db) return
   db = new Database(join(app.getPath('userData'), 'gallery.db'))
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
@@ -373,10 +374,19 @@ export function insertPhotoRow(p: NewPhotoRecord): void {
   ).run(p.id, p.tripId, p.fileName, p.relPath, p.type, p.caption, p.takenAt)
 }
 
-export function listPhotoFilesOfTrip(tripId: string): { id: string; fileName: string; takenAt: number | null; thumbStatus: string }[] {
+export function listPhotoFilesOfTrip(
+  tripId: string,
+): { id: string; fileName: string; takenAt: number | null; thumbStatus: string }[] {
   return db
-    .prepare('SELECT id, file_name, taken_at, thumb_status FROM photos WHERE trip_id = ?')
-    .all(tripId) as { id: string; fileName: string; takenAt: number | null; thumbStatus: string }[]
+    .prepare(
+      'SELECT id, file_name AS fileName, taken_at AS takenAt, thumb_status AS thumbStatus FROM photos WHERE trip_id = ?',
+    )
+    .all(tripId) as {
+    id: string
+    fileName: string
+    takenAt: number | null
+    thumbStatus: string
+  }[]
 }
 
 export function updatePhotoTakenAt(id: string, takenAt: number): void {

@@ -32,12 +32,14 @@ export async function watchAlbum(albumId: string, hooks: WatchHooks): Promise<vo
     awaitWriteFinish: { stabilityThreshold: 700, pollInterval: 150 },
   })
 
-  watcher.on('all', (_event, path) => {
+  watcher.on('all', (event, path) => {
     // 忽略隐藏文件（.DS_Store 等）
     const base = path.split('/').pop() ?? ''
     if (base.startsWith('.')) return
+    console.log(`[watcher] ${event}: ${base}`)
     scheduleRescan(albumId, hooks)
   })
+  console.log('[watcher] 已附加监听:', album.path)
 }
 
 function scheduleRescan(albumId: string, hooks: WatchHooks): void {

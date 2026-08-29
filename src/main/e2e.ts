@@ -40,15 +40,16 @@ export async function runE2EIfEnabled(win: Electron.BrowserWindow): Promise<void
     })
 
     for (const step of steps) {
+      // 先等待（给外部操作/异步任务留时间），再执行脚本，再截图
+      await new Promise((r) => setTimeout(r, step.wait ?? 800))
       let value: unknown
       if (step.script) {
         value = await win.webContents.executeJavaScript(
           `(async () => { ${step.script} })()`,
           true,
         )
+        if (step.log) console.log(`[e2e] ${step.name}:`, JSON.stringify(value))
       }
-      await new Promise((r) => setTimeout(r, step.wait ?? 800))
-      if (step.log) console.log(`[e2e] ${step.name}:`, JSON.stringify(value))
       const image = await win.webContents.capturePage()
       const file = join(outDir, `${step.name}.png`)
       await fs.writeFile(file, image.toPNG())
