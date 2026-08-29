@@ -1,130 +1,66 @@
-# 画廊 - 旅行照片管理应用
+# 画廊 · 旅行照片管理桌面应用
 
-一个用于管理旅游照片的 Web 应用，以时间线的形式展示你的旅行记忆。
+macOS 桌面应用（Electron），以手账风时间线管理你的旅行照片与视频。照片文件原地保存在自己的目录中，元数据存于独立的 SQLite 数据库，目录自包含、可迁移。
+
+![技术栈](https://img.shields.io/badge/Electron-44-47848F) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6) ![Tailwind](https://img.shields.io/badge/Tailwind-v4-38BDF8)
 
 ## 功能特性
 
-- 📅 **时间线视图** - 按时间倒序展示所有旅行
-- 📸 **照片堆叠效果** - 鼠标悬停时照片散开展示（最多9张）
-- 🎨 **照片墙** - 瀑布流布局，带有风吹动画效果
-- 🎬 **视频支持** - 支持图片和视频预览播放，左右切换浏览
-- ✏️ **编辑功能** - 编辑旅行标题、描述、日期和标签
-- 💾 **文件系统存储** - 数据保存在本地文件系统的 `.settings.json` 文件中
-- 🎭 **流畅动画** - 基于 Framer Motion 的精美动画效果
-- 🔍 **筛选功能** - 支持标签、时间范围和收藏筛选
-- ❤️ **收藏功能** - 支持收藏旅行并筛选查看
-- ⌨️ **键盘导航** - 支持方向键切换和ESC退出
-- 📱 **响应式设计** - 适配不同屏幕尺寸
+- 📅 **时间线视图** — 按开始日期倒序的手账时间线：缝线书脊、和纸胶带日期贴、拍立得照片堆叠（悬停散开，最多 9 张）
+- 🗂 **多相册** — 注册多个照片根目录，一次激活一个，快速切换；外置卷拔出时灰显、插回即恢复
+- 🌗 **主题** — 亮 / 暗 / 跟随系统三态，暗色为暖褐「烛光」调，跟随系统深色模式联动
+- 🏷 **标签 / 收藏 / 年份** — 三类筛选可叠加
+- 🖼 **照片墙 + 灯箱** — 瀑布流缩略图（sharp 生成 400px webp），灯箱看原图，视频可拖进度条（`gallery-media://` 协议支持 Range）
+- 🎬 **视频海报帧** — 视频自动截帧生成海报；解码失败自动落暖色占位图
+- ✏️ **编辑** — 标题、日期、描述、标签行内编辑；自选封面照片
+- 📥 **导入** — 表单上传、拖拽照片/视频进窗口即导入；一键导入旧版 `.settings.json` 数据目录（保留旧时间戳 id 与图注）
+- 👁 **实时同步** — 监听相册目录，Finder 中增删照片实时反映；亦可手动重新扫描
+- 🗑 **安全删除** — 照片与旅行目录一律移入废纸篓，可反悔
+- ⌨️ **键盘导航** — 灯箱 ←/→ 切换、ESC 退出；标准 macOS 中文菜单（⌘C/⌘V 可用）
+
+## 数据与文件
+
+| 内容 | 位置 |
+|---|---|
+| 应用数据库 | `~/Library/Application Support/画廊/gallery.db` |
+| 缩略图缓存 | `~/Library/Application Support/画廊/thumbnails/` |
+| 照片文件 | **原地不动**，仅在注册的相册目录内 |
+
+移除相册 / 清除应用数据都不会删除照片文件。
 
 ## 开发
 
-### 安装依赖
-
 ```bash
-npm install
+npm install     # 安装依赖（better-sqlite3 / sharp 为 NAPI 预编译，无需手动 rebuild）
+npm run dev     # 启动开发模式（HMR）
+npm run typecheck
+npm run build:mac   # 产出 release/画廊-<版本>-arm64.dmg
 ```
 
-### 启动开发服务器
+## 验收截图工具
 
 ```bash
-npm run dev
+# GALLERY_E2E=1 时按步骤文件驱动 UI 并截图到指定目录，最后自动退出
+GALLERY_E2E=1 \
+GALLERY_E2E_DIR=/tmp/gallery-e2e \
+GALLERY_E2E_STEPS=steps.json \
+GALLERY_E2E_ALBUM="/path/to/相册目录" \
+npx electron .
 ```
 
-### 构建生产版本
-
-```bash
-npm run build
-```
-
-### 构建独立 HTML 文件
-
-构建一个包含所有资源的独立 HTML 文件，可以直接在浏览器中打开运行：
-
-```bash
-npm run build
-```
-
-构建完成后，在 `dist/index.html` 文件就是完整的独立应用，包含：
-- 所有 JavaScript 代码内联
-- 所有 CSS 样式内联
-- 所有资源文件内联
-- 可以直接双击在浏览器中打开
-
-**使用方法：**
-1. 运行 `npm run build` 构建应用
-2. 将 `dist/index.html` 复制到任意位置
-3. 双击文件在浏览器中打开即可使用
-
-## 技术栈
-
-- React 18
-- TypeScript
-- Vite
-- TailwindCSS
-- Framer Motion
-- React Router
-- React DatePicker
-- File System Access API
-- IndexedDB
-
-## 项目结构
+## 架构
 
 ```
 src/
-├── components/        # 组件
-│   ├── PhotoStack.tsx       # 照片堆叠组件
-│   ├── PhotoWall.tsx        # 照片墙组件
-│   ├── TimelineItem.tsx     # 时间线项组件
-│   ├── AddTripModal.tsx     # 添加旅行模态框
-│   ├── FilterBar.tsx        # 筛选栏组件
-│   └── SettingsModal.tsx    # 设置模态框
-├── pages/            # 页面
-│   ├── HomePage.tsx         # 主页
-│   └── TripPage.tsx         # 旅行详情页
-├── types.ts          # 类型定义
-├── storage.ts        # 文件系统存储服务
-├── App.tsx           # 应用入口
-├── main.tsx          # React 入口
-└── index.css         # 全局样式
+├── main/          # 主进程：SQLite、扫描器、缩略图队列、协议、watcher
+│   └── services/  # scanner / thumbnails / watcher
+├── preload/       # contextBridge 类型化 window.api
+├── renderer/      # React 18 + Tailwind v4（语义 token，零 dark: 前缀）
+└── shared/        # 领域类型与 IPC 通道定义
 ```
 
-## 使用说明
+渲染进程不直接触碰文件系统与数据库，一切经类型化 IPC；安全边界由 contextIsolation + 路径越界校验保证。
 
-1. **设置存储目录** - 首次使用需要在设置中选择全局存储目录
-2. **查看旅行** - 主页展示所有旅行的时间线
-3. **添加旅行** - 点击时间线上的 "+" 按钮添加新旅行
-4. **编辑旅行** - 点击旅行进入详情页，点击"编辑"按钮修改信息
-5. **查看媒体** - 在详情页点击照片/视频可全屏查看，支持键盘切换
-6. **筛选功能** - 使用标签、时间范围和收藏状态筛选旅行
-7. **收藏旅行** - 点击爱心图标收藏喜欢的旅行
+## License
 
-## 数据存储
-
-- **配置信息** - 存储在浏览器 localStorage 和 IndexedDB 中
-- **旅行数据** - 存储在选定目录下的各个旅行文件夹中
-- **元数据文件** - 每个旅行目录包含 `.settings.json` 配置文件
-- **媒体文件** - 照片和视频直接存储在旅行目录中
-
-## 浏览器兼容性
-
-需要支持以下现代浏览器 API：
-- File System Access API
-- IndexedDB
-- ES2020+ 语法
-
-推荐使用：
-- Chrome 86+
-- Edge 86+
-- Safari 15.2+（部分功能受限）
-
-## 设计特色
-
-- 温暖复古的配色方案
-- 流畅自然的动画过渡
-- 直观的时间线导航
-- 响应式布局设计
-- 文件系统原生集成
-
-## 许可证
-
-[MIT](./LICENSE)
+MIT

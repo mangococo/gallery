@@ -40,5 +40,38 @@
   "description": "画廊 · 旅行照片管理桌面应用",
   "author": "mangococo",
   "license": "MIT",
-  "main": "out/main/index.js"
+  "main": "out/main/index.js",
+  "build": {
+    "appId": "com.mangococo.gallery",
+    "productName": "画廊",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/sharp/**",
+      "**/node_modules/@img/**",
+      "**/node_modules/better-sqlite3/**"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.photography",
+      "icon": "build/icon.icns",
+      "identity": null
+    },
+    "dmg": {
+      "title": "画廊"
+    }
+  }
 }
