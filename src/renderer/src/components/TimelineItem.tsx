@@ -2,15 +2,16 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Trip } from '../types'
 import PhotoStack from './PhotoStack'
-import { HeartIcon } from './icons'
+import { HeartIcon, TrashIcon } from './icons'
 
 interface TimelineItemProps {
   trip: Trip
   onEdit: (id: string) => void
   onToggleFavorite?: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
-const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavorite }) => {
+const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavorite, onDelete }) => {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '——'
     const date = new Date(dateStr)
@@ -54,20 +55,34 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
           >
             {trip.title}
           </h3>
-          {onToggleFavorite && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleFavorite(trip.id)
-              }}
-              className={`transition-transform shrink-0 hover:scale-110 ${
-                trip.isFavorite ? 'text-primary' : 'text-ink-3 hover:text-ink-2'
-              }`}
-              title={trip.isFavorite ? '取消收藏' : '收藏'}
-            >
-              <HeartIcon size={20} filled={trip.isFavorite} />
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onToggleFavorite && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleFavorite(trip.id)
+                }}
+                className={`transition-transform shrink-0 hover:scale-110 ${
+                  trip.isFavorite ? 'text-primary' : 'text-ink-3 hover:text-ink-2'
+                }`}
+                title={trip.isFavorite ? '取消收藏' : '收藏'}
+              >
+                <HeartIcon size={20} filled={trip.isFavorite} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(trip.id)
+                }}
+                className="transition-transform shrink-0 hover:scale-110 text-ink-3 hover:text-danger"
+                title="删除这次旅行"
+              >
+                <TrashIcon size={17} />
+              </button>
+            )}
+          </div>
         </div>
         {trip.description && (
           <p className="text-ink-2 text-sm leading-relaxed mb-2.5 line-clamp-3">

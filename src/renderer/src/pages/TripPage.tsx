@@ -11,10 +11,12 @@ import TagInput from '../components/TagInput'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
 import { toast } from '../components/feedback'
+import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import {
   ArrowLeftIcon,
   PlusIcon,
   HeartIcon,
+  TrashIcon,
 } from '../components/icons'
 import { Photo, Trip } from '../types'
 
@@ -29,6 +31,7 @@ const TripPage: React.FC = () => {
   const [captionTarget, setCaptionTarget] = React.useState<Photo | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
+  const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
 
   React.useEffect(() => {
     const loadTrip = async () => {
@@ -108,6 +111,22 @@ const TripPage: React.FC = () => {
     await api.setCover(editedTrip.id, photoId)
     await applyUpdate({ ...editedTrip, coverPhotoId: photoId })
     await refreshAll()
+  }
+
+  /** 删除当前打开的旅行：确认弹窗期间锁住入口防重复点击，成功后回首页 */
+  const handleDeleteTrip = async () => {
+    if (!trip || isDeletingTrip) return
+    setIsDeletingTrip(true)
+    const deleted = await confirmAndDeleteTrip({
+      id: trip.id,
+      title: trip.title,
+      photoCount: photos.length,
+    })
+    if (deleted) {
+      await refreshAll()
+      navigate('/')
+    }
+    setIsDeletingTrip(false)
   }
 
   const handleCaptionSaved = (photoId: string, caption: string) => {
@@ -202,12 +221,22 @@ const TripPage: React.FC = () => {
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="px-5 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
-            >
-              编辑
-            </button>
+            <>
+              <button
+                onClick={handleDeleteTrip}
+                disabled={isDeletingTrip}
+                title="删除这次旅行"
+                className="p-2 text-ink-3 hover:text-danger rounded-lg transition-colors disabled:opacity-50"
+              >
+                <TrashIcon size={16} />
+              </button>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-5 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
+              >
+                编辑
+              </button>
+            </>
           )}
         </div>
       </header>

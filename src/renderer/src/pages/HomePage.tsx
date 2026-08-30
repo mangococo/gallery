@@ -5,12 +5,15 @@ import { Trip } from '../types'
 import TimelineItem from '../components/TimelineItem'
 import TimelineAddButton from '../components/TimelineAddButton'
 import AddTripModal from '../components/AddTripModal'
+import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import { HeartIcon, PlusIcon, XIcon } from '../components/icons'
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate()
   const { albums, activeAlbumId, trips, filters, setFilters, refreshAll } = useApp()
   const [showAddModal, setShowAddModal] = React.useState(false)
+  /** 删除确认弹窗打开期间锁住，防重复点击 */
+  const [deletingTripId, setDeletingTripId] = React.useState<string | null>(null)
 
   const activeAlbum = albums.find((a) => a.id === activeAlbumId) ?? null
 
@@ -58,6 +61,20 @@ const HomePage: React.FC = () => {
     if (!trip) return
     await window.api.updateTrip(tripId, { isFavorite: !trip.isFavorite })
     await refreshAll()
+  }
+
+  const handleDeleteTrip = async (tripId: string) => {
+    if (deletingTripId) return
+    const trip = trips.find((t) => t.id === tripId)
+    if (!trip) return
+    setDeletingTripId(tripId)
+    const deleted = await confirmAndDeleteTrip({
+      id: trip.id,
+      title: trip.title,
+      photoCount: trip.photos?.length || 0,
+    })
+    if (deleted) await refreshAll()
+    setDeletingTripId(null)
   }
 
   return (
@@ -111,6 +128,7 @@ const HomePage: React.FC = () => {
                   trip={trip}
                   onEdit={(id) => navigate(`/trip/${id}`)}
                   onToggleFavorite={handleToggleFavorite}
+                  onDelete={handleDeleteTrip}
                 />
               </React.Fragment>
             ))}
