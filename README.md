@@ -1,7 +1,7 @@
 # 画廊 · 把旅行照片，做成一本翻不腻的手账
 
 <p align="center">
-  <img src="https://github.com/mangococo/gallery/releases/latest/download/home-light.png" alt="画廊 — 手账风时间线" width="960">
+  <img src="docs/screenshots/home-light.png" alt="画廊 — 手账风时间线" width="960">
 </p>
 
 <p align="center">
@@ -25,9 +25,9 @@
 
 | 手账时间线 | 旅行照片墙 |
 |---|---|
-| <img src="https://github.com/mangococo/gallery/releases/latest/download/home-light.png" alt="手账时间线" width="480"> | <img src="https://github.com/mangococo/gallery/releases/latest/download/trip-photos.png" alt="旅行照片墙" width="480"> |
+| <img src="docs/screenshots/home-light.png" alt="手账时间线" width="480"> | <img src="docs/screenshots/trip-photos.png" alt="旅行照片墙" width="480"> |
 | **灯箱看图** | **烛光暗色主题** |
-| <img src="https://github.com/mangococo/gallery/releases/latest/download/lightbox.png" alt="灯箱" width="480"> | <img src="https://github.com/mangococo/gallery/releases/latest/download/home-dark.png" alt="暗色主题" width="480"> |
+| <img src="docs/screenshots/lightbox.png" alt="灯箱" width="480"> | <img src="docs/screenshots/home-dark.png" alt="暗色主题" width="480"> |
 
 ## 功能特性
 
