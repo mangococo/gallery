@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { Album } from '../types'
+import { confirmDialog, toast } from './feedback'
 import ThemeSwitch from './ThemeSwitch'
 import SettingsModal from './SettingsModal'
 import {
@@ -72,10 +73,17 @@ const Sidebar: React.FC = () => {
   }
 
   const handleRemove = async (album: Album) => {
-    if (confirm(`移除相册「${album.name}」？\n仅解除注册，不会删除磁盘上的任何文件。`)) {
+    const ok = await confirmDialog({
+      title: `移除相册「${album.name}」？`,
+      body: '仅解除注册，不会删除磁盘上的任何文件。',
+      confirmText: '移除',
+      danger: true,
+    })
+    if (ok) {
       await api.removeAlbum(album.id)
       setMenuAlbum(null)
       await refreshAll()
+      toast(`已移除相册「${album.name}」`)
     }
   }
 

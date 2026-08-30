@@ -2,12 +2,14 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Photo, PhotoDTO } from '../types'
 import { displaySrc } from '../lib/api'
-import { StarIcon, XIcon } from './icons'
+import { confirmDialog } from './feedback'
+import { PenIcon, StarIcon, TrashIcon } from './icons'
 
 interface PhotoWallProps {
   photos: Photo[]
   onPhotoClick?: (photo: Photo) => void
   onDeletePhoto?: (photoId: string) => void
+  onEditCaption?: (photo: Photo) => void
   showDeleteButton?: boolean
   coverPhotoId?: string | null
   onSetCover?: (photoId: string) => void
@@ -57,10 +59,21 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   photos,
   onPhotoClick,
   onDeletePhoto,
+  onEditCaption,
   showDeleteButton = false,
   coverPhotoId = null,
   onSetCover,
 }) => {
+  const handleDelete = async (photo: Photo) => {
+    const ok = await confirmDialog({
+      title: '把这张照片移入废纸篓？',
+      body: photo.fileName,
+      confirmText: '移入废纸篓',
+      danger: true,
+    })
+    if (ok) onDeletePhoto?.(photo.id)
+  }
+
   return (
     <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
       {photos.map((photo, index) => (
@@ -86,6 +99,18 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
 
             {/* 悬停操作 */}
             <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onEditCaption && (
+                <button
+                  title="编辑图注"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onEditCaption(photo)
+                  }}
+                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
+                >
+                  <PenIcon size={13} />
+                </button>
+              )}
               {onSetCover && coverPhotoId !== photo.id && (
                 <button
                   title="设为封面"
@@ -103,18 +128,31 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
                   title="删除（移入废纸篓）"
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (confirm('把这张照片移入废纸篓？')) onDeletePhoto(photo.id)
+                    void handleDelete(photo)
                   }}
                   className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center"
                 >
-                  <XIcon size={13} />
+                  <TrashIcon size={13} />
                 </button>
               )}
             </div>
 
-            {/* 图注 */}
+            {/* 图注：点击直接编辑 */}
             {photo.caption && (
-              <div className="px-3 py-2 bg-surface text-xs text-ink-2">{photo.caption}</div>
+              <div
+                role="button"
+                title={onEditCaption ? '点击编辑图注' : undefined}
+                onClick={(e) => {
+                  if (!onEditCaption) return
+                  e.stopPropagation()
+                  onEditCaption(photo)
+                }}
+                className={`px-3 py-2 bg-surface text-xs text-ink-2 ${
+                  onEditCaption ? 'cursor-text hover:text-ink' : ''
+                }`}
+              >
+                {photo.caption}
+              </div>
             )}
           </div>
         </motion.div>

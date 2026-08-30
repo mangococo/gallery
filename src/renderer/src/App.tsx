@@ -4,6 +4,8 @@ import { AppProvider, useApp } from './lib/store'
 import Sidebar from './components/Sidebar'
 import HomePage from './pages/HomePage'
 import TripPage from './pages/TripPage'
+import DropImportLayer from './components/DropImport'
+import { FeedbackHost } from './components/feedback'
 
 /** 应用外壳：左侧常驻侧栏 + 右侧内容区（方案 §5.1） */
 function Shell() {
@@ -26,6 +28,10 @@ function Shell() {
           <Route path="/trip/:id" element={<TripPage />} />
         </Routes>
       </main>
+      {/* 窗口级拖拽导入（TripPage 内部拖拽会 stopPropagation） */}
+      <DropImportLayer />
+      {/* toast / 确认弹窗宿主 */}
+      <FeedbackHost />
     </div>
   )
 }

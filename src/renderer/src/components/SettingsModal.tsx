@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
+import { confirmDialog, toast } from './feedback'
 import { WarningIcon, XIcon } from './icons'
 import type { LegacyImportResult } from '../types'
 
@@ -27,7 +28,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
         setImportResult(result)
       }
     } catch (err: any) {
-      alert('导入失败: ' + (err?.message ?? err))
+      toast('导入失败: ' + (err?.message ?? err), 'error')
     } finally {
       setBusy(null)
     }
@@ -46,24 +47,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
   }
 
   const handleRemoveAlbum = async (id: string, name: string) => {
-    if (confirm(`移除相册「${name}」？\n仅解除注册，不会删除磁盘上的任何文件。`)) {
+    const ok = await confirmDialog({
+      title: `移除相册「${name}」？`,
+      body: '仅解除注册，不会删除磁盘上的任何文件。',
+      confirmText: '移除',
+      danger: true,
+    })
+    if (ok) {
       await api.removeAlbum(id)
       await reloadAlbums()
       await onChanged()
+      toast(`已移除相册「${name}」`)
     }
   }
 
   const handleClearData = async () => {
-    if (
-      confirm(
-        '清除应用数据库中的所有相册注册与旅行记录？\n照片文件不会被删除；之后可重新注册相册恢复。',
-      )
-    ) {
+    const ok = await confirmDialog({
+      title: '清除应用数据？',
+      body: '将清除应用数据库中的所有相册注册与旅行记录。\n照片文件不会被删除；之后可重新注册相册恢复。',
+      confirmText: '清除',
+      danger: true,
+    })
+    if (ok) {
       for (const album of albums) {
         await api.removeAlbum(album.id)
       }
       await onChanged()
-      alert('已清除。')
+      toast('已清除，照片文件原地未动')
     }
   }
 

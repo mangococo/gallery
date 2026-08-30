@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api';
+import { toast } from './feedback';
 import {
   CalendarIcon,
   CameraIcon,
@@ -75,7 +76,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (error: any) {
-      alert(error.message || '创建旅行失败');
+      toast(error.message || '创建旅行失败', 'error');
     } finally {
       setSubmitting(false);
     }

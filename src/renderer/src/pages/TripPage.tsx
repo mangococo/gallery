@@ -3,17 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
-import { api, displaySrc } from '../lib/api'
+import { api } from '../lib/api'
 import { useApp } from '../lib/store'
+import { hasMediaExt } from '../lib/media'
 import PhotoWall from '../components/PhotoWall'
 import TagInput from '../components/TagInput'
+import Lightbox from '../components/Lightbox'
+import CaptionEditor from '../components/CaptionEditor'
+import { toast } from '../components/feedback'
 import {
   ArrowLeftIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  HeartIcon,
   PlusIcon,
-  XIcon,
+  HeartIcon,
 } from '../components/icons'
 import { Photo, Trip } from '../types'
 
@@ -24,8 +25,8 @@ const TripPage: React.FC = () => {
   const [trip, setTrip] = React.useState<Trip | null>(null)
   const [isEditing, setIsEditing] = React.useState(false)
   const [editedTrip, setEditedTrip] = React.useState<Trip | null>(null)
-  const [selectedPhoto, setSelectedPhoto] = React.useState<Photo | null>(null)
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = React.useState<number>(0)
+  const [lightboxIndex, setLightboxIndex] = React.useState<number | null>(null)
+  const [captionTarget, setCaptionTarget] = React.useState<Photo | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
 
@@ -43,62 +44,63 @@ const TripPage: React.FC = () => {
     if (!isEditing) setTrip(updated)
   }
 
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files || files.length === 0 || !trip) return
-
+  const importPathsToTrip = async (paths: string[]) => {
+    if (!trip || paths.length === 0) return
     setIsUploading(true)
     try {
-      const paths = Array.from(files)
-        .filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'))
-        .map((f) => api.getPathForFile(f))
       const newPhotos = await api.importPhotos(trip.id, paths)
       if (editedTrip && newPhotos.length > 0) {
         await applyUpdate({ ...editedTrip, photos: [...editedTrip.photos, ...newPhotos] })
-        await refreshAll()
       }
+      toast(`已导入 ${newPhotos.length} 张照片`, 'success')
+      await refreshAll()
     } catch (error: any) {
-      alert('导入照片失败: ' + error.message)
+      toast('导入照片失败: ' + error.message, 'error')
     }
-
     setIsUploading(false)
+  }
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+    const paths = Array.from(files)
+      .filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || hasMediaExt(f.name))
+      .map((f) => api.getPathForFile(f))
+    await importPathsToTrip(paths)
     event.target.value = ''
   }
 
-  /** 拖拽照片进窗口即导入该旅行（方案决策17） */
+  /** 拖拽照片进窗口即导入该旅行（方案决策17）；stopPropagation 避免触发首页级拖拽弹层 */
   const handleDrop = async (event: React.DragEvent) => {
     event.preventDefault()
+    event.stopPropagation()
     setDragOver(false)
-    if (!trip || isUploading) return
     const paths = Array.from(event.dataTransfer.files)
       .filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || hasMediaExt(f.name))
       .map((f) => api.getPathForFile(f))
       .filter((p) => !!p)
-    if (paths.length === 0) return
-
-    setIsUploading(true)
-    try {
-      const newPhotos = await api.importPhotos(trip.id, paths)
-      if (editedTrip && newPhotos.length > 0) {
-        await applyUpdate({ ...editedTrip, photos: [...editedTrip.photos, ...newPhotos] })
-        await refreshAll()
-      }
-    } catch (error: any) {
-      alert('导入照片失败: ' + error.message)
-    }
-    setIsUploading(false)
+    await importPathsToTrip(paths)
   }
 
   const handleDeletePhoto = async (photoId: string) => {
-    if (editedTrip) {
-      const updatedTrip = {
-        ...editedTrip,
-        photos: editedTrip.photos.filter((p: Photo) => p.id !== photoId),
-      }
-      await applyUpdate(updatedTrip)
+    if (!editedTrip) return
+    const idx = editedTrip.photos.findIndex((p: Photo) => p.id === photoId)
+    try {
       await api.deletePhoto(photoId)
-      await refreshAll()
+    } catch (error: any) {
+      toast('删除失败: ' + error.message, 'error')
+      return
     }
+    const remaining = editedTrip.photos.filter((p: Photo) => p.id !== photoId)
+    await applyUpdate({ ...editedTrip, photos: remaining })
+    // 灯箱开着时跟随收缩；删空则关闭
+    setLightboxIndex((cur) => {
+      if (cur === null) return null
+      if (remaining.length === 0) return null
+      return Math.min(cur > idx ? cur - 1 : cur, remaining.length - 1)
+    })
+    toast('已移入废纸篓', 'success')
+    await refreshAll()
   }
 
   const handleSetCover = async (photoId: string) => {
@@ -106,6 +108,16 @@ const TripPage: React.FC = () => {
     await api.setCover(editedTrip.id, photoId)
     await applyUpdate({ ...editedTrip, coverPhotoId: photoId })
     await refreshAll()
+  }
+
+  const handleCaptionSaved = (photoId: string, caption: string) => {
+    if (!editedTrip) return
+    const updated = {
+      ...editedTrip,
+      photos: editedTrip.photos.map((p: Photo) => (p.id === photoId ? { ...p, caption } : p)),
+    }
+    setEditedTrip(updated)
+    if (!isEditing) setTrip(updated)
   }
 
   const handleSave = async () => {
@@ -125,43 +137,8 @@ const TripPage: React.FC = () => {
 
   const handlePhotoClick = (photo: Photo) => {
     const photos = editedTrip?.photos || trip?.photos || []
-    const index = photos.findIndex((p: Photo) => p.id === photo.id)
-    setSelectedPhoto(photo)
-    setSelectedPhotoIndex(index)
+    setLightboxIndex(photos.findIndex((p: Photo) => p.id === photo.id))
   }
-
-  const handlePrevPhoto = () => {
-    const photos = editedTrip?.photos || trip?.photos || []
-    if (photos.length === 0) return
-    const newIndex = selectedPhotoIndex > 0 ? selectedPhotoIndex - 1 : photos.length - 1
-    setSelectedPhoto(photos[newIndex])
-    setSelectedPhotoIndex(newIndex)
-  }
-
-  const handleNextPhoto = () => {
-    const photos = editedTrip?.photos || trip?.photos || []
-    if (photos.length === 0) return
-    const newIndex = selectedPhotoIndex < photos.length - 1 ? selectedPhotoIndex + 1 : 0
-    setSelectedPhoto(photos[newIndex])
-    setSelectedPhotoIndex(newIndex)
-  }
-
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedPhoto(null)
-      } else if (selectedPhoto) {
-        if (e.key === 'ArrowLeft') {
-          handlePrevPhoto()
-        } else if (e.key === 'ArrowRight') {
-          handleNextPhoto()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedPhoto, selectedPhotoIndex])
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '——'
@@ -178,14 +155,20 @@ const TripPage: React.FC = () => {
     )
   }
 
+  const photos = editedTrip?.photos || trip.photos
+
   return (
     <div
       className="min-h-screen bg-background"
       onDragOver={(e) => {
         e.preventDefault()
+        e.stopPropagation()
         setDragOver(true)
       }}
-      onDragLeave={() => setDragOver(false)}
+      onDragLeave={(e) => {
+        e.stopPropagation()
+        setDragOver(false)
+      }}
       onDrop={handleDrop}
     >
       {/* 顶栏（可拖拽） */}
@@ -363,7 +346,7 @@ const TripPage: React.FC = () => {
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display text-2xl font-bold text-ink">照片</h2>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-ink-3">{trip.photos.length} 张</span>
+            <span className="text-sm text-ink-3">{photos.length} 张</span>
             <label className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
               <PlusIcon size={13} />
               <span>{isUploading ? '导入中…' : '添加照片'}</span>
@@ -379,9 +362,10 @@ const TripPage: React.FC = () => {
           </div>
         </div>
         <PhotoWall
-          photos={editedTrip?.photos || trip.photos}
+          photos={photos}
           onPhotoClick={handlePhotoClick}
           onDeletePhoto={handleDeletePhoto}
+          onEditCaption={setCaptionTarget}
           showDeleteButton
           coverPhotoId={editedTrip?.coverPhotoId ?? null}
           onSetCover={handleSetCover}
@@ -390,80 +374,32 @@ const TripPage: React.FC = () => {
 
       {/* 灯箱 */}
       <AnimatePresence>
-        {selectedPhoto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-8"
-            onClick={() => setSelectedPhoto(null)}
-          >
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handlePrevPhoto()
-              }}
-              className="absolute left-8 top-1/2 -translate-y-1/2 text-white/80 hover:text-white z-10 transition-colors"
-              title="上一张"
-            >
-              <ChevronLeftIcon size={36} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleNextPhoto()
-              }}
-              className="absolute right-8 top-1/2 -translate-y-1/2 text-white/80 hover:text-white z-10 transition-colors"
-              title="下一张"
-            >
-              <ChevronRightIcon size={36} />
-            </button>
-
-            <motion.div
-              key={selectedPhoto.id}
-              initial={{ scale: 0.92 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.92 }}
-              className="h-full flex flex-col items-center justify-center gap-3"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="min-h-0 flex-1 flex items-center justify-center">
-                {selectedPhoto.type === 'video' ? (
-                  <video
-                    src={selectedPhoto.mediaUrl}
-                    controls
-                    autoPlay
-                    className="max-h-full max-w-full"
-                  />
-                ) : (
-                  <img
-                    src={selectedPhoto.mediaUrl}
-                    alt={selectedPhoto.caption || ''}
-                    className="max-h-full max-w-full object-contain"
-                  />
-                )}
-              </div>
-              {selectedPhoto.caption && (
-                <p className="text-white/70 text-sm">{selectedPhoto.caption}</p>
-              )}
-            </motion.div>
-
-            <button
-              onClick={() => setSelectedPhoto(null)}
-              className="absolute top-6 right-8 text-white/80 hover:text-white transition-colors"
-              title="关闭"
-            >
-              <XIcon size={26} />
-            </button>
-          </motion.div>
+        {lightboxIndex !== null && photos[lightboxIndex] && (
+          <Lightbox
+            key="lightbox"
+            photos={photos}
+            index={lightboxIndex}
+            onNavigate={setLightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+            onDeletePhoto={handleDeletePhoto}
+            onEditCaption={setCaptionTarget}
+            coverPhotoId={editedTrip?.coverPhotoId ?? null}
+            onSetCover={handleSetCover}
+          />
         )}
       </AnimatePresence>
+
+      {/* 图注编辑 */}
+      {captionTarget && (
+        <CaptionEditor
+          key={captionTarget.id}
+          photo={captionTarget}
+          onClose={() => setCaptionTarget(null)}
+          onSaved={handleCaptionSaved}
+        />
+      )}
     </div>
   )
-}
-
-function hasMediaExt(name: string): boolean {
-  return /\.(jpe?g|png|gif|bmp|webp|heic|tiff|mp4|m4v|mov|avi|mkv|webm)$/i.test(name)
 }
 
 export default TripPage
