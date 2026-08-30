@@ -71,4 +71,5 @@ jobs:
           files: |
             dist/*.dmg
             dist/*.exe
+            docs/screenshots/*.png
           fail_on_unmatched_files: true
