@@ -1,7 +1,9 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
+import { WarningIcon, XIcon } from './icons'
 import type { LegacyImportResult } from '../types'
 
 interface SettingsModalProps {
@@ -65,7 +67,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
     }
   }
 
-  return (
+  // portal 到 body：侧栏是 sticky 层叠上下文，弹窗留在内部会被照片堆叠盖住
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
       onClick={onClose}
@@ -81,9 +84,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
           <h2 className="font-display text-xl font-bold text-primary">设置</h2>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full text-ink-3 hover:text-ink hover:bg-surface-2 transition-colors"
+            title="关闭"
+            className="w-7 h-7 rounded-full text-ink-3 hover:text-ink hover:bg-surface-2 transition-colors flex items-center justify-center"
           >
-            ✕
+            <XIcon size={14} />
           </button>
         </header>
 
@@ -101,7 +105,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
                     <div className="text-sm text-ink truncate">
                       {album.name}
                       {album.status === 'missing' && (
-                        <span className="text-danger text-xs ml-1">⚠ 目录缺失</span>
+                        <span className="text-danger text-xs ml-1 inline-flex items-center gap-0.5 align-baseline">
+                          <WarningIcon size={11} className="self-center" />
+                          目录缺失
+                        </span>
                       )}
                     </div>
                     <div className="text-xs text-ink-3 truncate">{album.path}</div>
@@ -157,7 +164,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
           </section>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

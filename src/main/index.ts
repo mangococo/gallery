@@ -26,8 +26,8 @@ if (!gotLock) {
   })
 
   app.setName('画廊')
-  // 固定数据目录为「画廊」（dev 模式默认跟随 package name）
-  const userDataDir = join(app.getPath('appData'), '画廊')
+  // 固定数据目录为「画廊」（dev 模式默认跟随 package name）；测试可用 GALLERY_USER_DATA 隔离
+  const userDataDir = process.env.GALLERY_USER_DATA || join(app.getPath('appData'), '画廊')
   try {
     mkdirSync(userDataDir, { recursive: true })
   } catch {

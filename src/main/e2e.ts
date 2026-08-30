@@ -44,10 +44,14 @@ export async function runE2EIfEnabled(win: Electron.BrowserWindow): Promise<void
       await new Promise((r) => setTimeout(r, step.wait ?? 800))
       let value: unknown
       if (step.script) {
-        value = await win.webContents.executeJavaScript(
-          `(async () => { ${step.script} })()`,
-          true,
-        )
+        try {
+          value = await win.webContents.executeJavaScript(
+            `(async () => { ${step.script} })()`,
+            true,
+          )
+        } catch (err) {
+          console.error(`[e2e] ${step.name} 脚本出错:`, (err as Error)?.message ?? err)
+        }
         if (step.log) console.log(`[e2e] ${step.name}:`, JSON.stringify(value))
       }
       const image = await win.webContents.capturePage()

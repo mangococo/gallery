@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Trip } from '../types'
 import PhotoStack from './PhotoStack'
+import { HeartIcon } from './icons'
 
 interface TimelineItemProps {
   trip: Trip
@@ -59,10 +60,12 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
                 e.stopPropagation()
                 onToggleFavorite(trip.id)
               }}
-              className="text-xl hover:scale-110 transition-transform shrink-0"
+              className={`transition-transform shrink-0 hover:scale-110 ${
+                trip.isFavorite ? 'text-primary' : 'text-ink-3 hover:text-ink-2'
+              }`}
               title={trip.isFavorite ? '取消收藏' : '收藏'}
             >
-              {trip.isFavorite ? '❤️' : '🤍'}
+              <HeartIcon size={20} filled={trip.isFavorite} />
             </button>
           )}
         </div>

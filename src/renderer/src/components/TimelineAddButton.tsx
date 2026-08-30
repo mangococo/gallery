@@ -1,5 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import { PlusIcon } from './icons'
 
 interface TimelineAddButtonProps {
   onAdd: () => void
@@ -22,16 +23,14 @@ const TimelineAddButton: React.FC<TimelineAddButtonProps> = ({ onAdd }) => {
           <motion.div
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="absolute w-9 h-9 rounded-full border-2 border-dashed border-primary bg-background flex items-center justify-center text-primary font-bold shadow-sm z-10 pointer-events-none"
+            className="absolute w-9 h-9 rounded-full border-2 border-dashed border-primary bg-background flex items-center justify-center text-primary shadow-sm z-10 pointer-events-none"
             style={{
               left: 'calc(50% - 18px)',
               top: '50%',
               transform: 'translateY(-50%)',
-              fontSize: '18px',
-              lineHeight: '1',
             }}
           >
-            +
+            <PlusIcon size={18} />
           </motion.div>
         )}
       </div>

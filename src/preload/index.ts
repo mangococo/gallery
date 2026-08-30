@@ -34,6 +34,8 @@ const api: GalleryApi = {
   updateTrip: (id, patch) => ipcRenderer.invoke(IPC.tripsUpdate, id, patch),
   deleteTrip: (id) => ipcRenderer.invoke(IPC.tripsDelete, id),
 
+  listTags: () => ipcRenderer.invoke(IPC.tagsList),
+
   importPhotos: (tripId, paths) => ipcRenderer.invoke(IPC.photosImport, tripId, paths),
   deletePhoto: (photoId) => ipcRenderer.invoke(IPC.photosDelete, photoId),
   setCaption: (photoId, caption) => ipcRenderer.invoke(IPC.photosSetCaption, photoId, caption),

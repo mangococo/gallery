@@ -292,10 +292,18 @@ export function setTagsOfTrip(tripId: string, tags: string[]): void {
   tx(tags)
 }
 
+/** 全部已有标签，常用在前（联想选择用） */
 export function allTags(): string[] {
-  return (db.prepare('SELECT name FROM tags ORDER BY name').all() as { name: string }[]).map(
-    (r) => r.name,
-  )
+  return (
+    db
+      .prepare(
+        `SELECT t.name FROM tags t
+         LEFT JOIN trip_tags tt ON tt.tag_id = t.id
+         GROUP BY t.id
+         ORDER BY COUNT(tt.trip_id) DESC, t.name`,
+      )
+      .all() as { name: string }[]
+  ).map((r) => r.name)
 }
 
 // ---------- photos ----------

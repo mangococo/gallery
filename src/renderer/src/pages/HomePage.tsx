@@ -5,6 +5,7 @@ import { Trip } from '../types'
 import TimelineItem from '../components/TimelineItem'
 import TimelineAddButton from '../components/TimelineAddButton'
 import AddTripModal from '../components/AddTripModal'
+import { HeartIcon, PlusIcon, XIcon } from '../components/icons'
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate()
@@ -35,9 +36,9 @@ const HomePage: React.FC = () => {
     [filteredTrips],
   )
 
-  const activeFilterChips: { label: string; clear: () => void }[] = [
+  const activeFilterChips: { label: string; icon?: 'heart'; clear: () => void }[] = [
     ...(filters.favoritesOnly
-      ? [{ label: '❤️ 收藏', clear: () => setFilters({ favoritesOnly: false }) }]
+      ? [{ label: '收藏', icon: 'heart' as const, clear: () => setFilters({ favoritesOnly: false }) }]
       : []),
     ...filters.tags.map((tag) => ({
       label: `#${tag}`,
@@ -76,9 +77,11 @@ const HomePage: React.FC = () => {
                 <button
                   key={chip.label}
                   onClick={chip.clear}
-                  className="px-2 py-0.5 bg-primary-soft text-primary text-xs rounded-full hover:opacity-80 transition-opacity"
+                  className="px-2 py-0.5 bg-primary-soft text-primary text-xs rounded-full hover:opacity-80 transition-opacity flex items-center gap-1"
                 >
-                  {chip.label} ✕
+                  {chip.icon === 'heart' && <HeartIcon size={11} filled />}
+                  <span>{chip.label}</span>
+                  <XIcon size={10} />
                 </button>
               ))}
             </div>
@@ -86,9 +89,10 @@ const HomePage: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="no-drag px-4 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity shrink-0"
+          className="no-drag px-4 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1"
         >
-          ＋ 新旅行
+          <PlusIcon size={13} />
+          <span>新旅行</span>
         </button>
       </header>
 
@@ -133,8 +137,8 @@ const HomePage: React.FC = () => {
               <p className="text-ink-3 mb-2 font-display text-2xl">翻开第一页旅行手账</p>
               <p className="text-ink-3 text-sm mb-8">
                 {activeAlbum
-                  ? '点右上角「＋ 新旅行」，或把照片拖进窗口'
-                  : '先在左侧「相册」点击 ＋ 注册照片目录'}
+                  ? '点右上角「新旅行」，或把照片拖进窗口'
+                  : '先在左侧「相册」点击加号注册照片目录'}
               </p>
               {activeAlbum && (
                 <button

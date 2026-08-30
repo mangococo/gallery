@@ -1,10 +1,18 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { Album } from '../types'
 import ThemeSwitch from './ThemeSwitch'
 import SettingsModal from './SettingsModal'
+import {
+  EllipsisIcon,
+  GearIcon,
+  HeartIcon,
+  PlusIcon,
+  WarningIcon,
+} from './icons'
 
 /** 左侧常驻侧栏：收藏 / 相册 / 标签 / 年份 + 底部统计与主题 */
 const Sidebar: React.FC = () => {
@@ -104,7 +112,9 @@ const Sidebar: React.FC = () => {
               : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
           }`}
         >
-          <span>{filters.favoritesOnly ? '❤️' : '🤍'}</span>
+          <span className="flex items-center">
+            <HeartIcon size={16} filled={filters.favoritesOnly} />
+          </span>
           <span>收藏</span>
           {favoriteCount > 0 && (
             <span className="ml-auto text-xs text-ink-3">{favoriteCount}</span>
@@ -118,9 +128,9 @@ const Sidebar: React.FC = () => {
             <button
               onClick={handleRegister}
               title="注册相册目录"
-              className="w-5 h-5 rounded text-ink-3 hover:text-primary hover:bg-primary-soft transition-colors text-sm leading-none"
+              className="w-5 h-5 rounded text-ink-3 hover:text-primary hover:bg-primary-soft transition-colors flex items-center justify-center"
             >
-              ＋
+              <PlusIcon size={14} />
             </button>
           </header>
           <ul className="space-y-0.5">
@@ -150,9 +160,9 @@ const Sidebar: React.FC = () => {
                         missing ? 'bg-danger/60' : active ? 'bg-primary' : 'bg-line'
                       }`}
                     />
-                    <span className="truncate flex-1">
+                    <span className="truncate flex-1 flex items-center gap-1">
                       {album.name}
-                      {missing && ' ⚠'}
+                      {missing && <WarningIcon size={12} className="text-danger shrink-0" />}
                     </span>
                     <span
                       role="button"
@@ -162,11 +172,11 @@ const Sidebar: React.FC = () => {
                         setMenuAlbum(menuAlbum?.id === album.id ? null : album)
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && setMenuAlbum(album)}
-                      className={`opacity-0 group-hover:opacity-100 text-ink-3 hover:text-primary px-1 rounded ${
+                      className={`opacity-0 group-hover:opacity-100 text-ink-3 hover:text-primary px-0.5 rounded flex items-center ${
                         menuAlbum?.id === album.id ? 'opacity-100' : ''
                       }`}
                     >
-                      ⋯
+                      <EllipsisIcon size={14} />
                     </span>
                   </button>
 
@@ -202,7 +212,7 @@ const Sidebar: React.FC = () => {
             })}
             {albums.length === 0 && (
               <li className="px-3 py-2 text-xs text-ink-3 leading-relaxed">
-                还没有相册，点击 ＋ 选择照片根目录
+                还没有相册，点击「相册」右侧的加号选择照片根目录
               </li>
             )}
           </ul>
@@ -306,19 +316,20 @@ const Sidebar: React.FC = () => {
           <button
             onClick={() => setShowSettings(true)}
             title="设置"
-            className="text-ink-3 hover:text-primary transition-colors text-base"
+            className="text-ink-3 hover:text-primary transition-colors flex items-center"
           >
-            ⚙
+            <GearIcon size={16} />
           </button>
         </div>
       </footer>
 
-      {/* 重命名弹层 */}
-      {renamingAlbum && (
-        <div
-          className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"
-          onClick={() => setRenamingAlbum(null)}
-        >
+      {/* 重命名弹层（portal 到 body，避免被 sticky 侧栏的层叠上下文困住） */}
+      {renamingAlbum &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"
+            onClick={() => setRenamingAlbum(null)}
+          >
           <div
             className="bg-surface rounded-xl shadow-xl p-5 w-72"
             onClick={(e) => e.stopPropagation()}
@@ -346,8 +357,9 @@ const Sidebar: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {showSettings && (
         <SettingsModal

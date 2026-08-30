@@ -31,6 +31,7 @@ import {
   deleteTripsOfAlbum,
   getTagsOfTrip,
   setTagsOfTrip,
+  allTags,
   getPhotoRow,
   insertPhotoRow,
   deletePhotoRow,
@@ -244,6 +245,8 @@ export function registerIpcHandlers(): void {
     deleteTripRow(id)
     pushChanged(t.albumId)
   })
+
+  ipcMain.handle(IPC.tagsList, () => allTags())
 
   // —— 照片 ——
   ipcMain.handle(IPC.photosImport, async (_e, tripId: string, paths: string[]) => {

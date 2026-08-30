@@ -6,6 +6,15 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { api, displaySrc } from '../lib/api'
 import { useApp } from '../lib/store'
 import PhotoWall from '../components/PhotoWall'
+import TagInput from '../components/TagInput'
+import {
+  ArrowLeftIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  HeartIcon,
+  PlusIcon,
+  XIcon,
+} from '../components/icons'
 import { Photo, Trip } from '../types'
 
 const TripPage: React.FC = () => {
@@ -17,7 +26,6 @@ const TripPage: React.FC = () => {
   const [editedTrip, setEditedTrip] = React.useState<Trip | null>(null)
   const [selectedPhoto, setSelectedPhoto] = React.useState<Photo | null>(null)
   const [selectedPhotoIndex, setSelectedPhotoIndex] = React.useState<number>(0)
-  const [tagInput, setTagInput] = React.useState('')
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
 
@@ -26,7 +34,6 @@ const TripPage: React.FC = () => {
       const tripData = await api.getTrip(id!)
       setTrip(tripData)
       setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
-      setTagInput((tripData?.tags || []).join(', '))
     }
     loadTrip()
   }, [id])
@@ -187,7 +194,9 @@ const TripPage: React.FC = () => {
           onClick={() => navigate('/')}
           className="no-drag flex items-center gap-1.5 text-sm text-ink-2 hover:text-primary transition-colors"
         >
-          <span>←</span>
+          <span className="flex items-center">
+            <ArrowLeftIcon size={16} />
+          </span>
           <span>返回</span>
         </button>
         <div className="flex items-center gap-3 no-drag">
@@ -304,40 +313,23 @@ const TripPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-ink-2 mb-2">标签</label>
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => {
-                    setTagInput(e.target.value)
+                <TagInput
+                  value={editedTrip?.tags ?? []}
+                  onChange={(tags) => {
                     if (editedTrip) {
-                      setEditedTrip({
-                        ...editedTrip,
-                        tags: e.target.value.split(',').map((t) => t.trim()).filter((t) => t),
-                      })
+                      setEditedTrip({ ...editedTrip, tags })
                     }
                   }}
-                  placeholder="用逗号分隔标签"
-                  className="w-full px-5 py-3 bg-background border-2 border-line rounded-xl text-ink placeholder-ink-3 focus:outline-none focus:border-primary transition-all"
                 />
-                {editedTrip?.tags && editedTrip.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {editedTrip.tags.map((tag: string, index: number) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1 bg-primary-soft text-primary text-sm rounded-full"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           ) : (
             <>
               <div className="flex items-start justify-between gap-4">
                 <h1 className="font-display text-3xl font-bold text-ink mb-3">{trip.title}</h1>
-                {trip.isFavorite && <span className="text-xl">❤️</span>}
+                {trip.isFavorite && (
+                  <HeartIcon size={20} filled className="text-primary shrink-0" />
+                )}
               </div>
               <div className="flex items-center gap-3 text-sm text-ink-3 mb-4">
                 <span className="font-display">
@@ -373,7 +365,7 @@ const TripPage: React.FC = () => {
           <div className="flex items-center gap-4">
             <span className="text-sm text-ink-3">{trip.photos.length} 张</span>
             <label className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
-              <span>＋</span>
+              <PlusIcon size={13} />
               <span>{isUploading ? '导入中…' : '添加照片'}</span>
               <input
                 type="file"
@@ -411,18 +403,20 @@ const TripPage: React.FC = () => {
                 e.stopPropagation()
                 handlePrevPhoto()
               }}
-              className="absolute left-8 top-1/2 -translate-y-1/2 text-white/80 hover:text-white text-4xl z-10 transition-colors"
+              className="absolute left-8 top-1/2 -translate-y-1/2 text-white/80 hover:text-white z-10 transition-colors"
+              title="上一张"
             >
-              ←
+              <ChevronLeftIcon size={36} />
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 handleNextPhoto()
               }}
-              className="absolute right-8 top-1/2 -translate-y-1/2 text-white/80 hover:text-white text-4xl z-10 transition-colors"
+              className="absolute right-8 top-1/2 -translate-y-1/2 text-white/80 hover:text-white z-10 transition-colors"
+              title="下一张"
             >
-              →
+              <ChevronRightIcon size={36} />
             </button>
 
             <motion.div
@@ -456,9 +450,10 @@ const TripPage: React.FC = () => {
 
             <button
               onClick={() => setSelectedPhoto(null)}
-              className="absolute top-6 right-8 text-white/80 hover:text-white text-3xl transition-colors"
+              className="absolute top-6 right-8 text-white/80 hover:text-white transition-colors"
+              title="关闭"
             >
-              ×
+              <XIcon size={26} />
             </button>
           </motion.div>
         )}

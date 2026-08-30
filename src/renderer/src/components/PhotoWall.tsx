@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Photo, PhotoDTO } from '../types'
 import { displaySrc } from '../lib/api'
+import { StarIcon, XIcon } from './icons'
 
 interface PhotoWallProps {
   photos: Photo[]
@@ -77,8 +78,9 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
 
             {/* 封面徽标 */}
             {coverPhotoId === photo.id && (
-              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm">
-                ★ 封面
+              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm flex items-center gap-1">
+                <StarIcon size={10} filled />
+                <span>封面</span>
               </div>
             )}
 
@@ -91,9 +93,9 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
                     e.stopPropagation()
                     onSetCover(photo.id)
                   }}
-                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center text-sm"
+                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
                 >
-                  ★
+                  <StarIcon size={13} filled />
                 </button>
               )}
               {showDeleteButton && onDeletePhoto && (
@@ -103,9 +105,9 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
                     e.stopPropagation()
                     if (confirm('把这张照片移入废纸篓？')) onDeletePhoto(photo.id)
                   }}
-                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center text-sm"
+                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center"
                 >
-                  ×
+                  <XIcon size={13} />
                 </button>
               )}
             </div>

@@ -124,6 +124,9 @@ export interface GalleryApi {
   /** 移入废纸篓 */
   deleteTrip(id: string): Promise<void>
 
+  /** 全部已有标签（常用在前），标签输入联想用 */
+  listTags(): Promise<string[]>
+
   /** 复制文件进旅行目录并入库 */
   importPhotos(tripId: string, paths: string[]): Promise<PhotoDTO[]>
   /** 移入废纸篓 */
@@ -164,6 +167,7 @@ export const IPC = {
   tripsCreate: 'trips:create',
   tripsUpdate: 'trips:update',
   tripsDelete: 'trips:delete',
+  tagsList: 'tags:list',
 
   photosImport: 'photos:import',
   photosDelete: 'photos:delete',
