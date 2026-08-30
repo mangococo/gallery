@@ -27,6 +27,9 @@ export interface PhotoDTO {
   thumbStatus: ThumbStatus
   takenAt: number | null
   isCover: boolean
+  favorite: boolean
+  /** 照片级标签 */
+  tags: string[]
   mediaUrl: string
   /** 缩略图 URL；空串表示尚未生成，渲染层回退到占位/原图 */
   thumbUrl: string
@@ -99,8 +102,8 @@ export interface LegacyImportResult {
 
 export type Unsubscribe = () => void
 
-/** ⌘K 搜索命中字段 */
-export type SearchMatchIn = 'title' | 'description' | 'tags' | 'caption'
+/** ⌘K 搜索命中字段（photoTag = 照片级标签命中，聚合到所属旅行） */
+export type SearchMatchIn = 'title' | 'description' | 'tags' | 'caption' | 'photoTag'
 
 /** ⌘K 搜索结果：按旅行聚合（图注命中也归到所属旅行） */
 export interface SearchHit {
@@ -151,6 +154,10 @@ export interface GalleryApi {
   deletePhoto(photoId: string): Promise<void>
   setCaption(photoId: string, caption: string): Promise<void>
   setCover(tripId: string, photoId: string): Promise<void>
+  /** 照片级收藏开关 */
+  setPhotoFavorite(photoId: string, favorite: boolean): Promise<void>
+  /** 照片级标签（覆盖式） */
+  setPhotoTags(photoId: string, tags: string[]): Promise<void>
 
   getTheme(): Promise<ThemeMode>
   setTheme(mode: ThemeMode): Promise<void>
@@ -158,7 +165,7 @@ export interface GalleryApi {
   /** 选择旧数据根目录并执行 .settings.json 迁移导入 */
   importLegacy(): Promise<LegacyImportResult | null>
 
-  /** ⌘K 搜索：旅行标题/描述/标签/图注，按旅行聚合返回 */
+  /** ⌘K 搜索：旅行标题/描述/标签/图注/照片标签，按旅行聚合返回 */
   searchTrips(albumId: string, q: string): Promise<SearchHit[]>
 
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
@@ -194,6 +201,8 @@ export const IPC = {
   photosDelete: 'photos:delete',
   photosSetCaption: 'photos:set-caption',
   photosSetCover: 'photos:set-cover',
+  photosSetFavorite: 'photos:set-favorite',
+  photosSetTags: 'photos:set-tags',
 
   themeGet: 'theme:get',
   themeSet: 'theme:set',

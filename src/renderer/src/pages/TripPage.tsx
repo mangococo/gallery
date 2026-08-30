@@ -10,6 +10,7 @@ import PhotoWall from '../components/PhotoWall'
 import TagInput from '../components/TagInput'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
+import PhotoTagEditor from '../components/PhotoTagEditor'
 import { toast } from '../components/feedback'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import {
@@ -17,6 +18,7 @@ import {
   PlusIcon,
   HeartIcon,
   TrashIcon,
+  XIcon,
 } from '../components/icons'
 import { Photo, Trip } from '../types'
 
@@ -29,6 +31,10 @@ const TripPage: React.FC = () => {
   const [editedTrip, setEditedTrip] = React.useState<Trip | null>(null)
   const [lightboxIndex, setLightboxIndex] = React.useState<number | null>(null)
   const [captionTarget, setCaptionTarget] = React.useState<Photo | null>(null)
+  const [tagTarget, setTagTarget] = React.useState<Photo | null>(null)
+  /** 照片墙过滤：只看收藏 / 按标签筛选（旅行页内） */
+  const [favOnly, setFavOnly] = React.useState(false)
+  const [tagFilter, setTagFilter] = React.useState<string | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
   const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
@@ -139,6 +145,34 @@ const TripPage: React.FC = () => {
     if (!isEditing) setTrip(updated)
   }
 
+  /** 照片级收藏：本地即时更新（不动统计与时间线，无需 refreshAll） */
+  const handleTogglePhotoFavorite = async (photoId: string, favorite: boolean) => {
+    if (!editedTrip) return
+    try {
+      await api.setPhotoFavorite(photoId, favorite)
+    } catch (error: any) {
+      toast('操作失败: ' + error.message, 'error')
+      return
+    }
+    const updated = {
+      ...editedTrip,
+      photos: editedTrip.photos.map((p: Photo) => (p.id === photoId ? { ...p, favorite } : p)),
+    }
+    setEditedTrip(updated)
+    if (!isEditing) setTrip(updated)
+  }
+
+  /** 照片级标签保存（覆盖式） */
+  const handlePhotoTagsSaved = (photoId: string, tags: string[]) => {
+    if (!editedTrip) return
+    const updated = {
+      ...editedTrip,
+      photos: editedTrip.photos.map((p: Photo) => (p.id === photoId ? { ...p, tags } : p)),
+    }
+    setEditedTrip(updated)
+    if (!isEditing) setTrip(updated)
+  }
+
   const handleSave = async () => {
     if (editedTrip) {
       const saved = await api.updateTrip(editedTrip.id, {
@@ -155,8 +189,8 @@ const TripPage: React.FC = () => {
   }
 
   const handlePhotoClick = (photo: Photo) => {
-    const photos = editedTrip?.photos || trip?.photos || []
-    setLightboxIndex(photos.findIndex((p: Photo) => p.id === photo.id))
+    const list = editedTrip?.photos || trip?.photos || []
+    setLightboxIndex(list.findIndex((p: Photo) => p.id === photo.id))
   }
 
   const formatDate = (dateStr: string) => {
@@ -175,6 +209,13 @@ const TripPage: React.FC = () => {
   }
 
   const photos = editedTrip?.photos || trip.photos
+  /** 照片墙过滤（旅行页内）：只看收藏 / 按照片标签筛选；灯箱始终浏览全量列表 */
+  const photoTagList = [...new Set(photos.flatMap((p: Photo) => p.tags || []))].sort((a, b) =>
+    a.localeCompare(b, 'zh'),
+  )
+  const visiblePhotos = photos.filter(
+    (p: Photo) => (!favOnly || p.favorite) && (!tagFilter || (p.tags || []).includes(tagFilter)),
+  )
 
   return (
     <div
@@ -375,7 +416,11 @@ const TripPage: React.FC = () => {
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-display text-2xl font-bold text-ink">照片</h2>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-ink-3">{photos.length} 张</span>
+            <span className="text-sm text-ink-3">
+              {visiblePhotos.length === photos.length
+                ? `${photos.length} 张`
+                : `${visiblePhotos.length} / ${photos.length} 张`}
+            </span>
             <label className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
               <PlusIcon size={13} />
               <span>{isUploading ? '导入中…' : '添加照片'}</span>
@@ -390,14 +435,53 @@ const TripPage: React.FC = () => {
             </label>
           </div>
         </div>
+
+        {/* 过滤 chips：只看收藏 / 按标签筛选 */}
+        {(photoTagList.length > 0 || favOnly) && (
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            <button
+              onClick={() => setFavOnly((v) => !v)}
+              className={`px-3 py-1 rounded-full text-xs flex items-center gap-1 transition-colors ${
+                favOnly ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
+              }`}
+            >
+              <HeartIcon size={11} filled={favOnly} />
+              <span>只看收藏</span>
+            </button>
+            {photoTagList.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setTagFilter((cur) => (cur === tag ? null : tag))}
+                className={`px-3 py-1 rounded-full text-xs transition-colors ${
+                  tagFilter === tag ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+            {(favOnly || tagFilter) && (
+              <button
+                onClick={() => {
+                  setFavOnly(false)
+                  setTagFilter(null)
+                }}
+                className="px-2.5 py-1 rounded-full text-xs text-ink-3 hover:text-ink flex items-center gap-1"
+              >
+                <XIcon size={10} />
+                <span>清除</span>
+              </button>
+            )}
+          </div>
+        )}
         <PhotoWall
-          photos={photos}
+          photos={visiblePhotos}
           onPhotoClick={handlePhotoClick}
           onDeletePhoto={handleDeletePhoto}
           onEditCaption={setCaptionTarget}
           showDeleteButton
           coverPhotoId={editedTrip?.coverPhotoId ?? null}
           onSetCover={handleSetCover}
+          onToggleFavorite={handleTogglePhotoFavorite}
         />
       </main>
 
@@ -414,6 +498,8 @@ const TripPage: React.FC = () => {
             onEditCaption={setCaptionTarget}
             coverPhotoId={editedTrip?.coverPhotoId ?? null}
             onSetCover={handleSetCover}
+            onToggleFavorite={handleTogglePhotoFavorite}
+            onEditTags={setTagTarget}
           />
         )}
       </AnimatePresence>
@@ -425,6 +511,16 @@ const TripPage: React.FC = () => {
           photo={captionTarget}
           onClose={() => setCaptionTarget(null)}
           onSaved={handleCaptionSaved}
+        />
+      )}
+
+      {/* 照片标签编辑 */}
+      {tagTarget && (
+        <PhotoTagEditor
+          key={tagTarget.id}
+          photo={tagTarget}
+          onClose={() => setTagTarget(null)}
+          onSaved={handlePhotoTagsSaved}
         />
       )}
     </div>

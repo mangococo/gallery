@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
+import { normalizeTagNames } from '../shared/tags'
 import type { Album, PhotoDTO, PhotoType, SearchHit, SearchMatchIn, ThumbStatus, TripDTO } from '../shared/types'
 
 let db: Database.Database
@@ -57,7 +58,8 @@ const BASELINE_SQL = `
     height INTEGER,
     thumb_status TEXT DEFAULT 'pending',
     taken_at INTEGER,
-    file_mtime INTEGER
+    file_mtime INTEGER,
+    favorite INTEGER DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS tags (
@@ -71,6 +73,12 @@ const BASELINE_SQL = `
     PRIMARY KEY (trip_id, tag_id)
   );
 
+  CREATE TABLE IF NOT EXISTS photo_tags (
+    photo_id TEXT REFERENCES photos(id) ON DELETE CASCADE,
+    tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (photo_id, tag_id)
+  );
+
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -78,12 +86,14 @@ const BASELINE_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_photos_trip ON photos(trip_id);
   CREATE INDEX IF NOT EXISTS idx_trip_tags_tag ON trip_tags(tag_id);
+  CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id);
 `
 
 /**
  * user_version pragma 迁移：
- * - 全新库：基线建表（已含 file_mtime）→ 逐版迁移全为空操作 → 置 user_version
+ * - 全新库：基线建表（已含 file_mtime/favorite/photo_tags）→ 逐版迁移全为空操作 → 置 user_version
  * - v0.9 存量库：表已存在，v1 给 photos 补 file_mtime 列并把 taken_at（即当时的 mtime）回填进去
+ * - v0.10 存量库：v2 给 photos 补 favorite 列（默认 0，无需回填）；photo_tags 建表在基线 SQL 里幂等完成
  */
 function migrate(): void {
   const version = db.pragma('user_version', { simple: true }) as number
@@ -97,6 +107,14 @@ function migrate(): void {
       db.exec('UPDATE photos SET file_mtime = taken_at WHERE file_mtime IS NULL')
     }
     db.pragma('user_version = 1')
+  }
+
+  if (version < 2) {
+    const cols = db.pragma('table_info(photos)') as { name: string }[]
+    if (!cols.some((c) => c.name === 'favorite')) {
+      db.exec('ALTER TABLE photos ADD COLUMN favorite INTEGER DEFAULT 0')
+    }
+    db.pragma('user_version = 2')
   }
 }
 
@@ -299,31 +317,54 @@ export function getTagsOfTrip(tripId: string): string[] {
   ).map((r) => r.name)
 }
 
-/** 覆盖式设置旅行标签 */
+/** 覆盖式设置旅行标签（规范化：trim、去空、去重） */
 export function setTagsOfTrip(tripId: string, tags: string[]): void {
   const insertTag = db.prepare('INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO NOTHING')
   const link = db.prepare('INSERT OR IGNORE INTO trip_tags (trip_id, tag_id) VALUES (?, (SELECT id FROM tags WHERE name = ?))')
   const tx = db.transaction((names: string[]) => {
     db.prepare('DELETE FROM trip_tags WHERE trip_id = ?').run(tripId)
     for (const name of names) {
-      const trimmed = name.trim()
-      if (!trimmed) continue
-      insertTag.run(trimmed)
-      link.run(tripId, trimmed)
+      insertTag.run(name)
+      link.run(tripId, name)
     }
   })
-  tx(tags)
+  tx(normalizeTagNames(tags))
 }
 
-/** 全部已有标签，常用在前（联想选择用） */
+export function getTagsOfPhoto(photoId: string): string[] {
+  return (
+    db
+      .prepare(
+        'SELECT t.name FROM tags t JOIN photo_tags pt ON pt.tag_id = t.id WHERE pt.photo_id = ? ORDER BY t.name',
+      )
+      .all(photoId) as { name: string }[]
+  ).map((r) => r.name)
+}
+
+/** 覆盖式设置照片标签（与旅行标签共用 tags 表） */
+export function setTagsOfPhoto(photoId: string, tags: string[]): void {
+  const insertTag = db.prepare('INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO NOTHING')
+  const link = db.prepare('INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, (SELECT id FROM tags WHERE name = ?))')
+  const tx = db.transaction((names: string[]) => {
+    db.prepare('DELETE FROM photo_tags WHERE photo_id = ?').run(photoId)
+    for (const name of names) {
+      insertTag.run(name)
+      link.run(photoId, name)
+    }
+  })
+  tx(normalizeTagNames(tags))
+}
+
+/** 全部已有标签，旅行+照片合计用量降序（联想选择用） */
 export function allTags(): string[] {
   return (
     db
       .prepare(
         `SELECT t.name FROM tags t
          LEFT JOIN trip_tags tt ON tt.tag_id = t.id
+         LEFT JOIN photo_tags pt ON pt.tag_id = t.id
          GROUP BY t.id
-         ORDER BY COUNT(tt.trip_id) DESC, t.name`,
+         ORDER BY (COUNT(DISTINCT tt.trip_id) + COUNT(DISTINCT pt.photo_id)) DESC, t.name`,
       )
       .all() as { name: string }[]
   ).map((r) => r.name)
@@ -343,9 +384,10 @@ interface PhotoRow {
   thumb_status: string | null
   taken_at: number | null
   file_mtime: number | null
+  favorite: number | null
 }
 
-function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean): PhotoDTO {
+function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean, tags: string[] = []): PhotoDTO {
   const encoded = encodeURIComponent(r.rel_path)
   return {
     id: r.id,
@@ -359,6 +401,8 @@ function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean): PhotoDTO {
     thumbStatus: (r.thumb_status ?? 'pending') as ThumbStatus,
     takenAt: r.taken_at,
     isCover,
+    favorite: !!r.favorite,
+    tags,
     mediaUrl: `gallery-media://m/${albumId}/${encoded}`,
     thumbUrl: r.thumb_status === 'ready' ? `gallery-media://t/${r.id}.webp` : '',
   }
@@ -371,7 +415,7 @@ export function getPhotoRow(id: string): (PhotoDTO & { albumId: string }) | null
     )
     .get(id) as (PhotoRow & { album_id: string; _cover: string | null }) | undefined
   if (!r) return null
-  const dto = rowToPhoto(r, r.album_id, r._cover === r.id)
+  const dto = rowToPhoto(r, r.album_id, r._cover === r.id, getTagsOfPhoto(id))
   return { ...dto, albumId: r.album_id }
 }
 
@@ -383,10 +427,26 @@ export function getPhotoIdByTripAndName(tripId: string, fileName: string): strin
   return r?.id ?? null
 }
 
+/** 旅行内全部照片，批量带出标签（一次 JOIN，避免 N+1） */
 export function listPhotosOfTrip(tripId: string, albumId: string, coverPhotoId: string | null): PhotoDTO[] {
-  return (
-    db.prepare('SELECT * FROM photos WHERE trip_id = ? ORDER BY rowid').all(tripId) as PhotoRow[]
-  ).map((r) => rowToPhoto(r, albumId, coverPhotoId === r.id))
+  const tagRows = db
+    .prepare(
+      `SELECT pt.photo_id AS photoId, g.name AS name
+       FROM photo_tags pt
+       JOIN tags g ON g.id = pt.tag_id
+       WHERE pt.photo_id IN (SELECT id FROM photos WHERE trip_id = ?)
+       ORDER BY g.name`,
+    )
+    .all(tripId) as { photoId: string; name: string }[]
+  const tagsByPhoto = new Map<string, string[]>()
+  for (const r of tagRows) {
+    const list = tagsByPhoto.get(r.photoId) ?? []
+    list.push(r.name)
+    tagsByPhoto.set(r.photoId, list)
+  }
+  return (db.prepare('SELECT * FROM photos WHERE trip_id = ? ORDER BY rowid').all(tripId) as PhotoRow[]).map(
+    (r) => rowToPhoto(r, albumId, coverPhotoId === r.id, tagsByPhoto.get(r.id) ?? []),
+  )
 }
 
 export interface NewPhotoRecord {
@@ -474,6 +534,10 @@ export function setPhotoCaption(id: string, caption: string): void {
   db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption, id)
 }
 
+export function setPhotoFavorite(id: string, favorite: boolean): void {
+  db.prepare('UPDATE photos SET favorite = ? WHERE id = ?').run(favorite ? 1 : 0, id)
+}
+
 export function setPhotoThumbStatus(id: string, status: ThumbStatus): void {
   db.prepare('UPDATE photos SET thumb_status = ? WHERE id = ?').run(status, id)
 }
@@ -506,7 +570,7 @@ export function countPendingThumbs(albumId: string): number {
 
 // ---------- ⌘K 搜索 ----------
 
-const MATCH_RANK: Record<SearchMatchIn, number> = { title: 0, tags: 1, description: 2, caption: 3 }
+const MATCH_RANK: Record<SearchMatchIn, number> = { title: 0, tags: 1, description: 2, caption: 3, photoTag: 4 }
 
 interface HitPhoto {
   id: string
@@ -523,11 +587,11 @@ function hitThumbUrl(r: HitPhoto | undefined): string {
 }
 
 /**
- * ⌘K 旅行搜索：标题/描述/标签/图注（图注命中聚合到所属旅行）。
+ * ⌘K 旅行搜索：标题/描述/旅行标签/图注/照片标签（照片侧命中聚合到所属旅行）。
  * 选 LIKE 而非 FTS5：unicode61 分词器不切分中文（整段中文成一个 token，两字词搜不到），
  * trigram 分词又要求查询 ≥3 字符；旅行数量小，LIKE 扫描配合面板防抖足够。
- * 字段匹配在 JS 侧做（toLowerCase，Unicode 友好）；图注命中在 SQL 侧筛（LIKE 仅 ASCII
- * 大小写不敏感，中文无大小写概念，行为一致）。
+ * 字段匹配在 JS 侧做（toLowerCase，Unicode 友好）；图注/照片标签命中在 SQL 侧筛
+ * （LIKE 仅 ASCII 大小写不敏感，中文无大小写概念，行为一致）。
  */
 export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
   const q = rawQ.trim()
@@ -565,6 +629,22 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
   const capByTrip = new Map<string, (typeof capRows)[number]>()
   for (const r of capRows) if (!capByTrip.has(r.tripId)) capByTrip.set(r.tripId, r)
 
+  // 照片标签命中：同样聚合到所属旅行，命中照片可作缩略图候选
+  const ptagRows = db
+    .prepare(
+      `SELECT p.trip_id AS tripId, p.id, p.type, p.rel_path AS relPath,
+              p.thumb_status AS thumbStatus, tr.album_id AS albumId, g.name AS tagName
+       FROM photo_tags pt
+       JOIN tags g ON g.id = pt.tag_id
+       JOIN photos p ON p.id = pt.photo_id
+       JOIN trips tr ON tr.id = p.trip_id
+       WHERE tr.album_id = ? AND g.name LIKE ? ESCAPE '\\'
+       ORDER BY p.rowid`,
+    )
+    .all(albumId, like) as (HitPhoto & { tripId: string; tagName: string })[]
+  const ptagByTrip = new Map<string, HitPhoto>()
+  for (const r of ptagRows) if (!ptagByTrip.has(r.tripId)) ptagByTrip.set(r.tripId, r)
+
   const coverById = new Map<string, HitPhoto>()
   for (const t of tripRows) {
     if (!t.coverPhotoId || coverById.has(t.coverPhotoId)) continue
@@ -586,6 +666,8 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
     if (tags.some((g) => g.toLowerCase().includes(lowerQ))) matchedIn.push('tags')
     const cap = capByTrip.get(t.id)
     if (cap) matchedIn.push('caption')
+    const ptagHit = ptagByTrip.get(t.id)
+    if (ptagHit) matchedIn.push('photoTag')
     if (matchedIn.length === 0) continue
 
     const rank = Math.min(...matchedIn.map((m) => MATCH_RANK[m]))
@@ -599,7 +681,10 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
         matchedIn,
         description: t.description,
         sampleCaption: cap?.caption ?? null,
-        thumbUrl: hitThumbUrl(cap) || hitThumbUrl(t.coverPhotoId ? coverById.get(t.coverPhotoId) : undefined),
+        thumbUrl:
+          hitThumbUrl(cap) ||
+          hitThumbUrl(ptagHit) ||
+          hitThumbUrl(t.coverPhotoId ? coverById.get(t.coverPhotoId) : undefined),
       },
     })
   }

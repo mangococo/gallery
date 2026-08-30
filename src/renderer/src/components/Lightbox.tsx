@@ -9,6 +9,7 @@ import {
   HeartIcon,
   PenIcon,
   StarIcon,
+  TagIcon,
   TrashIcon,
   XIcon,
 } from './icons'
@@ -22,6 +23,10 @@ interface LightboxProps {
   onEditCaption?: (photo: Photo) => void
   coverPhotoId?: string | null
   onSetCover?: (photoId: string) => void
+  /** 照片级收藏开关（信息栏心形按钮） */
+  onToggleFavorite?: (photoId: string, favorite: boolean) => void
+  /** 照片级标签编辑弹层入口 */
+  onEditTags?: (photo: Photo) => void
 }
 
 interface ViewState {
@@ -48,6 +53,8 @@ const Lightbox: React.FC<LightboxProps> = ({
   onEditCaption,
   coverPhotoId,
   onSetCover,
+  onToggleFavorite,
+  onEditTags,
 }) => {
   const photo = photos[index]
   const [view, setView] = React.useState<ViewState>({ zoom: 1, x: 0, y: 0 })
@@ -241,16 +248,40 @@ const Lightbox: React.FC<LightboxProps> = ({
               {photo.width} × {photo.height}
             </span>
           )}
+          {photo.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-xs text-white/85 px-2.5 py-1 rounded-full bg-black/45 backdrop-blur-sm"
+            >
+              #{tag}
+            </span>
+          ))}
         </div>
 
-        {/* 操作（右上）：图注 / 封面 / 删除 / 关闭。stopPropagation 防止误触遮罩关闭 */}
+        {/* 操作（右上）：收藏 / 图注 / 标签 / 封面 / 删除 / 关闭。stopPropagation 防止误触遮罩关闭 */}
         <div
           className="absolute top-5 right-6 z-10 flex items-center gap-1 no-drag"
           onClick={(e) => e.stopPropagation()}
         >
+          {onToggleFavorite && (
+            <button
+              className={`transition-colors flex items-center justify-center w-9 h-9 rounded-full hover:bg-white/10 ${
+                photo.favorite ? 'text-danger hover:text-danger' : 'text-white/80 hover:text-white'
+              }`}
+              title={photo.favorite ? '取消收藏' : '收藏'}
+              onClick={() => onToggleFavorite(photo.id, !photo.favorite)}
+            >
+              <HeartIcon size={17} filled={photo.favorite} />
+            </button>
+          )}
           {onEditCaption && (
             <button className={actionBtn} title="编辑图注" onClick={() => onEditCaption(photo)}>
               <PenIcon size={17} />
+            </button>
+          )}
+          {onEditTags && (
+            <button className={actionBtn} title="编辑标签" onClick={() => onEditTags(photo)}>
+              <TagIcon size={16} />
             </button>
           )}
           {onSetCover && coverPhotoId !== photo.id && (
@@ -259,12 +290,12 @@ const Lightbox: React.FC<LightboxProps> = ({
               title="设为封面"
               onClick={() => onSetCover(photo.id)}
             >
-              <StarIcon size={17} filled />
+              <StarIcon size={17} />
             </button>
           )}
           {onSetCover && coverPhotoId === photo.id && (
             <span className={`${actionBtn} text-primary`} title="当前封面">
-              <HeartIcon size={17} filled />
+              <StarIcon size={17} filled />
             </span>
           )}
           {onDeletePhoto && (

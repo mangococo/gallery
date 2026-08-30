@@ -40,6 +40,8 @@ const api: GalleryApi = {
   deletePhoto: (photoId) => ipcRenderer.invoke(IPC.photosDelete, photoId),
   setCaption: (photoId, caption) => ipcRenderer.invoke(IPC.photosSetCaption, photoId, caption),
   setCover: (tripId, photoId) => ipcRenderer.invoke(IPC.photosSetCover, tripId, photoId),
+  setPhotoFavorite: (photoId, favorite) => ipcRenderer.invoke(IPC.photosSetFavorite, photoId, favorite),
+  setPhotoTags: (photoId, tags) => ipcRenderer.invoke(IPC.photosSetTags, photoId, tags),
 
   getTheme: () => ipcRenderer.invoke(IPC.themeGet),
   setTheme: (mode: ThemeMode) => ipcRenderer.invoke(IPC.themeSet, mode),

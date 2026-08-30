@@ -12,6 +12,7 @@ const MATCH_LABEL: Record<SearchMatchIn, string> = {
   description: '描述',
   tags: '标签',
   caption: '图注',
+  photoTag: '照片标签',
 }
 
 /** 命中词高亮：按不区分大小写的 occurrences 切片 */
@@ -158,7 +159,7 @@ const CommandPalette: React.FC = () => {
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索旅行标题、描述、标签、图注…"
+                placeholder="搜索旅行标题、描述、标签、图注、照片标签…"
                 className="flex-1 bg-transparent outline-none text-[15px] text-ink placeholder-ink-3"
               />
               {searching && (

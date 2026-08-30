@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Photo, PhotoDTO } from '../types'
 import { displaySrc } from '../lib/api'
 import { confirmDialog } from './feedback'
-import { PenIcon, StarIcon, TrashIcon } from './icons'
+import { HeartIcon, PenIcon, StarIcon, TrashIcon } from './icons'
 
 interface PhotoWallProps {
   photos: Photo[]
@@ -13,6 +13,8 @@ interface PhotoWallProps {
   showDeleteButton?: boolean
   coverPhotoId?: string | null
   onSetCover?: (photoId: string) => void
+  /** 照片级收藏开关（悬停心形按钮） */
+  onToggleFavorite?: (photoId: string, favorite: boolean) => void
 }
 
 /** 照片墙单元：图片用缩略图；视频用海报帧 + 播放角标 */
@@ -63,6 +65,7 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   showDeleteButton = false,
   coverPhotoId = null,
   onSetCover,
+  onToggleFavorite,
 }) => {
   const handleDelete = async (photo: Photo) => {
     const ok = await confirmDialog({
@@ -89,16 +92,38 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
           <div className="relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border border-line">
             <WallMedia photo={photo} />
 
-            {/* 封面徽标 */}
+            {/* 封面/收藏徽标 */}
             {coverPhotoId === photo.id && (
               <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm flex items-center gap-1">
                 <StarIcon size={10} filled />
                 <span>封面</span>
               </div>
             )}
+            {photo.favorite && (
+              <div
+                className={`absolute top-2 ${coverPhotoId === photo.id ? 'left-[64px]' : 'left-2'} px-1.5 py-0.5 rounded-full bg-danger text-white shadow-sm flex items-center`}
+                title="已收藏"
+              >
+                <HeartIcon size={10} filled />
+              </div>
+            )}
 
             {/* 悬停操作 */}
             <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onToggleFavorite && (
+                <button
+                  title={photo.favorite ? '取消收藏' : '收藏'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleFavorite(photo.id, !photo.favorite)
+                  }}
+                  className={`w-7 h-7 rounded-full hover:bg-danger transition-colors flex items-center justify-center ${
+                    photo.favorite ? 'bg-danger/80 text-white' : 'bg-black/45 text-white'
+                  }`}
+                >
+                  <HeartIcon size={13} filled={photo.favorite} />
+                </button>
+              )}
               {onEditCaption && (
                 <button
                   title="编辑图注"

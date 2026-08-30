@@ -36,6 +36,8 @@ import {
   insertPhotoRow,
   deletePhotoRow,
   setPhotoCaption,
+  setPhotoFavorite,
+  setTagsOfPhoto,
   listPhotosOfTrip,
   searchTripHits,
   getStats,
@@ -314,6 +316,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.photosSetCaption, (_e, photoId: string, caption: string) => {
     setPhotoCaption(photoId, caption)
+  })
+
+  ipcMain.handle(IPC.photosSetFavorite, (_e, photoId: string, favorite: boolean) => {
+    setPhotoFavorite(photoId, favorite)
+  })
+
+  ipcMain.handle(IPC.photosSetTags, (_e, photoId: string, tags: string[]) => {
+    setTagsOfPhoto(photoId, tags)
   })
 
   ipcMain.handle(IPC.photosSetCover, (_e, tripId: string, photoId: string) => {
