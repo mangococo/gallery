@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ['nanoid', 'chokidar'] })],
+    plugins: [externalizeDepsPlugin({ exclude: ['nanoid', 'chokidar', 'exifr'] })],
     resolve: {
       alias: { '@shared': resolve('src/shared') },
     },

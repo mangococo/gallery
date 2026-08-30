@@ -12,6 +12,7 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
@@ -19,5 +20,5 @@
       "@/*": ["src/renderer/src/*"]
     }
   },
-  "include": ["src", "electron.vite.config.ts"]
+  "include": ["src", "tests", "electron.vite.config.ts"]
 }

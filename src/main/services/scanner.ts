@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import type { ScanProgress } from '../../shared/types'
 import {
   getAlbumRow,
+  getEarliestTakenAtOfTrip,
   getPhotoIdByTripAndName,
   getTripIdByFolder,
   getTripRow,
@@ -14,9 +15,11 @@ import {
   setSetting,
   setTagsOfTrip,
   deletePhotoRow,
-  updatePhotoTakenAt,
+  updatePhotoFileMeta,
   updateTripRow,
 } from '../db'
+import { resolvePhotoTakenAt } from './exif'
+import { buildCaptionMap, compareFileNames, msToLocalDate, planReconciliation } from './reconcile'
 
 // —— 旧 .settings.json 解析 ——
 
@@ -54,11 +57,6 @@ async function readLegacySettings(dir: string): Promise<LegacySettings | null> {
   }
 }
 
-/** 文件名排序：数字感知，保证时间线内照片顺序稳定 */
-function compareFileNames(a: string, b: string): number {
-  return a.localeCompare(b, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
-}
-
 export interface ScanCounters {
   trips: number
   photos: number
@@ -77,7 +75,7 @@ export interface ScanHooks {
  * - 只处理子目录；根目录散落的 index.html / .DS_Store 等一律跳过
  * - 子目录含媒体文件或 .settings.json 即收录为旅行（空目录跳过）
  * - 新发现的旅行从 .settings.json 导入元数据（保留旧 id）；已入库旅行不覆盖用户编辑
- * - 文件级增量校对：以 文件名 + mtime 对比（taken_at 即 mtime）
+ * - 文件级增量校对：以 文件名 + file_mtime 对比；拍摄时间取 EXIF（回退 mtime）
  */
 export async function scanAlbum(albumId: string, hooks: ScanHooks): Promise<ScanCounters | null> {
   const album = getAlbumRow(albumId)
@@ -147,6 +145,7 @@ export async function scanAlbum(albumId: string, hooks: ScanHooks): Promise<Scan
 /**
  * 单个旅行目录的入库与增量校对。
  * caption 匹配一律大小写不敏感；指向已改名/已删除文件的残留键静默跳过。
+ * 对账决策在 reconcile.ts（纯逻辑，有单测），这里只做 IO 与入库。
  */
 async function reconcileTrip(
   albumId: string,
@@ -192,48 +191,61 @@ async function reconcileTrip(
     }
   }
 
-  // caption 映射：小写键 → caption；与磁盘文件大小写不敏感匹配，残留键静默跳过
-  const captionMap = new Map<string, string>()
-  if (settings?.photoCaptions) {
-    for (const [k, v] of Object.entries(settings.photoCaptions)) {
-      captionMap.set(k.toLowerCase(), typeof v === 'string' ? v : '')
-      if (!diskFiles.has(k.toLowerCase())) counters.skippedCaptions++
-    }
-  }
+  const { map: captionMap, skipped } = buildCaptionMap(settings?.photoCaptions, new Set(diskFiles.keys()))
+  counters.skippedCaptions += skipped
 
   const dbFiles = listPhotoFilesOfTrip(tripId)
-  const dbByName = new Map(dbFiles.map((f) => [f.fileName.toLowerCase(), f]))
+  const plan = planReconciliation(diskFiles, dbFiles)
 
-  // 入库新文件 / 校对被替换的文件
-  for (const [key, disk] of diskFiles) {
-    const existing = dbByName.get(key)
-    if (!existing) {
+  // 入库新文件：拍摄时间优先 EXIF DateTimeOriginal，回退 mtime
+  for (const disk of plan.inserts) {
+    const type = mediaTypeOf(disk.name)!
+    try {
+      const takenAt = await resolvePhotoTakenAt(join(dirPath, disk.name), type, disk.mtimeMs)
       insertPhotoRow({
         id: nanoid(12),
         tripId,
         fileName: disk.name,
         relPath: `${folderName}/${disk.name}`,
-        type: mediaTypeOf(disk.name)!,
-        caption: captionMap.get(key) ?? '',
-        takenAt: Math.round(disk.mtimeMs),
+        type,
+        caption: captionMap.get(disk.name.toLowerCase()) ?? '',
+        takenAt,
+        fileMtime: Math.round(disk.mtimeMs),
       })
       counters.photos++
-    } else if (existing.takenAt !== null && Math.abs(existing.takenAt - disk.mtimeMs) > 500) {
-      // 同名但文件内容被替换（mtime 变化）：更新并重新生成缩略图
-      updatePhotoTakenAt(existing.id, Math.round(disk.mtimeMs))
+    } catch {
+      // 竞态：文件刚好消失，下轮扫描再处理
+    }
+  }
+
+  // 同名但文件内容被替换（file_mtime 变化）：重读拍摄时间并重新生成缩略图
+  for (const { id, file } of plan.replaced) {
+    const type = mediaTypeOf(file.name)!
+    try {
+      const takenAt = await resolvePhotoTakenAt(join(dirPath, file.name), type, file.mtimeMs)
+      updatePhotoFileMeta(id, takenAt, Math.round(file.mtimeMs))
+    } catch {
+      // 竞态跳过
     }
   }
 
   // 清理磁盘上已不存在的记录
-  for (const [key, dbFile] of dbByName) {
-    if (!diskFiles.has(key)) deletePhotoRow(dbFile.id)
-  }
+  for (const { id } of plan.removed) deletePhotoRow(id)
 
   // 新旅行默认第一张为封面
   if (isNew && diskFiles.size > 0) {
     const firstName = diskFiles.values().next().value!.name
     const coverId = getPhotoIdByTripAndName(tripId, firstName)
     if (coverId) updateTripRow(tripId, { coverPhotoId: coverId })
+  }
+
+  // 旅行开始日期推断：用户未填时用照片最早拍摄日期补齐（绝不覆盖已填值）
+  if (diskFiles.size > 0) {
+    const trip = getTripRow(tripId)
+    if (trip && !trip.startDate) {
+      const earliest = getEarliestTakenAtOfTrip(tripId)
+      if (earliest !== null) updateTripRow(tripId, { startDate: msToLocalDate(earliest) })
+    }
   }
 }
 

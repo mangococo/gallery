@@ -40,9 +40,10 @@ import {
   getStats,
 } from './db'
 import { scanAlbum } from './services/scanner'
+import { mediaTypeOf } from './services/scanner'
+import { resolvePhotoTakenAt } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
-import { mediaTypeOf } from './services/scanner'
 
 function senderWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
@@ -269,7 +270,8 @@ export function registerIpcHandlers(): void {
         // 不重名，直接用
       }
       await fs.copyFile(src, join(destDir, name))
-      const st = await fs.stat(join(destDir, name))
+      const dest = join(destDir, name)
+      const st = await fs.stat(dest)
       const photoId = nanoid(12)
       insertPhotoRow({
         id: photoId,
@@ -278,7 +280,8 @@ export function registerIpcHandlers(): void {
         relPath: `${t.folderName}/${name}`,
         type,
         caption: '',
-        takenAt: Math.round(st.mtimeMs),
+        takenAt: await resolvePhotoTakenAt(dest, type, st.mtimeMs),
+        fileMtime: Math.round(st.mtimeMs),
       })
       importedIds.push(photoId)
     }

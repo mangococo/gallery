@@ -18,63 +18,86 @@ export function closeDb(): void {
   db?.close()
 }
 
+/**
+ * 基线建表（幂等，覆盖全新数据库）。
+ * v0.10 起 photos.file_mtime 承担文件对账职责（taken_at 改存 EXIF 拍摄时间，只管展示）。
+ */
+const BASELINE_SQL = `
+  CREATE TABLE IF NOT EXISTS albums (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    path TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ok',
+    created_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS trips (
+    id TEXT PRIMARY KEY,
+    album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    folder_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    start_date TEXT,
+    end_date TEXT,
+    is_favorite INTEGER DEFAULT 0,
+    cover_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
+    created_at INTEGER,
+    updated_at INTEGER,
+    UNIQUE(album_id, folder_name)
+  );
+
+  CREATE TABLE IF NOT EXISTS photos (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    file_name TEXT NOT NULL,
+    rel_path TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('image','video')),
+    caption TEXT DEFAULT '',
+    width INTEGER,
+    height INTEGER,
+    thumb_status TEXT DEFAULT 'pending',
+    taken_at INTEGER,
+    file_mtime INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS trip_tags (
+    trip_id TEXT REFERENCES trips(id) ON DELETE CASCADE,
+    tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (trip_id, tag_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_photos_trip ON photos(trip_id);
+  CREATE INDEX IF NOT EXISTS idx_trip_tags_tag ON trip_tags(tag_id);
+`
+
+/**
+ * user_version pragma 迁移：
+ * - 全新库：基线建表（已含 file_mtime）→ 逐版迁移全为空操作 → 置 user_version
+ * - v0.9 存量库：表已存在，v1 给 photos 补 file_mtime 列并把 taken_at（即当时的 mtime）回填进去
+ */
 function migrate(): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS albums (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      path TEXT UNIQUE NOT NULL,
-      status TEXT NOT NULL DEFAULT 'ok',
-      created_at INTEGER
-    );
+  const version = db.pragma('user_version', { simple: true }) as number
+  db.exec(BASELINE_SQL)
 
-    CREATE TABLE IF NOT EXISTS trips (
-      id TEXT PRIMARY KEY,
-      album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
-      folder_name TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      start_date TEXT,
-      end_date TEXT,
-      is_favorite INTEGER DEFAULT 0,
-      cover_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
-      created_at INTEGER,
-      updated_at INTEGER,
-      UNIQUE(album_id, folder_name)
-    );
-
-    CREATE TABLE IF NOT EXISTS photos (
-      id TEXT PRIMARY KEY,
-      trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
-      file_name TEXT NOT NULL,
-      rel_path TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('image','video')),
-      caption TEXT DEFAULT '',
-      width INTEGER,
-      height INTEGER,
-      thumb_status TEXT DEFAULT 'pending',
-      taken_at INTEGER
-    );
-
-    CREATE TABLE IF NOT EXISTS tags (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS trip_tags (
-      trip_id TEXT REFERENCES trips(id) ON DELETE CASCADE,
-      tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-      PRIMARY KEY (trip_id, tag_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_photos_trip ON photos(trip_id);
-    CREATE INDEX IF NOT EXISTS idx_trip_tags_tag ON trip_tags(tag_id);
-  `)
+  if (version < 1) {
+    const cols = db.pragma('table_info(photos)') as { name: string }[]
+    if (!cols.some((c) => c.name === 'file_mtime')) {
+      db.exec('ALTER TABLE photos ADD COLUMN file_mtime INTEGER')
+      // 存量 taken_at 一直是文件 mtime，直接平移给 file_mtime 承担对账职责
+      db.exec('UPDATE photos SET file_mtime = taken_at WHERE file_mtime IS NULL')
+    }
+    db.pragma('user_version = 1')
+  }
 }
 
 // ---------- settings ----------
@@ -319,6 +342,7 @@ interface PhotoRow {
   height: number | null
   thumb_status: string | null
   taken_at: number | null
+  file_mtime: number | null
 }
 
 function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean): PhotoDTO {
@@ -373,32 +397,73 @@ export interface NewPhotoRecord {
   type: PhotoType
   caption: string
   takenAt: number
+  /** 文件 mtime，对账用（taken_at 存 EXIF 拍摄时间，二者解耦） */
+  fileMtime: number
 }
 
 export function insertPhotoRow(p: NewPhotoRecord): void {
   db.prepare(
-    `INSERT INTO photos (id, trip_id, file_name, rel_path, type, caption, taken_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(p.id, p.tripId, p.fileName, p.relPath, p.type, p.caption, p.takenAt)
+    `INSERT INTO photos (id, trip_id, file_name, rel_path, type, caption, taken_at, file_mtime)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(p.id, p.tripId, p.fileName, p.relPath, p.type, p.caption, p.takenAt, p.fileMtime)
 }
 
 export function listPhotoFilesOfTrip(
   tripId: string,
-): { id: string; fileName: string; takenAt: number | null; thumbStatus: string }[] {
+): { id: string; fileName: string; fileMtime: number | null }[] {
   return db
     .prepare(
-      'SELECT id, file_name AS fileName, taken_at AS takenAt, thumb_status AS thumbStatus FROM photos WHERE trip_id = ?',
+      'SELECT id, file_name AS fileName, file_mtime AS fileMtime FROM photos WHERE trip_id = ?',
     )
     .all(tripId) as {
     id: string
     fileName: string
-    takenAt: number | null
-    thumbStatus: string
+    fileMtime: number | null
   }[]
 }
 
-export function updatePhotoTakenAt(id: string, takenAt: number): void {
-  db.prepare('UPDATE photos SET taken_at = ?, thumb_status = ? WHERE id = ?').run(takenAt, 'pending', id)
+/** 文件被替换：更新拍摄时间与 file_mtime，缩略图重新生成 */
+export function updatePhotoFileMeta(id: string, takenAt: number, fileMtime: number): void {
+  db.prepare(
+    'UPDATE photos SET taken_at = ?, file_mtime = ?, thumb_status = ? WHERE id = ?',
+  ).run(takenAt, fileMtime, 'pending', id)
+}
+
+/** 仅更新拍摄时间（EXIF 回填用，不动缩略图状态） */
+export function updatePhotoTakenAtOnly(id: string, takenAt: number): void {
+  db.prepare('UPDATE photos SET taken_at = ? WHERE id = ?').run(takenAt, id)
+}
+
+/** 旅行内最早拍摄时间（旅行开始日期推断用）；无照片返回 null */
+export function getEarliestTakenAtOfTrip(tripId: string): number | null {
+  const r = db
+    .prepare('SELECT MIN(taken_at) AS min FROM photos WHERE trip_id = ? AND taken_at IS NOT NULL')
+    .get(tripId) as { min: number | null }
+  return r.min
+}
+
+/** 未填开始日期的旅行（回填后推断日期用） */
+export function listTripsWithEmptyStartDate(): { id: string; albumId: string }[] {
+  return db
+    .prepare(
+      "SELECT id, album_id AS albumId FROM trips WHERE start_date IS NULL OR start_date = ''",
+    )
+    .all() as { id: string; albumId: string }[]
+}
+
+/** EXIF 一次性回填：全库照片 + 所属相册根目录 */
+export function listPhotosForExifBackfill(): {
+  id: string
+  relPath: string
+  type: string
+  albumPath: string
+}[] {
+  return db
+    .prepare(
+      `SELECT p.id, p.rel_path AS relPath, p.type, a.path AS albumPath
+       FROM photos p JOIN trips t ON t.id = p.trip_id JOIN albums a ON a.id = t.album_id`,
+    )
+    .all() as { id: string; relPath: string; type: string; albumPath: string }[]
 }
 
 export function deletePhotoRow(id: string): void {

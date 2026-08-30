@@ -461,6 +461,17 @@ const TRIPS = [
 mkdirSync(ALBUM, { recursive: true })
 mkdirSync(USERDATA, { recursive: true })
 
+/** 依旅行开始日期派生确定性的 EXIF 拍摄时间（EXIF 格式 'YYYY:MM:DD HH:mm:ss'） */
+function exifTakenAt(startDate, i) {
+  if (!startDate) return null
+  const d = new Date(`${startDate}T00:00:00`)
+  if (isNaN(d.getTime())) return null
+  d.setDate(d.getDate() + Math.floor(i / 2))
+  d.setHours(8 + ((i * 3) % 12), (i * 17) % 60, 0, 0)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 // 1. Windows 打包图标：icon.svg → icon.png（1024）
 await sharp(join('build', 'icon.svg'), { density: 96 })
   .resize(1024, 1024)
@@ -478,7 +489,10 @@ for (const trip of TRIPS) {
     const seed = Math.floor(rngee() * 1e9)
     const name = `DSC0${(50001 + i * 7 + Math.floor(rngee() * 5)).toString()}.jpg`
     const svg = trip.gen(seed, i)
-    await sharp(Buffer.from(svg)).jpeg({ quality: 82, mozjpeg: true }).toFile(join(dir, name))
+    const dto = exifTakenAt(trip.settings.startDate, i)
+    let pipe = sharp(Buffer.from(svg))
+    if (dto) pipe = pipe.withExif({ IFD2: { DateTimeOriginal: dto } })
+    await pipe.jpeg({ quality: 82, mozjpeg: true }).toFile(join(dir, name))
     photoCaptions[name] = trip.captions[i] ?? ''
   }
   writeFileSync(join(dir, '.settings.json'), JSON.stringify({ ...trip.settings, photoCaptions }, null, 2))
@@ -516,7 +530,7 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 `)
-const put = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)')
+const put = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
 put.run('theme_mode', 'light')
 put.run('window_bounds', JSON.stringify({ width: 1600, height: 1000, x: 40, y: 40 }))
 db.close()
