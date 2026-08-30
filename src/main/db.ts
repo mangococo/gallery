@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import type { Album, PhotoDTO, PhotoType, ThumbStatus, TripDTO } from '../shared/types'
+import type { Album, PhotoDTO, PhotoType, SearchHit, SearchMatchIn, ThumbStatus, TripDTO } from '../shared/types'
 
 let db: Database.Database
 
@@ -502,6 +502,109 @@ export function countPendingThumbs(albumId: string): number {
     )
     .get(albumId) as { n: number }
   return r.n
+}
+
+// ---------- ⌘K 搜索 ----------
+
+const MATCH_RANK: Record<SearchMatchIn, number> = { title: 0, tags: 1, description: 2, caption: 3 }
+
+interface HitPhoto {
+  id: string
+  type: string
+  relPath: string
+  thumbStatus: string
+  albumId: string
+}
+
+function hitThumbUrl(r: HitPhoto | undefined): string {
+  if (!r) return ''
+  if (r.thumbStatus === 'ready') return `gallery-media://t/${r.id}.webp`
+  return r.type === 'image' ? `gallery-media://m/${r.albumId}/${encodeURIComponent(r.relPath)}` : ''
+}
+
+/**
+ * ⌘K 旅行搜索：标题/描述/标签/图注（图注命中聚合到所属旅行）。
+ * 选 LIKE 而非 FTS5：unicode61 分词器不切分中文（整段中文成一个 token，两字词搜不到），
+ * trigram 分词又要求查询 ≥3 字符；旅行数量小，LIKE 扫描配合面板防抖足够。
+ * 字段匹配在 JS 侧做（toLowerCase，Unicode 友好）；图注命中在 SQL 侧筛（LIKE 仅 ASCII
+ * 大小写不敏感，中文无大小写概念，行为一致）。
+ */
+export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
+  const q = rawQ.trim()
+  if (!q) return []
+  const like = `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+
+  const tripRows = listTripRows(albumId)
+
+  const tagRows = db
+    .prepare(
+      `SELECT tt.trip_id AS tripId, g.name AS name
+       FROM trip_tags tt
+       JOIN tags g ON g.id = tt.tag_id
+       JOIN trips tr ON tr.id = tt.trip_id
+       WHERE tr.album_id = ?`,
+    )
+    .all(albumId) as { tripId: string; name: string }[]
+  const tagsByTrip = new Map<string, string[]>()
+  for (const r of tagRows) {
+    const list = tagsByTrip.get(r.tripId) ?? []
+    list.push(r.name)
+    tagsByTrip.set(r.tripId, list)
+  }
+
+  const capRows = db
+    .prepare(
+      `SELECT p.trip_id AS tripId, p.id, p.type, p.rel_path AS relPath,
+              p.thumb_status AS thumbStatus, p.caption, tr.album_id AS albumId
+       FROM photos p
+       JOIN trips tr ON tr.id = p.trip_id
+       WHERE tr.album_id = ? AND p.caption LIKE ? ESCAPE '\\'
+       ORDER BY p.rowid`,
+    )
+    .all(albumId, like) as (HitPhoto & { tripId: string; caption: string })[]
+  const capByTrip = new Map<string, (typeof capRows)[number]>()
+  for (const r of capRows) if (!capByTrip.has(r.tripId)) capByTrip.set(r.tripId, r)
+
+  const coverById = new Map<string, HitPhoto>()
+  for (const t of tripRows) {
+    if (!t.coverPhotoId || coverById.has(t.coverPhotoId)) continue
+    const r = db
+      .prepare(
+        'SELECT p.id, p.type, p.rel_path AS relPath, p.thumb_status AS thumbStatus, t.album_id AS albumId FROM photos p JOIN trips t ON t.id = p.trip_id WHERE p.id = ?',
+      )
+      .get(t.coverPhotoId) as HitPhoto | undefined
+    if (r) coverById.set(t.coverPhotoId, r)
+  }
+
+  const lowerQ = q.toLowerCase()
+  const hits: { hit: SearchHit; rank: number }[] = []
+  for (const t of tripRows) {
+    const tags = tagsByTrip.get(t.id) ?? []
+    const matchedIn: SearchMatchIn[] = []
+    if (t.title.toLowerCase().includes(lowerQ)) matchedIn.push('title')
+    if (t.description.toLowerCase().includes(lowerQ)) matchedIn.push('description')
+    if (tags.some((g) => g.toLowerCase().includes(lowerQ))) matchedIn.push('tags')
+    const cap = capByTrip.get(t.id)
+    if (cap) matchedIn.push('caption')
+    if (matchedIn.length === 0) continue
+
+    const rank = Math.min(...matchedIn.map((m) => MATCH_RANK[m]))
+    hits.push({
+      rank,
+      hit: {
+        tripId: t.id,
+        title: t.title,
+        startDate: t.startDate,
+        tags,
+        matchedIn,
+        description: t.description,
+        sampleCaption: cap?.caption ?? null,
+        thumbUrl: hitThumbUrl(cap) || hitThumbUrl(t.coverPhotoId ? coverById.get(t.coverPhotoId) : undefined),
+      },
+    })
+  }
+  hits.sort((a, b) => a.rank - b.rank || b.hit.startDate.localeCompare(a.hit.startDate))
+  return hits.slice(0, 50).map((h) => h.hit)
 }
 
 // ---------- stats ----------

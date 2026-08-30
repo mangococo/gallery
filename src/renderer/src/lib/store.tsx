@@ -20,6 +20,9 @@ interface AppState {
   setFilters: (patch: Partial<TripFilters>) => void
   theme: ThemeMode
   setTheme: (mode: ThemeMode) => Promise<void>
+  /** ⌘K 搜索面板开关 */
+  searchOpen: boolean
+  setSearchOpen: (v: boolean) => void
   reloadAlbums: () => Promise<void>
   reloadTrips: () => Promise<void>
   reloadStats: () => Promise<void>
@@ -49,6 +52,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   })
   const [theme, setThemeState] = React.useState<ThemeMode>('system')
   const [systemDark, setSystemDark] = React.useState(false)
+  const [searchOpen, setSearchOpen] = React.useState(false)
 
   const setFilters = React.useCallback((patch: Partial<TripFilters>) => {
     setFiltersState((prev) => ({ ...prev, ...patch }))
@@ -135,6 +139,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setFilters,
         theme,
         setTheme,
+        searchOpen,
+        setSearchOpen,
         reloadAlbums,
         reloadTrips,
         reloadStats,

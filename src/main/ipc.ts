@@ -37,6 +37,7 @@ import {
   deletePhotoRow,
   setPhotoCaption,
   listPhotosOfTrip,
+  searchTripHits,
   getStats,
 } from './db'
 import { scanAlbum } from './services/scanner'
@@ -326,6 +327,9 @@ export function registerIpcHandlers(): void {
     nativeTheme.themeSource = mode
     notifyThemeState()
   })
+
+  // —— ⌘K 搜索 ——
+  ipcMain.handle(IPC.searchTrips, (_e, albumId: string, q: string) => searchTripHits(albumId, q))
 
   // —— 旧数据导入 ——
   ipcMain.handle(IPC.importLegacy, async (e): Promise<LegacyImportResult | null> => {

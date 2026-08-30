@@ -46,6 +46,8 @@ const api: GalleryApi = {
 
   importLegacy: () => ipcRenderer.invoke(IPC.importLegacy),
 
+  searchTrips: (albumId: string, q: string) => ipcRenderer.invoke(IPC.searchTrips, albumId, q),
+
   onScanProgress: (cb: (p: ScanProgress) => void) => subscribe(IPC.pushScanProgress, cb),
   onFsChanged: (cb) => subscribe(IPC.pushFsChanged, cb),
   onThemeSystemChanged: (cb) => subscribe(IPC.pushThemeSystemChanged, cb),

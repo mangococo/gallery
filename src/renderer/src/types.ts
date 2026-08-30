@@ -9,6 +9,8 @@ export type {
   PhotoDTO,
   PhotoType,
   ScanProgress,
+  SearchHit,
+  SearchMatchIn,
   Stats,
   ThemeMode,
   ThumbStatus,

@@ -4,6 +4,7 @@ import { AppProvider, useApp } from './lib/store'
 import Sidebar from './components/Sidebar'
 import HomePage from './pages/HomePage'
 import TripPage from './pages/TripPage'
+import CommandPalette from './components/CommandPalette'
 import DropImportLayer from './components/DropImport'
 import { FeedbackHost } from './components/feedback'
 
@@ -30,6 +31,8 @@ function Shell() {
       </main>
       {/* 窗口级拖拽导入（TripPage 内部拖拽会 stopPropagation） */}
       <DropImportLayer />
+      {/* ⌘K 搜索面板 */}
+      <CommandPalette />
       {/* toast / 确认弹窗宿主 */}
       <FeedbackHost />
     </div>

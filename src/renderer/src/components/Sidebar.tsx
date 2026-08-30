@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { Album } from '../types'
 import { confirmDialog, toast } from './feedback'
+import { SearchIcon } from './icons'
 import ThemeSwitch from './ThemeSwitch'
 import SettingsModal from './SettingsModal'
 import {
@@ -27,6 +28,7 @@ const Sidebar: React.FC = () => {
     filters,
     setFilters,
     setActiveAlbum,
+    setSearchOpen,
     reloadAlbums,
     reloadTrips,
     reloadStats,
@@ -111,6 +113,20 @@ const Sidebar: React.FC = () => {
       </div>
 
       <nav className="flex-1 overflow-y-auto scroll-slim px-3 pb-3 space-y-5">
+        {/* ⌘K 搜索入口 */}
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-ink-3 hover:bg-surface-2 hover:text-ink-2 transition-colors"
+        >
+          <span className="flex items-center">
+            <SearchIcon size={15} />
+          </span>
+          <span>搜索</span>
+          <kbd className="ml-auto px-1.5 py-0.5 rounded-md bg-surface-2 border border-line text-[10px] text-ink-3">
+            ⌘K
+          </kbd>
+        </button>
+
         {/* 收藏 */}
         <button
           onClick={() => setFilters({ favoritesOnly: !filters.favoritesOnly })}

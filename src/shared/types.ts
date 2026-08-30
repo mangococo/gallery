@@ -99,6 +99,24 @@ export interface LegacyImportResult {
 
 export type Unsubscribe = () => void
 
+/** ⌘K 搜索命中字段 */
+export type SearchMatchIn = 'title' | 'description' | 'tags' | 'caption'
+
+/** ⌘K 搜索结果：按旅行聚合（图注命中也归到所属旅行） */
+export interface SearchHit {
+  tripId: string
+  title: string
+  startDate: string
+  tags: string[]
+  /** 本次命中的字段，标题命中排最前 */
+  matchedIn: SearchMatchIn[]
+  description: string
+  /** 命中的图注样例（渲染层做高亮） */
+  sampleCaption: string | null
+  /** 缩略图 URL：命中图注的照片优先，否则封面照片；'' 表示无可用缩略图 */
+  thumbUrl: string
+}
+
 /** 渲染进程可用的类型化 API（经 contextBridge 暴露） */
 export interface GalleryApi {
   bootstrap(): Promise<Bootstrap>
@@ -140,6 +158,9 @@ export interface GalleryApi {
   /** 选择旧数据根目录并执行 .settings.json 迁移导入 */
   importLegacy(): Promise<LegacyImportResult | null>
 
+  /** ⌘K 搜索：旅行标题/描述/标签/图注，按旅行聚合返回 */
+  searchTrips(albumId: string, q: string): Promise<SearchHit[]>
+
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
   onThemeSystemChanged(cb: (p: { systemDark: boolean }) => void): Unsubscribe
@@ -178,6 +199,8 @@ export const IPC = {
   themeSet: 'theme:set',
 
   importLegacy: 'import:legacy',
+
+  searchTrips: 'search:trips',
 
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',

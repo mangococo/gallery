@@ -80,6 +80,14 @@ mark {
   color: inherit;
 }
 
+/* ⌘K 搜索命中词高亮 */
+.hl {
+  background-color: color-mix(in srgb, var(--g-primary) 24%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
 ::selection {
   background-color: color-mix(in srgb, var(--g-primary) 30%, transparent);
   color: inherit;
