@@ -1,22 +1,59 @@
-# 画廊 · 旅行照片管理桌面应用
+# 画廊 · 把旅行照片，做成一本翻不腻的手账
 
-macOS 桌面应用（Electron），以手账风时间线管理你的旅行照片与视频。照片文件原地保存在自己的目录中，元数据存于独立的 SQLite 数据库，目录自包含、可迁移。
+<p align="center">
+  <img src="docs/screenshots/home-light.png" alt="画廊 — 手账风时间线" width="960">
+</p>
 
-![技术栈](https://img.shields.io/badge/Electron-44-47848F) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6) ![Tailwind](https://img.shields.io/badge/Tailwind-v4-38BDF8)
+<p align="center">
+  <a href="https://github.com/mangococo/gallery/releases/latest"><img src="https://img.shields.io/github/v/release/mangococo/gallery?label=%E6%9C%80%E6%96%B0%E7%89%88&color=B07E4E" alt="最新版"></a>
+  <a href="https://github.com/mangococo/gallery/actions/workflows/release.yml"><img src="https://github.com/mangococo/gallery/actions/workflows/release.yml/badge.svg" alt="Release CI"></a>
+  <img src="https://img.shields.io/badge/macOS%2014%2B%20%7C%20Windows%2010%2B-arm64%20%7C%20x64-B07E4E" alt="平台">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-3178C6" alt="MIT"></a>
+</p>
+
+**画廊**是一款本地优先的旅行照片管理桌面应用。它不把照片锁进自己的图库，而是把你已有的照片文件夹，变成一条按日期排开的手账时间线——拍立得堆叠、和纸胶带日期贴、缝线书脊。点开一本，就是那次旅行的照片墙。
+
+不需要联网，不需要登录，不会后台上传。照片在哪里，永远由你说了算。
+
+## 为什么选画廊
+
+- **照片原地不动** — 注册你已有的照片文件夹，文件零拷贝、零改名；拔掉相册目录，应用数据分毫未损，插回即恢复
+- **数据完全属于你** — 元数据存本地 SQLite 单文件，删掉应用也只是一行 `rm`；没有账号、没有云、没有追踪
+- **好看得像手账，快得像原生** — React + Electron，缩略图由 sharp 预生成，万张照片的时间线照样流畅滚动
+
+## 界面一览
+
+| 手账时间线 | 旅行照片墙 |
+|---|---|
+| <img src="docs/screenshots/home-light.png" alt="手账时间线" width="480"> | <img src="docs/screenshots/trip-photos.png" alt="旅行照片墙" width="480"> |
+| **灯箱看图** | **烛光暗色主题** |
+| <img src="docs/screenshots/lightbox.png" alt="灯箱" width="480"> | <img src="docs/screenshots/home-dark.png" alt="暗色主题" width="480"> |
 
 ## 功能特性
 
 - 📅 **时间线视图** — 按开始日期倒序的手账时间线：缝线书脊、和纸胶带日期贴、拍立得照片堆叠（悬停散开，最多 9 张）
 - 🗂 **多相册** — 注册多个照片根目录，一次激活一个，快速切换；外置卷拔出时灰显、插回即恢复
 - 🌗 **主题** — 亮 / 暗 / 跟随系统三态，暗色为暖褐「烛光」调，跟随系统深色模式联动
-- 🏷 **标签 / 收藏 / 年份** — 三类筛选可叠加
-- 🖼 **照片墙 + 灯箱** — 瀑布流缩略图（sharp 生成 400px webp），灯箱看原图，视频可拖进度条（`gallery-media://` 协议支持 Range）
-- 🎬 **视频海报帧** — 视频自动截帧生成海报；解码失败自动落暖色占位图
-- ✏️ **编辑** — 标题、日期、描述、标签行内编辑；自选封面照片
-- 📥 **导入** — 表单上传、拖拽照片/视频进窗口即导入；一键导入旧版 `.settings.json` 数据目录（保留旧时间戳 id 与图注）
-- 👁 **实时同步** — 监听相册目录，Finder 中增删照片实时反映；亦可手动重新扫描
-- 🗑 **安全删除** — 照片与旅行目录一律移入废纸篓，可反悔
-- ⌨️ **键盘导航** — 灯箱 ←/→ 切换、ESC 退出；标准 macOS 中文菜单（⌘C/⌘V 可用）
+- 🏷 **标签 / 收藏 / 年份** — 三类筛选可叠加，标签输入带常用联想
+- 🖼 **照片墙 + 灯箱** — 瀑布流缩略图（sharp 生成 400px webp），灯箱看原图，←/→ 切换、ESC 退出
+- 🎬 **视频播放** — 视频自动截帧生成海报帧，灯箱内直接拖进度条（`gallery-media://` 协议支持 Range）
+- ✏️ **行内编辑** — 标题、日期、描述、标签随手改；一键指定封面照片
+- 📥 **多种导入** — 表单上传、拖拽照片/视频进窗口即导入；一键迁移旧版 `.settings.json` 数据目录
+- 👁 **实时同步** — 监听相册目录，Finder 里增删照片立刻反映；也可手动重新扫描
+- 🗑 **安全删除** — 照片与旅行目录一律移入系统废纸篓，可反悔
+
+## 下载安装
+
+前往 [**Releases**](https://github.com/mangococo/gallery/releases/latest) 下载最新版本：
+
+| 平台 | 文件 |
+|---|---|
+| macOS（Apple Silicon） | `gallery-<版本>-mac-arm64.dmg` |
+| Windows 10/11（64 位） | `gallery-<版本>-win-x64.exe` |
+
+> **首次运行提示**：安装包目前未做代码签名（没钱买苹果开发者证书 😅）
+> - **macOS**：打开 dmg 拖入「应用程序」后，首次启动若提示无法验证开发者，请**右键 → 打开**，或在「系统设置 → 隐私与安全性」中点击「仍要打开」
+> - **Windows**：SmartScreen 弹窗时点击「更多信息 → 仍要运行」
 
 ## 数据与文件
 
@@ -31,13 +68,15 @@ macOS 桌面应用（Electron），以手账风时间线管理你的旅行照片
 ## 开发
 
 ```bash
-npm install     # 安装依赖（better-sqlite3 / sharp 为 NAPI 预编译，无需手动 rebuild）
-npm run dev     # 启动开发模式（HMR）
+npm install        # 安装依赖（better-sqlite3 / sharp 为 NAPI 预编译，无需手动 rebuild）
+npm run dev        # 启动开发模式（HMR）
 npm run typecheck
-npm run build:mac   # 产出 release/画廊-<版本>-arm64.dmg
+npm run build:mac  # 产出 release/gallery-<版本>-mac-arm64.dmg
 ```
 
-## 验收截图工具
+推送 `v*` 标签时，[Release CI](.github/workflows/release.yml) 会自动构建 macOS / Windows 安装包并创建 GitHub Release。
+
+### 验收截图工具
 
 ```bash
 # GALLERY_E2E=1 时按步骤文件驱动 UI 并截图到指定目录，最后自动退出
@@ -47,6 +86,8 @@ GALLERY_E2E_STEPS=steps.json \
 GALLERY_E2E_ALBUM="/path/to/相册目录" \
 npx electron .
 ```
+
+README 中的界面截图由 `scripts/gen-demo.mjs` 生成的演示相册驱动应用截取，可复现。
 
 ## 架构
 
@@ -63,4 +104,4 @@ src/
 
 ## License
 
-MIT
+[MIT](LICENSE)
