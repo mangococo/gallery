@@ -16,9 +16,9 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            args: --mac --arm64
+            args: --mac --arm64 --publish never
           - os: windows-latest
-            args: --win --x64
+            args: --win --x64 --publish never
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
