@@ -183,12 +183,14 @@ function buildJournalHtml(trip: TripDTO): string {
 </html>`
 }
 
-/** 等待窗口内全部图片加载完成（15s 兜底超时） */
+/** 等待窗口内全部图片加载完成（15s 兜底超时）。
+ * 只等 !complete：加载失败（文件缺失等）的图片 complete=true 而 naturalWidth=0，
+ * 若一并计入会永远等不到、白耗满 15s 超时——失败图由模板自身呈现空底即可。 */
 async function waitImagesLoaded(win: BrowserWindow): Promise<void> {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
     const pending = await win.webContents.executeJavaScript(
-      `[...document.images].filter(i => !i.complete || i.naturalWidth === 0).length`,
+      `[...document.images].filter(i => !i.complete).length`,
     )
     if (pending === 0) return
     await new Promise((r) => setTimeout(r, 120))
@@ -216,14 +218,16 @@ export async function exportJournal(
   }
 
   const ext = format === 'pdf' ? 'pdf' : 'png'
+  // 标题是自由文本：含 / 等字符时 join 会凭空多出不存在的目录层级，写入必失败
+  const safeTitle = trip.title.replace(/[/\\:*?"<>|]/g, '_').trim() || '未命名旅行'
   let target = savePath
   if (!target) {
     if (process.env.GALLERY_E2E === '1' && process.env.GALLERY_E2E_EXPORT_DIR) {
-      target = join(process.env.GALLERY_E2E_EXPORT_DIR, `${trip.title}.${ext}`)
+      target = join(process.env.GALLERY_E2E_EXPORT_DIR, `${safeTitle}.${ext}`)
     } else {
       const res = await dialog.showSaveDialog(parentWin, {
         title: '导出手账',
-        defaultPath: join(app.getPath('downloads'), `${trip.title}.${ext}`),
+        defaultPath: join(app.getPath('downloads'), `${safeTitle}.${ext}`),
         filters: [
           format === 'pdf' ? { name: 'PDF', extensions: ['pdf'] } : { name: 'PNG 长图', extensions: ['png'] },
         ],
