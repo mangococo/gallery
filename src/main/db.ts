@@ -240,6 +240,8 @@ function rowToTrip(r: TripRow): Omit<TripDTO, 'tags' | 'photos'> {
     coverPhotoId: r.cover_photo_id,
     createdAt: r.created_at ?? 0,
     updatedAt: r.updated_at ?? 0,
+    // DB 不落盘此状态：IPC 层在 list/get 时按磁盘实时校对覆盖（'ok' 只是占位）
+    status: 'ok',
   }
 }
 

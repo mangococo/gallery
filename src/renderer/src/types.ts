@@ -17,6 +17,7 @@ export type {
   ThumbStatus,
   TripDTO,
   TripPatch,
+  TripStatus,
   Unsubscribe,
 } from '@shared/types'
 

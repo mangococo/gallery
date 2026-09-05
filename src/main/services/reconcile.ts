@@ -94,3 +94,20 @@ export function msToLocalDate(ms: number): string {
   const dd = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${mm}-${dd}`
 }
+
+export type TripRemovalPlan =
+  | { action: 'trash-folder' }
+  | { action: 'record-only' }
+  | { action: 'root-missing' }
+
+/**
+ * 删除旅行前的分流决策：
+ * - 相册根可达且旅行目录还在 → 目录移入废纸篓后删记录
+ * - 相册根可达但旅行目录已不在（被移出相册目录/外部删除）→ 只删记录，磁盘无东西可删
+ * - 相册根本身不可达（外置卷未挂载等）→ 拒绝删除：无法区分「文件夹真没了」和「暂时看不到」，
+ *   此时删元数据不可逆，必须等根目录恢复
+ */
+export function planTripRemoval(albumRootAccessible: boolean, tripFolderExists: boolean): TripRemovalPlan {
+  if (!albumRootAccessible) return { action: 'root-missing' }
+  return tripFolderExists ? { action: 'trash-folder' } : { action: 'record-only' }
+}

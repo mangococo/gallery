@@ -2,6 +2,8 @@
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type AlbumStatus = 'ok' | 'missing'
+/** 旅行文件夹在相册目录中的在位状态（磁盘实时校对，不落库） */
+export type TripStatus = 'ok' | 'missing'
 export type PhotoType = 'image' | 'video'
 export type ThumbStatus = 'pending' | 'ready' | 'failed'
 
@@ -51,6 +53,8 @@ export interface TripDTO {
   tags: string[]
   createdAt: number
   updatedAt: number
+  /** 旅行文件夹是否还在相册目录中；missing 时点击应提示删除记录 */
+  status: TripStatus
   photos: PhotoDTO[]
 }
 

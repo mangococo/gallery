@@ -44,6 +44,7 @@ import {
 } from './db'
 import { scanAlbum } from './services/scanner'
 import { mediaTypeOf } from './services/scanner'
+import { planTripRemoval } from './services/reconcile'
 import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
@@ -59,6 +60,23 @@ function pushProgress(p: ScanProgress): void {
 
 function pushChanged(albumId: string): void {
   senderWindow()?.webContents.send(IPC.pushFsChanged, { albumId })
+}
+
+/** 旅行文件夹是否还在相册目录中（磁盘实时校对，不落库） */
+async function tripFolderExists(albumPath: string, folderName: string): Promise<boolean> {
+  return fs
+    .access(join(albumPath, folderName))
+    .then(() => true)
+    .catch(() => false)
+}
+
+/** 单个旅行附带走位状态（tripsGet/tripsCreate/tripsUpdate 出口统一） */
+async function withTripStatus<T extends { status: 'ok' | 'missing'; folderName: string }>(
+  album: Album | null,
+  trip: T,
+): Promise<T> {
+  const exists = album ? await tripFolderExists(album.path, trip.folderName) : false
+  return { ...trip, status: exists ? 'ok' : 'missing' }
 }
 
 /** 对相册执行完整扫描 + 缩略图生成 + watcher 更新，并通知渲染层 */
@@ -181,25 +199,29 @@ export function registerIpcHandlers(): void {
       .access(album.path)
       .then(() => album)
       .catch(() => null)
-      .then((ok) => {
+      .then(async (ok) => {
         if (!ok) {
           setAlbumStatus(albumId, 'missing')
           return []
         }
         if (album.status !== 'ok') setAlbumStatus(albumId, 'ok')
-        // 附带完整照片列表（时间线堆叠与计数需要）
-        return listTripRows(albumId).map((t) => ({
-          ...t,
-          tags: getTagsOfTrip(t.id),
-          photos: photosOfTrip(t),
-        }))
+        // 附带走位状态（启动即扫描：文件夹被外部移除的旅行当场标记 missing）
+        // + 完整照片列表（时间线堆叠与计数需要）
+        const trips = await Promise.all(
+          listTripRows(albumId).map(async (t) => {
+            const withStatus = await withTripStatus(album, t)
+            return { ...withStatus, tags: getTagsOfTrip(t.id), photos: photosOfTrip(t) }
+          }),
+        )
+        return trips
       })
   })
 
-  ipcMain.handle(IPC.tripsGet, (_e, id: string) => {
+  ipcMain.handle(IPC.tripsGet, async (_e, id: string) => {
     const t = getTripRow(id)
     if (!t) return null
-    return { ...t, tags: getTagsOfTrip(id), photos: photosOfTrip(t) }
+    const withStatus = await withTripStatus(getAlbumRow(t.albumId), t)
+    return { ...withStatus, tags: getTagsOfTrip(id), photos: photosOfTrip(t) }
   })
 
   ipcMain.handle(IPC.tripsCreate, (_e, input: CreateTripInput) => {
@@ -227,13 +249,14 @@ export function registerIpcHandlers(): void {
     return { ...row, tags: getTagsOfTrip(t.id), photos: [] }
   })
 
-  ipcMain.handle(IPC.tripsUpdate, (_e, id: string, patch: TripPatch) => {
+  ipcMain.handle(IPC.tripsUpdate, async (_e, id: string, patch: TripPatch) => {
     const tags = patch.tags
     updateTripRow(id, patch)
     if (tags !== undefined) setTagsOfTrip(id, tags)
     const t = getTripRow(id)
     if (!t) throw new Error('旅行不存在')
-    return { ...t, tags: getTagsOfTrip(id), photos: photosOfTrip(t) }
+    const withStatus = await withTripStatus(getAlbumRow(t.albumId), t)
+    return { ...withStatus, tags: getTagsOfTrip(id), photos: photosOfTrip(t) }
   })
 
   ipcMain.handle(IPC.tripsDelete, async (_e, id: string) => {
@@ -241,11 +264,22 @@ export function registerIpcHandlers(): void {
     if (!t) return
     const album = getAlbumRow(t.albumId)
     if (album) {
-      const dir = join(album.path, t.folderName)
-      // 一律进废纸篓，不直接删除
-      await shell.trashItem(dir).catch((err) => {
-        throw new Error('移入废纸篓失败: ' + err.message)
-      })
+      const rootOk = await fs
+        .access(album.path)
+        .then(() => true)
+        .catch(() => false)
+      const plan = planTripRemoval(rootOk, await tripFolderExists(album.path, t.folderName))
+      if (plan.action === 'root-missing') {
+        // 外置卷未挂载等场景：无法区分「真没了」和「暂时看不到」，删元数据不可逆，拒绝
+        throw new Error('相册目录当前不可访问，无法确认旅行文件夹状态，已取消删除')
+      }
+      if (plan.action === 'trash-folder') {
+        // 一律进废纸篓，不直接删除
+        await shell.trashItem(join(album.path, t.folderName)).catch((err) => {
+          throw new Error('移入废纸篓失败: ' + err.message)
+        })
+      }
+      // record-only：文件夹已被移出相册目录/外部删除，只清理库内元数据
     }
     deleteTripRow(id)
     pushChanged(t.albumId)

@@ -5,6 +5,7 @@ import {
   compareFileNames,
   msToLocalDate,
   planReconciliation,
+  planTripRemoval,
   type DiskFile,
 } from '../src/main/services/reconcile.ts'
 
@@ -81,4 +82,17 @@ test('buildCaptionMap 非字符串值转空串、空输入安全', () => {
 test('msToLocalDate 输出本地时区 YYYY-MM-DD', () => {
   const ms = new Date(2025, 10, 3, 8, 30).getTime() // 本地 2025-11-03 08:30
   assert.equal(msToLocalDate(ms), '2025-11-03')
+})
+
+test('planTripRemoval 文件夹在 → 移入废纸篓', () => {
+  assert.deepEqual(planTripRemoval(true, true), { action: 'trash-folder' })
+})
+
+test('planTripRemoval 相册根可达但旅行文件夹已被移除 → 只删记录', () => {
+  assert.deepEqual(planTripRemoval(true, false), { action: 'record-only' })
+})
+
+test('planTripRemoval 相册根不可达 → 拒绝删除（防外置卷未挂载时误删元数据）', () => {
+  assert.deepEqual(planTripRemoval(false, false), { action: 'root-missing' })
+  assert.deepEqual(planTripRemoval(false, true), { action: 'root-missing' })
 })

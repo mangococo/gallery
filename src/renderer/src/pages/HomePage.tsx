@@ -63,6 +63,32 @@ const HomePage: React.FC = () => {
     await refreshAll()
   }
 
+  /** 首次点击缺失旅行的确认弹窗期间锁住，防重复触发 */
+  const [openingTripId, setOpeningTripId] = React.useState<string | null>(null)
+
+  /**
+   * 点击旅行 = 打开旅行页；但文件夹已被移出相册目录的旅行（status === 'missing'）
+   * 打开只会看到一堆失效图片——首次点击即提示是否删除该旅行记录，取消则留在首页。
+   */
+  const handleOpenTrip = async (tripId: string) => {
+    const trip = trips.find((t) => t.id === tripId)
+    if (!trip) return
+    if (trip.status === 'missing') {
+      if (openingTripId) return
+      setOpeningTripId(tripId)
+      const deleted = await confirmAndDeleteTrip({
+        id: trip.id,
+        title: trip.title,
+        photoCount: trip.photos?.length || 0,
+        status: trip.status,
+      })
+      if (deleted) await refreshAll()
+      setOpeningTripId(null)
+      return
+    }
+    navigate(`/trip/${tripId}`)
+  }
+
   const handleDeleteTrip = async (tripId: string) => {
     if (deletingTripId) return
     const trip = trips.find((t) => t.id === tripId)
@@ -72,6 +98,7 @@ const HomePage: React.FC = () => {
       id: trip.id,
       title: trip.title,
       photoCount: trip.photos?.length || 0,
+      status: trip.status,
     })
     if (deleted) await refreshAll()
     setDeletingTripId(null)
@@ -126,7 +153,7 @@ const HomePage: React.FC = () => {
                 {index > 0 && <TimelineAddButton onAdd={() => setShowAddModal(true)} />}
                 <TimelineItem
                   trip={trip}
-                  onEdit={(id) => navigate(`/trip/${id}`)}
+                  onEdit={handleOpenTrip}
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteTrip}
                 />

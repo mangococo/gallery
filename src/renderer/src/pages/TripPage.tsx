@@ -21,6 +21,7 @@ import {
   TrashIcon,
   XIcon,
   BookIcon,
+  WarningIcon,
 } from '../components/icons'
 import type { JournalFormat } from '../types'
 import { Photo, Trip } from '../types'
@@ -134,6 +135,7 @@ const TripPage: React.FC = () => {
       id: trip.id,
       title: trip.title,
       photoCount: photos.length,
+      status: trip.status,
     })
     if (deleted) {
       await refreshAll()
@@ -345,6 +347,15 @@ const TripPage: React.FC = () => {
       )}
 
       <main className="max-w-[1100px] mx-auto px-10 py-10">
+        {/* 文件夹缺失横幅（⌘K 等入口仍可能进到缺失旅行页） */}
+        {trip.status === 'missing' && (
+          <div className="mb-6 px-4 py-3 bg-danger/10 border border-danger/30 rounded-xl flex items-center gap-2 text-sm text-danger">
+            <WarningIcon size={14} className="shrink-0" />
+            <span>
+              旅行文件夹已不在相册目录中（可能被移出或删除），照片无法读取；顶栏删除将只清理这条旅行记录。
+            </span>
+          </div>
+        )}
         {/* 信息卡 */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}

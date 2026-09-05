@@ -2,7 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Trip } from '../types'
 import PhotoStack from './PhotoStack'
-import { HeartIcon, TrashIcon } from './icons'
+import { HeartIcon, TrashIcon, WarningIcon } from './icons'
 
 interface TimelineItemProps {
   trip: Trip
@@ -12,6 +12,7 @@ interface TimelineItemProps {
 }
 
 const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavorite, onDelete }) => {
+  const missing = trip.status === 'missing'
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '——'
     const date = new Date(dateStr)
@@ -41,8 +42,8 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
         </div>
       </div>
 
-      {/* 拍立得照片堆叠 */}
-      <div className="ml-6 mr-8 mt-1">
+      {/* 拍立得照片堆叠（文件夹缺失时降透明度，点击会触发删除提示而非进入旅行页） */}
+      <div className={`ml-6 mr-8 mt-1 ${missing ? 'opacity-40 saturate-50' : ''}`}>
         <PhotoStack trip={trip} onClick={() => onEdit(trip.id)} />
       </div>
 
@@ -92,6 +93,12 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
         <div className="flex items-center gap-3 text-xs text-ink-3">
           <span>{(trip.photos || []).length} 张照片</span>
           <span className="font-display">{getDaysDiff()} 天旅程</span>
+          {missing && (
+            <span className="px-2 py-0.5 bg-danger/10 text-danger rounded-full flex items-center gap-1">
+              <WarningIcon size={10} />
+              <span>文件夹已缺失，点击可删除记录</span>
+            </span>
+          )}
         </div>
         {(trip.tags || []).length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2.5">
