@@ -96,6 +96,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "afterPack": "scripts/afterpack.cjs"
   }
 }
