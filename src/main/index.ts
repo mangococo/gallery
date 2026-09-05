@@ -29,6 +29,8 @@ app.setPath('userData', userDataDir)
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
+  // 同数据目录已有实例（如已开打包版又跑 dev）：静默秒退很难排查，给出明确提示
+  console.warn(`[画廊] 已有使用数据目录「${userDataDir}」的实例在运行，本次启动退出`)
   app.quit()
 } else {
   app.on('second-instance', () => {
