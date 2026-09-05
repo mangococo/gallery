@@ -47,14 +47,28 @@ const TripPage: React.FC = () => {
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
   const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
+  /** getTrip 是否已返回：区分「加载中」与「旅行不存在」 */
+  const [tripLoaded, setTripLoaded] = React.useState(false)
 
   React.useEffect(() => {
+    // ⌘K 可在旅行页之间直接跳转（同一路由组件复用）：慢的旧请求回来会覆盖新旅行，
+    // 用取消标记丢弃过期响应
+    let cancelled = false
     const loadTrip = async () => {
-      const tripData = await api.getTrip(id!)
-      setTrip(tripData)
-      setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
+      try {
+        const tripData = await api.getTrip(id!)
+        if (cancelled) return
+        setTrip(tripData)
+        setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
+      } catch {
+        if (!cancelled) setTrip(null)
+      }
+      if (!cancelled) setTripLoaded(true)
     }
-    loadTrip()
+    void loadTrip()
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   const applyUpdate = async (updated: Trip) => {
@@ -128,7 +142,12 @@ const TripPage: React.FC = () => {
 
   const handleSetCover = async (photoId: string) => {
     if (!editedTrip) return
-    await api.setCover(editedTrip.id, photoId)
+    try {
+      await api.setCover(editedTrip.id, photoId)
+    } catch (error: any) {
+      toast('设置封面失败: ' + (error?.message ?? error), 'error')
+      return
+    }
     await applyUpdate({ ...editedTrip, coverPhotoId: photoId })
     await refreshAll()
   }
@@ -203,7 +222,16 @@ const TripPage: React.FC = () => {
   }
 
   const handleSave = async () => {
-    if (editedTrip) {
+    if (!editedTrip) return
+    if (
+      editedTrip.startDate &&
+      editedTrip.endDate &&
+      editedTrip.endDate < editedTrip.startDate
+    ) {
+      toast('结束日期不能早于开始日期', 'error')
+      return
+    }
+    try {
       const saved = await api.updateTrip(editedTrip.id, {
         title: editedTrip.title,
         description: editedTrip.description,
@@ -214,6 +242,8 @@ const TripPage: React.FC = () => {
       if (saved) setTrip(saved)
       setIsEditing(false)
       await refreshAll()
+    } catch (error: any) {
+      toast('保存失败: ' + (error?.message ?? error), 'error')
     }
   }
 
@@ -230,8 +260,20 @@ const TripPage: React.FC = () => {
 
   if (!trip) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-ink-3">加载中…</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        {tripLoaded ? (
+          <>
+            <p className="text-ink-3 font-display text-lg">旅行不存在或已被删除</p>
+            <button
+              onClick={() => navigate('/')}
+              className="px-5 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
+            >
+              回到首页
+            </button>
+          </>
+        ) : (
+          <p className="text-ink-3">加载中…</p>
+        )}
       </div>
     )
   }

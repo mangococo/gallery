@@ -56,6 +56,10 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
+      toast('结束日期不能早于开始日期', 'error');
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -157,6 +161,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                 <input
                   type="date"
                   required
+                  min={formData.startDate || undefined}
                   value={formData.endDate}
                   onChange={(e) =>
                     setFormData({ ...formData, endDate: e.target.value })
