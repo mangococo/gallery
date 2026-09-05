@@ -14,6 +14,7 @@ import PhotoTagEditor from '../components/PhotoTagEditor'
 import MapView from '../components/MapView'
 import { toast } from '../components/feedback'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
+import { dateToLocalStr, formatDotDate, parseLocalDate } from '@shared/dates'
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -216,11 +217,10 @@ const TripPage: React.FC = () => {
     setLightboxIndex(list.findIndex((p: Photo) => p.id === photo.id))
   }
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '——'
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return dateStr
-    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+  /** DatePicker 展示值：date-only 字符串按本地时区解析（UTC 解析会在西半球偏一天） */
+  const asDate = (s: string): Date | null => {
+    const d = parseLocalDate(s)
+    return isNaN(d.getTime()) ? null : d
   }
 
   if (!trip) {
@@ -382,12 +382,12 @@ const TripPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-2">开始日期</label>
                   <DatePicker
-                    selected={editedTrip?.startDate ? new Date(editedTrip.startDate) : null}
+                    selected={editedTrip?.startDate ? asDate(editedTrip.startDate) : null}
                     onChange={(date: Date | null) => {
                       if (editedTrip && date) {
                         setEditedTrip({
                           ...editedTrip,
-                          startDate: date.toISOString().split('T')[0],
+                          startDate: dateToLocalStr(date),
                         })
                       }
                     }}
@@ -399,12 +399,12 @@ const TripPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-2">结束日期</label>
                   <DatePicker
-                    selected={editedTrip?.endDate ? new Date(editedTrip.endDate) : null}
+                    selected={editedTrip?.endDate ? asDate(editedTrip.endDate) : null}
                     onChange={(date: Date | null) => {
                       if (editedTrip && date) {
                         setEditedTrip({
                           ...editedTrip,
-                          endDate: date.toISOString().split('T')[0],
+                          endDate: dateToLocalStr(date),
                         })
                       }
                     }}
@@ -450,7 +450,7 @@ const TripPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-sm text-ink-3 mb-4">
                 <span className="font-display">
-                  {formatDate(trip.startDate)} — {formatDate(trip.endDate)}
+                  {formatDotDate(trip.startDate)} — {formatDotDate(trip.endDate)}
                 </span>
                 <span>·</span>
                 <span>{trip.photos.length} 张照片</span>

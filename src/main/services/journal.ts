@@ -3,6 +3,7 @@ import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import sharp from 'sharp'
 import type { JournalFormat, PhotoDTO, TripDTO } from '../../shared/types'
+import { formatDotDate, formatDotFromMs } from '../../shared/dates'
 import { getTagsOfTrip, getTripRow, listPhotosOfTrip } from '../db'
 
 /**
@@ -25,13 +26,6 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function fmtDate(d: string): string {
-  if (!d) return '——'
-  const date = new Date(d)
-  if (isNaN(date.getTime())) return d
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-}
-
 function photoSrc(p: PhotoDTO): string {
   if (p.thumbStatus === 'ready' && p.thumbUrl) return p.thumbUrl
   return p.mediaUrl
@@ -49,7 +43,7 @@ function buildJournalHtml(trip: TripDTO): string {
         <img src="${photoSrc(p)}" alt="">
         <figcaption>
           ${p.caption ? `<span class="cap">${esc(p.caption)}</span>` : '<span class="cap dim">未写图注</span>'}
-          ${p.takenAt != null ? `<span class="taken">${esc(fmtDate(new Date(p.takenAt).toISOString().slice(0, 10)))}</span>` : ''}
+          ${p.takenAt != null ? `<span class="taken">${esc(formatDotFromMs(p.takenAt))}</span>` : ''}
         </figcaption>
       </figure>`,
     )
@@ -156,7 +150,7 @@ function buildJournalHtml(trip: TripDTO): string {
 <body>
   <div class="page">
     <section class="cover">
-      <span class="washi display">${esc(fmtDate(trip.startDate))} — ${esc(fmtDate(trip.endDate))}</span>
+      <span class="washi display">${esc(formatDotDate(trip.startDate))} — ${esc(formatDotDate(trip.endDate))}</span>
       <h1 class="title display">${esc(trip.title)}</h1>
       <div class="dates display">旅 行 手 账</div>
       ${trip.description ? `<p class="desc">${esc(trip.description)}</p>` : ''}

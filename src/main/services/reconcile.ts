@@ -87,13 +87,9 @@ export function buildCaptionMap(
   return { map, skipped }
 }
 
-/** 毫秒时间戳 → 本地时区 YYYY-MM-DD（旅行日期推断用） */
-export function msToLocalDate(ms: number): string {
-  const d = new Date(ms)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
-}
+// 日期工具收拢到 shared/dates（主/渲染进程共用），此处 re-export 保持旧引用
+// （显式 .ts 扩展：node --test 直跑 TS 时 ESM 解析需要）
+export { msToLocalDate } from '../../shared/dates.ts'
 
 export type TripRemovalPlan =
   | { action: 'trash-folder' }
