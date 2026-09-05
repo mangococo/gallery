@@ -38,6 +38,17 @@ const Sidebar: React.FC = () => {
   const [renamingAlbum, setRenamingAlbum] = React.useState<Album | null>(null)
   const [renameText, setRenameText] = React.useState('')
   const [showSettings, setShowSettings] = React.useState(false)
+  const menuRef = React.useRef<HTMLDivElement | null>(null)
+
+  // 相册操作菜单：点菜单外任意处关闭（此前只靠 onMouseLeave，键盘/精准点击场景关不掉）
+  React.useEffect(() => {
+    if (!menuAlbum) return
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuAlbum(null)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [menuAlbum])
 
   const allTags = React.useMemo(() => {
     const s = new Set<string>()
@@ -207,6 +218,7 @@ const Sidebar: React.FC = () => {
                   {/* 相册操作菜单 */}
                   {menuAlbum?.id === album.id && (
                     <div
+                      ref={menuRef}
                       className="absolute right-2 top-8 z-30 w-36 bg-surface rounded-lg shadow-lg border border-line py-1 text-sm"
                       onMouseLeave={() => setMenuAlbum(null)}
                     >
