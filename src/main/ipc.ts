@@ -152,6 +152,8 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.albumsRemove, async (_e, id: string) => {
     cancelThumbsForAlbum(id)
+    // 队列被取消后不会再有收尾进度，补一个 done>=total 让渲染层进度条收起
+    pushProgress({ albumId: id, albumName: '', phase: 'thumb', done: 1, total: 1 })
     if (getSetting('active_album_id') === id) setSetting('active_album_id', '')
     removeAlbumRow(id) // 仅解除注册，不删除任何文件
     await closeWatcherIfInactive(id)
