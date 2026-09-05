@@ -2,6 +2,7 @@ import { app, protocol } from 'electron'
 import { join, normalize, sep } from 'path'
 import { createReadStream, promises as fs } from 'fs'
 import { Readable } from 'stream'
+import { convertHeicForDisplay, isHeicFamily } from './services/heic'
 
 export const MEDIA_SCHEME = 'gallery-media'
 
@@ -121,6 +122,25 @@ async function serveMedia(
 
   const stat = await fs.stat(abs)
   if (!stat.isFile()) return json(404, { error: 'not a file' })
+
+  // HEIC：Chromium 无法解码，协议层换成 JPEG 展示缓存（带 Range 的视频路径不走这里）
+  if (isHeicFamily(abs)) {
+    const converted = await convertHeicForDisplay(abs, relPath, stat.mtimeMs, stat.size)
+    if (converted) {
+      const cstat = await fs.stat(converted)
+      const stream = createReadStream(converted)
+      return new Response(Readable.toWeb(stream) as unknown as ReadableStream, {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'content-length': String(cstat.size),
+          'cache-control': 'max-age=3600',
+          ...CORS_HEADERS,
+        },
+      })
+    }
+    // 转换失败：继续按原文件回退（浏览器显示失败即降级占位，不 500）
+  }
 
   const contentType = mimeOf(abs)
   const range = request.headers.get('range')

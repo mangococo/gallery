@@ -16,6 +16,7 @@
     "chokidar": "^5.0.0",
     "exifr": "^7.1.3",
     "framer-motion": "^10.16.16",
+    "heic-decode": "^2.1.0",
     "leaflet": "^1.9.4",
     "nanoid": "^6.0.1",
     "react": "^18.2.0",
@@ -59,7 +60,9 @@
     "asarUnpack": [
       "**/node_modules/sharp/**",
       "**/node_modules/@img/**",
-      "**/node_modules/better-sqlite3/**"
+      "**/node_modules/better-sqlite3/**",
+      "**/node_modules/heic-decode/**",
+      "**/node_modules/libheif-js/**"
     ],
     "npmRebuild": false,
     "artifactName": "${name}-${version}-${os}-${arch}.${ext}",

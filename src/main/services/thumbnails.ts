@@ -10,6 +10,7 @@ import {
   setPhotoDimensions,
   setPhotoThumbStatus,
 } from '../db'
+import { decodeHeicRaw, isHeicFamily } from './heic'
 
 /** 缩略图规格：约 400px webp */
 const THUMB_SIZE = 400
@@ -110,10 +111,22 @@ async function generateOne(photoId: string): Promise<void> {
 
   try {
     if (photo.type === 'image') {
-      const out = await sharp(abs)
-        .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toFile(thumbPath(photoId))
+      let out: { width: number; height: number }
+      try {
+        out = await sharp(abs)
+          .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toFile(thumbPath(photoId))
+      } catch (err) {
+        // sharp 的 libheif 无 HEVC 解码插件（实测）：HEIC 回退 WASM 解码后重走管线
+        if (!isHeicFamily(photo.fileName)) throw err
+        const raw = await decodeHeicRaw(abs)
+        if (!raw) throw err
+        out = await sharp(raw.data, { raw: { width: raw.width, height: raw.height, channels: 4 } })
+          .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toFile(thumbPath(photoId))
+      }
       setPhotoDimensions(photoId, out.width, out.height)
       setPhotoThumbStatus(photoId, 'ready')
     } else {

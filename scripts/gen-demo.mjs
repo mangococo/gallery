@@ -10,8 +10,9 @@
  */
 import sharp from 'sharp'
 import piexif from 'piexifjs'
-import { mkdirSync, writeFileSync, readFileSync } from 'fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { spawnSync } from 'child_process'
 import Database from 'better-sqlite3'
 
 const ROOT = '/tmp/gallery-demo'
@@ -591,6 +592,26 @@ if (LARGE_COUNT > 0) {
     ),
   )
   console.log(`grand-album-large ✓ (${LARGE_COUNT} 张)`)
+}
+
+// 2.6 HEIC 样张（HEIC 链路验收用）：macOS 用 sips 把 2 张现有 JPEG 转 .heic
+// （sips 走系统编码器，EXIF/GPS 完整保留；sharp/libheif 写不了 HEVC）
+if (process.platform === 'darwin' && existsSync('/usr/bin/sips')) {
+  const dir = join(ALBUM, 'kyoto-autumn-2025')
+  const jpgs = readFileSync(join(dir, '.settings.json'), 'utf8')
+  const settings = JSON.parse(jpgs)
+  const names = Object.keys(settings.photoCaptions).filter((n) => n.endsWith('.jpg')).slice(0, 2)
+  for (const name of names) {
+    const heicName = name.replace(/\.jpg$/i, '.heic')
+    const res = spawnSync('/usr/bin/sips', ['-s', 'format', 'heic', join(dir, name), '--out', join(dir, heicName)], { stdio: 'ignore' })
+    if (res.status === 0 && existsSync(join(dir, heicName))) {
+      settings.photoCaptions[heicName] = `HEIC 样张（${name} 的副本）`
+      console.log(`${heicName} ✓ (sips 转换)`)
+    } else {
+      console.log(`${heicName} ✗ sips 转换失败`)
+    }
+  }
+  writeFileSync(join(dir, '.settings.json'), JSON.stringify(settings, null, 2))
 }
 
 // 3. 预置演示 userData：schema 与 src/main/db.ts migrate() 保持一致 + 浅色主题/窗口尺寸
