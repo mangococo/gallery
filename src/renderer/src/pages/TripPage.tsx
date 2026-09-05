@@ -20,7 +20,9 @@ import {
   HeartIcon,
   TrashIcon,
   XIcon,
+  BookIcon,
 } from '../components/icons'
+import type { JournalFormat } from '../types'
 import { Photo, Trip } from '../types'
 
 const TripPage: React.FC = () => {
@@ -38,6 +40,8 @@ const TripPage: React.FC = () => {
   const [tagFilter, setTagFilter] = React.useState<string | null>(null)
   /** 旅行页内容视图：照片墙 / 地图 */
   const [viewMode, setViewMode] = React.useState<'photos' | 'map'>('photos')
+  const [exportOpen, setExportOpen] = React.useState(false)
+  const [exporting, setExporting] = React.useState<JournalFormat | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
   const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
@@ -136,6 +140,20 @@ const TripPage: React.FC = () => {
       navigate('/')
     }
     setIsDeletingTrip(false)
+  }
+
+  /** 导出手账：PDF 或长图 PNG（保存对话框由主进程弹出） */
+  const handleExport = async (format: JournalFormat) => {
+    if (!trip || exporting) return
+    setExportOpen(false)
+    setExporting(format)
+    try {
+      const path = await api.exportJournal(trip.id, format)
+      if (path) toast(`手账已导出：${path.split('/').pop()}`, 'success')
+    } catch (error: any) {
+      toast('导出失败: ' + (error?.message ?? error), 'error')
+    }
+    setExporting(null)
   }
 
   const handleCaptionSaved = (photoId: string, caption: string) => {
@@ -266,6 +284,38 @@ const TripPage: React.FC = () => {
             </>
           ) : (
             <>
+              <div className="relative">
+                <button
+                  onClick={() => setExportOpen((v) => !v)}
+                  disabled={!!exporting}
+                  className="px-3 py-1.5 text-sm text-ink-2 hover:text-ink rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  title="导出手账"
+                >
+                  <BookIcon size={15} />
+                  <span>{exporting === 'pdf' ? '生成 PDF…' : exporting === 'png' ? '生成长图…' : '导出手账'}</span>
+                </button>
+                {exportOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-surface border border-line rounded-xl shadow-xl p-1.5 no-drag">
+                      <button
+                        onClick={() => void handleExport('pdf')}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-primary-soft transition-colors"
+                      >
+                        <span className="block text-sm text-ink">PDF · 可打印</span>
+                        <span className="block text-xs text-ink-3 mt-0.5">矢量文字，适合送印</span>
+                      </button>
+                      <button
+                        onClick={() => void handleExport('png')}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-primary-soft transition-colors"
+                      >
+                        <span className="block text-sm text-ink">长图 PNG</span>
+                        <span className="block text-xs text-ink-3 mt-0.5">整卷一张，适合分享</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={handleDeleteTrip}
                 disabled={isDeletingTrip}

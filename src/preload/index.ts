@@ -50,6 +50,8 @@ const api: GalleryApi = {
 
   searchTrips: (albumId: string, q: string) => ipcRenderer.invoke(IPC.searchTrips, albumId, q),
 
+  exportJournal: (tripId, format) => ipcRenderer.invoke(IPC.journalsExport, tripId, format),
+
   onScanProgress: (cb: (p: ScanProgress) => void) => subscribe(IPC.pushScanProgress, cb),
   onFsChanged: (cb) => subscribe(IPC.pushFsChanged, cb),
   onThemeSystemChanged: (cb) => subscribe(IPC.pushThemeSystemChanged, cb),

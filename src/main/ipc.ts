@@ -47,6 +47,7 @@ import { mediaTypeOf } from './services/scanner'
 import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
+import { exportJournal } from './services/journal'
 
 function senderWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
@@ -343,6 +344,14 @@ export function registerIpcHandlers(): void {
 
   // —— ⌘K 搜索 ——
   ipcMain.handle(IPC.searchTrips, (_e, albumId: string, q: string) => searchTripHits(albumId, q))
+
+  // —— 手账导出 ——
+  ipcMain.handle(IPC.journalsExport, async (e, tripId: string, format: 'pdf' | 'png') => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) throw new Error('窗口不存在')
+    const res = await exportJournal(win, tripId, format, null)
+    return res.canceled ? null : res.path ?? null
+  })
 
   // —— 旧数据导入 ——
   ipcMain.handle(IPC.importLegacy, async (e): Promise<LegacyImportResult | null> => {

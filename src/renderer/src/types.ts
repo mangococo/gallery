@@ -5,6 +5,7 @@ export type {
   AlbumStatus,
   Bootstrap,
   CreateTripInput,
+  JournalFormat,
   LegacyImportResult,
   PhotoDTO,
   PhotoType,

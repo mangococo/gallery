@@ -105,6 +105,9 @@ export interface LegacyImportResult {
 
 export type Unsubscribe = () => void
 
+/** 手账导出格式：PDF（矢量可打印）或长图 PNG */
+export type JournalFormat = 'pdf' | 'png'
+
 /** ⌘K 搜索命中字段（photoTag = 照片级标签命中，聚合到所属旅行） */
 export type SearchMatchIn = 'title' | 'description' | 'tags' | 'caption' | 'photoTag'
 
@@ -171,6 +174,9 @@ export interface GalleryApi {
   /** ⌘K 搜索：旅行标题/描述/标签/图注/照片标签，按旅行聚合返回 */
   searchTrips(albumId: string, q: string): Promise<SearchHit[]>
 
+  /** 导出手账（隐藏窗口渲染模板；返回保存路径，用户取消返回 null） */
+  exportJournal(tripId: string, format: JournalFormat): Promise<string | null>
+
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
   onThemeSystemChanged(cb: (p: { systemDark: boolean }) => void): Unsubscribe
@@ -213,6 +219,8 @@ export const IPC = {
   importLegacy: 'import:legacy',
 
   searchTrips: 'search:trips',
+
+  journalsExport: 'journals:export',
 
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',
