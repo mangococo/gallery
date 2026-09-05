@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeTheme, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, screen, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { registerMediaScheme, attachMediaProtocol, ensureThumbsDir } from './protocol'
@@ -23,6 +23,9 @@ if (!gotLock) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
+    } else {
+      // darwin 关窗常驻后再次启动：重建窗口
+      createMainWindow()
     }
   })
 
@@ -39,11 +42,9 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     initDb()
 
-    // 启动即恢复持久化主题（窗口背景色与 nativeTheme 同步，防首帧闪烁）
+    // 启动即恢复持久化主题（nativeTheme 先于建窗，backgroundColor 防首帧闪烁）
     const savedTheme = (getSetting('theme_mode') as ThemeMode | null) ?? 'system'
     if (savedTheme !== 'system') nativeTheme.themeSource = savedTheme
-    const darkAtBoot =
-      savedTheme === 'dark' || (savedTheme === 'system' && nativeTheme.shouldUseDarkColors)
 
     attachMediaProtocol({
       resolveAlbumRoot: async (albumId) => getAlbumPath(albumId),
@@ -81,67 +82,12 @@ if (!gotLock) {
       })()
     }
 
-    // 恢复上次窗口尺寸位置
-    let bounds: { width: number; height: number; x?: number; y?: number } | undefined
-    try {
-      const raw = getSetting('window_bounds')
-      if (raw) bounds = JSON.parse(raw)
-    } catch {
-      // 忽略损坏的窗口状态
-    }
-
-    mainWindow = new BrowserWindow({
-      width: bounds?.width ?? 1280,
-      height: bounds?.height ?? 820,
-      x: bounds?.x,
-      y: bounds?.y,
-      minWidth: 960,
-      minHeight: 600,
-      show: false,
-      title: '画廊',
-      titleBarStyle: 'hiddenInset',
-      backgroundColor: darkAtBoot ? '#1C1916' : '#FAF8F5',
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-      },
-    })
-
-    mainWindow.once('ready-to-show', () => mainWindow?.show())
-
-    // 记忆窗口位置尺寸
-    const saveBounds = (): void => {
-      if (!mainWindow || mainWindow.isDestroyed()) return
-      setSetting('window_bounds', JSON.stringify(mainWindow.getBounds()))
-    }
-    mainWindow.on('resized', saveBounds)
-    mainWindow.on('moved', saveBounds)
-    mainWindow.on('close', saveBounds)
-
-    mainWindow.on('closed', () => {
-      mainWindow = null
-    })
-
-    // 加载渲染层
-    if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-      mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-    } else {
-      mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-    }
-
-    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-
-    // E2E 验收截图（仅 GALLERY_E2E=1 时启用）
-    void runE2EIfEnabled(mainWindow)
-
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) app.quit()
-    })
+    createMainWindow()
   })
 
   app.on('window-all-closed', () => {
-    app.quit()
+    // macOS 惯例：关窗不退出，Dock 图标常驻，点击 Dock/再次启动重建窗口
+    if (process.platform !== 'darwin') app.quit()
   })
 
   app.on('will-quit', () => {
@@ -149,6 +95,87 @@ if (!gotLock) {
     disposeThumbResources()
     closeDb()
   })
+
+  app.on('activate', () => {
+    // macOS：点击 Dock 图标时若窗口已关则重建
+    if (mainWindow === null) createMainWindow()
+  })
+}
+
+/** 恢复记忆的窗口尺寸位置；位置钳制到可见显示器（外接显示器拔掉后窗口不再开在屏外） */
+function restoreWindowBounds(): { width: number; height: number; x?: number; y?: number } {
+  const defaults = { width: 1280, height: 820 }
+  try {
+    const raw = getSetting('window_bounds')
+    if (!raw) return defaults
+    const b = JSON.parse(raw) as { width: number; height: number; x?: number; y?: number }
+    if (typeof b.width !== 'number' || typeof b.height !== 'number') return defaults
+    const wa = screen.getDisplayMatching({
+      x: b.x ?? 0,
+      y: b.y ?? 0,
+      width: b.width,
+      height: b.height,
+    }).workArea
+    // 至少把标题栏区域留在工作区内，用户能看见并拖回
+    const x = Math.min(Math.max(b.x ?? wa.x, wa.x), wa.x + wa.width - 160)
+    const y = Math.min(Math.max(b.y ?? wa.y, wa.y), wa.y + wa.height - 60)
+    return { width: b.width, height: b.height, x, y }
+  } catch {
+    // 损坏的窗口状态回退默认值
+    return defaults
+  }
+}
+
+/** 创建主窗口（首次启动、Dock 激活、二次启动共用） */
+function createMainWindow(): void {
+  const savedTheme = (getSetting('theme_mode') as ThemeMode | null) ?? 'system'
+  const dark = savedTheme === 'dark' || (savedTheme === 'system' && nativeTheme.shouldUseDarkColors)
+  const bounds = restoreWindowBounds()
+
+  mainWindow = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    minWidth: 960,
+    minHeight: 600,
+    show: false,
+    title: '画廊',
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: dark ? '#1C1916' : '#FAF8F5',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  mainWindow.once('ready-to-show', () => mainWindow?.show())
+
+  // 记忆窗口位置尺寸
+  const saveBounds = (): void => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    setSetting('window_bounds', JSON.stringify(mainWindow.getBounds()))
+  }
+  mainWindow.on('resized', saveBounds)
+  mainWindow.on('moved', saveBounds)
+  mainWindow.on('close', saveBounds)
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+
+  // 加载渲染层
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+  // E2E 验收截图（仅 GALLERY_E2E=1 时启用）
+  void runE2EIfEnabled(mainWindow)
 }
 
 /** 标准 macOS 菜单（中文文案，保证 ⌘C/⌘V 等快捷键） */
