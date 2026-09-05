@@ -70,7 +70,11 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
       // 文件经主进程复制进旅行目录
       const paths = selectedFiles.map((f) => api.getPathForFile(f));
       if (paths.length > 0) {
-        await api.importPhotos(trip.id, paths);
+        const { failed } = await api.importPhotos(trip.id, paths);
+        if (failed.length > 0) {
+          const etc = failed.length > 1 ? ` 等 ${failed.length} 个` : '';
+          toast(`旅行已创建，但 ${failed[0].name}${etc}导入失败（${failed[0].reason}）`, 'info');
+        }
       }
 
       onSuccess();

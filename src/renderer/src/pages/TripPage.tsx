@@ -66,11 +66,16 @@ const TripPage: React.FC = () => {
     if (!trip || paths.length === 0) return
     setIsUploading(true)
     try {
-      const newPhotos = await api.importPhotos(trip.id, paths)
+      const { photos: newPhotos, failed } = await api.importPhotos(trip.id, paths)
       if (editedTrip && newPhotos.length > 0) {
         await applyUpdate({ ...editedTrip, photos: [...editedTrip.photos, ...newPhotos] })
       }
-      toast(`已导入 ${newPhotos.length} 张照片`, 'success')
+      if (failed.length > 0) {
+        const etc = failed.length > 1 ? ` 等 ${failed.length} 个` : ''
+        toast(`已导入 ${newPhotos.length} 张；${failed[0].name}${etc}导入失败（${failed[0].reason}）`, 'info')
+      } else {
+        toast(`已导入 ${newPhotos.length} 张照片`, 'success')
+      }
       await refreshAll()
     } catch (error: any) {
       toast('导入照片失败: ' + error.message, 'error')

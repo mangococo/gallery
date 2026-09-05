@@ -62,12 +62,17 @@ function pushChanged(albumId: string): void {
   senderWindow()?.webContents.send(IPC.pushFsChanged, { albumId })
 }
 
-/** 旅行文件夹是否还在相册目录中（磁盘实时校对，不落库） */
-async function tripFolderExists(albumPath: string, folderName: string): Promise<boolean> {
+/** 路径可访问（存在且可 stat） */
+async function pathAccessible(p: string): Promise<boolean> {
   return fs
-    .access(join(albumPath, folderName))
+    .access(p)
     .then(() => true)
     .catch(() => false)
+}
+
+/** 旅行文件夹是否还在相册目录中（磁盘实时校对，不落库） */
+async function tripFolderExists(albumPath: string, folderName: string): Promise<boolean> {
+  return pathAccessible(join(albumPath, folderName))
 }
 
 /** 单个旅行附带走位状态（tripsGet/tripsCreate/tripsUpdate 出口统一） */
@@ -294,37 +299,51 @@ export function registerIpcHandlers(): void {
     const album = getAlbumRow(t.albumId)
     if (!album) throw new Error('相册不存在')
     const destDir = join(album.path, t.folderName)
+    // 旅行文件夹可能被外部移出/删除过，导入前确保存在
+    await fs.mkdir(destDir, { recursive: true })
+
+    /** 目标不重名：重名加时间戳前缀，仍冲突则加序号（同批同名文件在同一毫秒内也不会互相覆盖） */
+    const dedupeName = async (name: string): Promise<string> => {
+      if (!(await pathAccessible(join(destDir, name)))) return name
+      const stamp = Date.now()
+      let candidate = `${stamp}_${name}`
+      let i = 1
+      while (await pathAccessible(join(destDir, candidate))) {
+        candidate = `${stamp}_${i++}_${name}`
+      }
+      return candidate
+    }
 
     const importedIds: string[] = []
+    const failed: { name: string; reason: string }[] = []
     for (const src of paths) {
-      const type = mediaTypeOf(basename(src))
+      const base = basename(src)
+      const type = mediaTypeOf(base)
       if (!type) continue
-      let name = basename(src)
-      // 重名文件加时间戳前缀
       try {
-        await fs.access(join(destDir, name))
-        name = `${Date.now()}_${name}`
-      } catch {
-        // 不重名，直接用
+        const name = await dedupeName(base)
+        const dest = join(destDir, name)
+        await fs.copyFile(src, dest)
+        const st = await fs.stat(dest)
+        const photoId = nanoid(12)
+        const gps = type === 'image' ? await readExifGps(dest) : null
+        insertPhotoRow({
+          id: photoId,
+          tripId,
+          fileName: name,
+          relPath: `${t.folderName}/${name}`,
+          type,
+          caption: '',
+          takenAt: await resolvePhotoTakenAt(dest, type, st.mtimeMs),
+          fileMtime: Math.round(st.mtimeMs),
+          gpsLat: gps?.lat ?? null,
+          gpsLon: gps?.lon ?? null,
+        })
+        importedIds.push(photoId)
+      } catch (err: any) {
+        // 单个文件失败（源被移走/无权限/磁盘满）不中断整批，结尾统一回报
+        failed.push({ name: base, reason: String(err?.message ?? err) })
       }
-      await fs.copyFile(src, join(destDir, name))
-      const dest = join(destDir, name)
-      const st = await fs.stat(dest)
-      const photoId = nanoid(12)
-      const gps = type === 'image' ? await readExifGps(dest) : null
-      insertPhotoRow({
-        id: photoId,
-        tripId,
-        fileName: name,
-        relPath: `${t.folderName}/${name}`,
-        type,
-        caption: '',
-        takenAt: await resolvePhotoTakenAt(dest, type, st.mtimeMs),
-        fileMtime: Math.round(st.mtimeMs),
-        gpsLat: gps?.lat ?? null,
-        gpsLon: gps?.lon ?? null,
-      })
-      importedIds.push(photoId)
     }
 
     // 后台补缩略图并通知
@@ -333,20 +352,33 @@ export function registerIpcHandlers(): void {
       pushChanged(album.id)
     })()
 
-    // 只返回本次新增的照片
-    return importedIds
+    if (importedIds.length === 0 && failed.length > 0) {
+      throw new Error(`全部 ${failed.length} 个文件导入失败：${failed[0].name}（${failed[0].reason}）`)
+    }
+    // 只返回本次新增的照片与失败清单
+    const photos = importedIds
       .map((id) => getPhotoRow(id))
       .filter((p): p is NonNullable<typeof p> => p !== null)
+    return { photos, failed }
   })
 
   ipcMain.handle(IPC.photosDelete, async (_e, photoId: string) => {
     const photo = getPhotoRow(photoId)
     if (!photo) return
-    const root = getAlbumRow(photo.albumId)
-    if (root) {
-      await shell.trashItem(join(root.path, photo.relPath)).catch((err) => {
-        throw new Error('移入废纸篓失败: ' + err.message)
-      })
+    const album = getAlbumRow(photo.albumId)
+    if (album) {
+      const abs = join(album.path, photo.relPath)
+      // 与删除旅行同规则：相册根不可达时拒绝删记录（外置卷可能只是暂时看不到）；
+      // 根可达但文件已被外部移走/删除时只清记录，磁盘无东西可删
+      const plan = planTripRemoval(await pathAccessible(album.path), await pathAccessible(abs))
+      if (plan.action === 'root-missing') {
+        throw new Error('相册目录当前不可访问，无法确认照片文件状态，已取消删除')
+      }
+      if (plan.action === 'trash-folder') {
+        await shell.trashItem(abs).catch((err) => {
+          throw new Error('移入废纸篓失败: ' + err.message)
+        })
+      }
     }
     deletePhotoRow(photoId)
     pushChanged(photo.albumId)

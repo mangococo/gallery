@@ -87,9 +87,14 @@ const ImportPickerModal: React.FC<ImportPickerModalProps> = ({ paths, onClose })
   const importTo = async (tripId: string, title: string) => {
     setBusy(true)
     try {
-      const photos = await api.importPhotos(tripId, paths)
+      const { photos, failed } = await api.importPhotos(tripId, paths)
       await refreshAll()
-      toast(`已导入 ${photos.length} 张照片到「${title}」`, 'success')
+      if (failed.length > 0) {
+        const etc = failed.length > 1 ? ` 等 ${failed.length} 个` : ''
+        toast(`已导入 ${photos.length} 张到「${title}」；${failed[0].name}${etc}失败（${failed[0].reason}）`, 'info')
+      } else {
+        toast(`已导入 ${photos.length} 张照片到「${title}」`, 'success')
+      }
       onClose()
     } catch (err: any) {
       toast('导入照片失败: ' + (err?.message ?? err), 'error')
