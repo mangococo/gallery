@@ -28,6 +28,8 @@ interface QueueJob {
   albumId: string
 }
 const queues = new Map<string, { jobs: QueueJob[]; running: number; cancelled: boolean }>()
+/** 同相册进行中的生成任务（并发调用合并为一次，防止两个队列对同一批照片重复生成） */
+const inflight = new Map<string, Promise<void>>()
 let progressWindow: BrowserWindow | null = null
 
 export interface ThumbHooks {
@@ -36,56 +38,64 @@ export interface ThumbHooks {
 
 /**
  * 为相册中所有 pending 照片生成缩略图（并发队列，向渲染层推送进度）。
- * 幂等：重复调用会跳过已就绪的。
+ * 幂等：重复调用会跳过已就绪的；同相册并发调用合并，并在结束后补扫本轮新增的 pending
+ * （此前队列运行期间的导入要等下一次全量触发才出缩略图）。
  */
-export async function generateThumbsForAlbum(
+export function generateThumbsForAlbum(
   albumId: string,
   albumName: string,
   hooks: ThumbHooks,
 ): Promise<void> {
+  const running = inflight.get(albumId)
+  if (running) return running
+  const p = runThumbQueue(albumId, albumName, hooks).finally(() => inflight.delete(albumId))
+  inflight.set(albumId, p)
+  return p
+}
+
+async function runThumbQueue(albumId: string, albumName: string, hooks: ThumbHooks): Promise<void> {
   await fs.mkdir(thumbDir(), { recursive: true })
 
-  // 已有同相册队列在跑则不重复
-  let q = queues.get(albumId)
-  if (q && q.running > 0) return
-  q = { jobs: [], running: 0, cancelled: false }
+  const q = { jobs: [] as QueueJob[], running: 0, cancelled: false }
   queues.set(albumId, q)
 
-  const pending = listPendingThumbPhotos(albumId)
-  const total = pending.length
-  if (total === 0) return
+  // 扫描/导入可能在本轮生成期间又标记了新的 pending：收敛循环补扫（上限防意外死循环）
+  for (let round = 0; round < 5 && !q.cancelled; round++) {
+    const pending = listPendingThumbPhotos(albumId)
+    const total = pending.length
+    if (total === 0) return
 
-  let done = 0
-  let lastPush = 0
-  const pushProgress = (): void => {
-    const now = Date.now()
-    if (now - lastPush > 150 || done >= total) {
-      lastPush = now
-      hooks.progress({ albumId, albumName, phase: 'thumb', done, total })
-    }
-  }
-  pushProgress()
-
-  await fs.mkdir(thumbDir(), { recursive: true })
-  q.jobs = pending.map((p) => ({ photoId: p.id, albumId }))
-
-  const worker = async (): Promise<void> => {
-    while (q!.jobs.length > 0 && !q!.cancelled) {
-      const job = q!.jobs.shift()!
-      try {
-        await generateOne(job.photoId)
-      } catch {
-        // 单张失败不影响整体
+    let done = 0
+    let lastPush = 0
+    const pushProgress = (): void => {
+      const now = Date.now()
+      if (now - lastPush > 150 || done >= total) {
+        lastPush = now
+        hooks.progress({ albumId, albumName, phase: 'thumb', done, total })
       }
-      done++
-      pushProgress()
     }
-  }
+    pushProgress()
 
-  q.running = CONCURRENCY
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker))
-  q.running = 0
-  hooks.progress({ albumId, albumName, phase: 'thumb', done, total })
+    q.jobs = pending.map((p) => ({ photoId: p.id, albumId }))
+
+    const worker = async (): Promise<void> => {
+      while (q.jobs.length > 0 && !q.cancelled) {
+        const job = q.jobs.shift()!
+        try {
+          await generateOne(job.photoId)
+        } catch {
+          // 单张失败不影响整体
+        }
+        done++
+        pushProgress()
+      }
+    }
+
+    q.running = CONCURRENCY
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker))
+    q.running = 0
+    hooks.progress({ albumId, albumName, phase: 'thumb', done, total })
+  }
 }
 
 export function cancelThumbsForAlbum(albumId: string): void {
