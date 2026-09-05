@@ -1,0 +1,44 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"照片级收藏（暗色）：侧栏切暗色 → 进旅行 → 灯箱收藏按钮变红（title 变「取消收藏」断言）。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-click-dark",
+    "wait": 900,
+    "script": "const b = [...document.querySelectorAll('[role=\"radiogroup\"][aria-label=\"主题\"] button')].find(x => x.textContent.trim() === '暗'); if (!b) throw new Error('暗色切换按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 300)); if (document.documentElement.dataset.theme !== 'dark') throw new Error('暗色未生效'); 'dark-ok'"
+  },
+  {
+    "name": "03-home-dark",
+    "wait": 900
+  },
+  {
+    "name": "04-open-trip",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "05-open-lightbox",
+    "wait": 1500,
+    "script": "const imgs = document.querySelectorAll('main img'); if (imgs.length < 2) throw new Error('照片不足'); imgs[1].click(); 'ok'"
+  },
+  {
+    "name": "06-lightbox-dark",
+    "wait": 600
+  },
+  {
+    "name": "07-fav-in-lightbox",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button[title=\"收藏\"]')].pop(); if (!b) throw new Error('灯箱收藏按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 400)); if (![...document.querySelectorAll('button[title=\"取消收藏\"]')].length) throw new Error('收藏状态未更新'); 'fav-ok'"
+  },
+  {
+    "name": "08-lightbox-faved-dark",
+    "wait": 500
+  }
+]

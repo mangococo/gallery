@@ -1,0 +1,47 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"HEIC 全链路：HEIC 缩略图上墙 → 灯箱 .heic 原图（协议层转 JPEG）+ EXIF 摄于日期 → ⌘K 命中 HEIC 图注。前置：macOS（gen-demo 用 sips 造 HEIC 样张）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 5000
+  },
+  {
+    "name": "02-open-kyoto",
+    "wait": 2600,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-wall-with-heic",
+    "wait": 2500,
+    "script": "const imgs = [...document.querySelectorAll('main img')]; const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('照片墙有未加载图 ' + bad.length); if (!document.body.textContent.match(/10 张照片/)) throw new Error('应为 10 张（8 jpg + 2 heic）'); 'wall-ok'"
+  },
+  {
+    "name": "04-open-heic-lightbox",
+    "wait": 900,
+    "script": "const cap = [...document.querySelectorAll('main [role=\"button\"]')].find(el => el.textContent.startsWith('HEIC 样张')); if (!cap) throw new Error('找不到 HEIC 卡片图注'); const card = cap.closest('.group'); const img = card?.querySelector('img'); if (!img) throw new Error('卡片内无 img'); img.click(); 'ok'"
+  },
+  {
+    "name": "05-lightbox-heic",
+    "wait": 2000,
+    "script": "const lb = document.querySelector('.fixed.inset-0.z-50'); if (!lb) throw new Error('灯箱未打开'); const img = lb.querySelector('img'); if (!img) throw new Error('灯箱无大图'); if (!(img.complete && img.naturalWidth > 0)) throw new Error('HEIC 大图未加载'); if (!lb.textContent.includes('.heic')) throw new Error('信息栏文件名不是 .heic'); if (!lb.textContent.includes('摄于')) throw new Error('HEIC EXIF 缺失'); 'lightbox-ok'"
+  },
+  {
+    "name": "06-close-and-search",
+    "wait": 800,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 300)); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true })); 'ok'"
+  },
+  {
+    "name": "07-search-heic-caption",
+    "wait": 900,
+    "script": "const inp = document.querySelector('input[placeholder^=\"搜索旅行标题\"]'); if (!inp) throw new Error('搜索框缺失'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(inp, 'HEIC 样张'); inp.dispatchEvent(new Event('input', { bubbles: true })); 'ok'"
+  },
+  {
+    "name": "08-search-hit",
+    "wait": 800,
+    "script": "const hits = [...document.querySelectorAll('button')].filter(b => b.textContent.includes('京都')); if (hits.length === 0) throw new Error('⌘K 未命中 HEIC 图注'); 'search-ok'"
+  }
+]

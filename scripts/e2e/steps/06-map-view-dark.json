@@ -1,0 +1,36 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"地图视图（暗色）：暗色下控件/署名应为深色面板无白色断层；标记数断言。需联网加载 OSM 瓦片。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-click-dark",
+    "wait": 900,
+    "script": "const b = [...document.querySelectorAll('[role=\"radiogroup\"][aria-label=\"主题\"] button')].find(x => x.textContent.trim() === '暗'); if (!b) throw new Error('暗色切换按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 300)); if (document.documentElement.dataset.theme !== 'dark') throw new Error('暗色未生效'); 'dark-ok'"
+  },
+  {
+    "name": "03-home-dark",
+    "wait": 900
+  },
+  {
+    "name": "04-open-kyoto",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "05-switch-map",
+    "wait": 1200,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '地图'); if (!b) throw new Error('地图 tab 缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "06-map-dark",
+    "wait": 3000,
+    "script": "const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 10) throw new Error('标记数不对（应为 10）: ' + markers.length); 'ok'"
+  }
+]

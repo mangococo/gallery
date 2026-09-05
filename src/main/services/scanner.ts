@@ -20,6 +20,10 @@ import {
 } from '../db'
 import { resolvePhotoTakenAt, readExifGps } from './exif'
 import { buildCaptionMap, compareFileNames, msToLocalDate, planReconciliation } from './reconcile'
+import { mediaTypeOf } from '../../shared/media'
+
+// 旧引用兼容（ipc.ts 等处从 scanner 取 mediaTypeOf）
+export { mediaTypeOf }
 
 // —— 旧 .settings.json 解析 ——
 
@@ -32,19 +36,6 @@ export interface LegacySettings {
   tags?: string[]
   isFavorite?: boolean
   photoCaptions?: Record<string, string>
-}
-
-/** 图片/视频扩展名（大小写不敏感） */
-const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic', '.tiff'])
-const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm'])
-
-export function mediaTypeOf(fileName: string): 'image' | 'video' | null {
-  const dot = fileName.lastIndexOf('.')
-  if (dot < 0) return null
-  const ext = fileName.slice(dot).toLowerCase()
-  if (IMAGE_EXTS.has(ext)) return 'image'
-  if (VIDEO_EXTS.has(ext)) return 'video'
-  return null
 }
 
 async function readLegacySettings(dir: string): Promise<LegacySettings | null> {

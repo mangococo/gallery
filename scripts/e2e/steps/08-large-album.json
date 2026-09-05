@@ -1,0 +1,53 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"大相册滚动性能：420 张照片墙顶/中/90%/触底四点截图 + 视口图片加载断言（应用滚动容器是内层 main.overflow-y-auto，触底需循环滚动）。前置：GALLERY_DEMO_LARGE=420 node scripts/gen-demo.mjs。\""
+  },
+  {
+    "name": "01-home-large",
+    "wait": 6000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大相册压力测试')); if (!h) throw new Error('大相册旅行缺失（需要 GALLERY_DEMO_LARGE=420 重新 gen-demo）'); 'found'"
+  },
+  {
+    "name": "02-open-large",
+    "wait": 2600,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大相册压力测试')); h.click(); 'ok'"
+  },
+  {
+    "name": "03-top-loaded",
+    "wait": 1500,
+    "script": "const imgs = [...document.querySelectorAll('main img')].filter(i => { const r = i.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight }); const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('视口内未加载图片 ' + bad.length); 'top-ok'"
+  },
+  {
+    "name": "04-scroll-mid",
+    "wait": 300,
+    "script": "const sc = document.querySelector('main.overflow-y-auto'); sc.scrollTop = sc.scrollHeight * 0.5; 'ok'"
+  },
+  {
+    "name": "05-mid-loaded",
+    "wait": 1400,
+    "script": "const imgs = [...document.querySelectorAll('main img')].filter(i => { const r = i.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight }); const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('中部视口未加载 ' + bad.length); 'mid-ok'"
+  },
+  {
+    "name": "06-scroll-deep",
+    "wait": 300,
+    "script": "const sc = document.querySelector('main.overflow-y-auto'); sc.scrollTop = sc.scrollHeight * 0.9; 'ok'"
+  },
+  {
+    "name": "07-deep-loaded",
+    "wait": 1400,
+    "script": "const imgs = [...document.querySelectorAll('main img')].filter(i => { const r = i.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight }); const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('深部视口未加载 ' + bad.length); 'deep-ok'"
+  },
+  {
+    "name": "08-scroll-bottom",
+    "wait": 300,
+    "script": "const sc = document.querySelector('main.overflow-y-auto'); for (let i = 0; i < 6; i++) { sc.scrollTop = sc.scrollHeight; await new Promise(r => setTimeout(r, 350)); } 'ok'"
+  },
+  {
+    "name": "09-bottom",
+    "wait": 2200,
+    "script": "const sc = document.querySelector('main.overflow-y-auto'); if (sc.scrollTop + sc.clientHeight < sc.scrollHeight - 50) throw new Error('未触底'); const imgs = [...document.querySelectorAll('main img')].filter(i => { const r = i.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight }); const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('底部视口未加载 ' + bad.length); 'bottom-ok'"
+  }
+]

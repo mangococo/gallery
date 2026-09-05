@@ -1,0 +1,115 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"照片级收藏与标签（亮色）：照片墙悬停收藏 → 灯箱收藏 → 标签编辑弹层保存 → 信息栏标签 chips → 只看收藏/标签过滤 → ⌘K 照片标签徽章。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 2600
+  },
+  {
+    "name": "02-open-trip",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-trip-photos",
+    "wait": 900
+  },
+  {
+    "name": "04-fav-photo1",
+    "wait": 700,
+    "script": "const b = document.querySelector('button[title=\"收藏\"]'); if (!b) throw new Error('找不到收藏按钮'); b.click(); 'ok'"
+  },
+  {
+    "name": "05-wall-fav-badge",
+    "wait": 500
+  },
+  {
+    "name": "06-open-lightbox",
+    "wait": 1000,
+    "script": "const imgs = document.querySelectorAll('main img'); if (imgs.length < 2) throw new Error('照片墙图片不足'); imgs[1].click(); 'ok'"
+  },
+  {
+    "name": "07-lightbox",
+    "wait": 600
+  },
+  {
+    "name": "08-lightbox-fav",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button[title=\"收藏\"]')].pop(); if (!b) throw new Error('灯箱收藏按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 400)); if (![...document.querySelectorAll('button[title=\"取消收藏\"]')].length) throw new Error('灯箱收藏状态未更新'); 'fav-ok'"
+  },
+  {
+    "name": "09-open-tag-editor",
+    "wait": 700,
+    "script": "const b = document.querySelector('button[title=\"编辑标签\"]'); if (!b) throw new Error('编辑标签按钮缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "10-tag-editor",
+    "wait": 600
+  },
+  {
+    "name": "11-tag-save",
+    "wait": 1000,
+    "script": "const inp = document.querySelector('input[placeholder^=\"给这张照片加标签\"]'); if (!inp) throw new Error('标签输入缺失'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(inp, '雪山, 黄昏'); inp.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 150)); const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '保存'); if (!b) throw new Error('保存按钮缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "12-lightbox-tagged",
+    "wait": 600,
+    "script": "if (!document.body.textContent.includes('#雪山')) throw new Error('灯箱信息栏未见标签'); 'ok'"
+  },
+  {
+    "name": "13-close-lightbox",
+    "wait": 700,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'ok'"
+  },
+  {
+    "name": "14-wall-chips",
+    "wait": 500
+  },
+  {
+    "name": "15-fav-filter",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('只看收藏')); if (!b) throw new Error('只看收藏 chip 缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "16-fav-filtered",
+    "wait": 500
+  },
+  {
+    "name": "17-clear-filter",
+    "wait": 600,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('清除')); if (!b) throw new Error('清除按钮缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "18-tag-filter",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '#雪山'); if (!b) throw new Error('#雪山 chip 缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "19-tag-filtered",
+    "wait": 500
+  },
+  {
+    "name": "20-clear-tag",
+    "wait": 600,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('清除')); if (!b) throw new Error('清除按钮缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "21-open-cmdk",
+    "wait": 600,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true })); 'ok'"
+  },
+  {
+    "name": "22-type-query",
+    "wait": 900,
+    "script": "const inp = document.querySelector('input[placeholder^=\"搜索旅行标题\"]'); if (!inp) throw new Error('搜索输入缺失'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(inp, '雪山'); inp.dispatchEvent(new Event('input', { bubbles: true })); 'ok'"
+  },
+  {
+    "name": "23-search-phototag",
+    "wait": 600,
+    "script": "const badge = [...document.querySelectorAll('span')].find(s => s.textContent.trim() === '照片标签'); if (!badge) throw new Error('未命中照片标签徽章'); 'ok'"
+  }
+]

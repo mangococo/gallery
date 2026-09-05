@@ -1,0 +1,73 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"删除旅行链路（亮色）：新建旅行 → 时间线卡片垃圾桶确认弹窗 → 删除成功 toast；旅行页顶栏删除 → 取消。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 2600
+  },
+  {
+    "name": "02-open-add-modal",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '新旅行'); if (!b) throw new Error('找不到新旅行按钮'); b.click(); 'ok'"
+  },
+  {
+    "name": "03-add-modal",
+    "wait": 500
+  },
+  {
+    "name": "04-fill-and-create",
+    "wait": 1800,
+    "script": "const setV = (el, v) => { Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }; const title = document.querySelector('input[placeholder=\"给这次旅行起个名字...\"]'); if (!title) throw new Error('找不到标题输入'); setV(title, 'E2E 删除链路'); const dates = document.querySelectorAll('input[type=\"date\"]'); if (dates.length < 2) throw new Error('找不到日期输入'); setV(dates[0], '2026-08-20'); setV(dates[1], '2026-08-21'); const btn = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '创建旅行'); if (!btn) throw new Error('找不到创建按钮'); btn.click(); 'submitted'"
+  },
+  {
+    "name": "05-home-new-trip",
+    "wait": 800,
+    "script": "if (![...document.querySelectorAll('h3')].some(el => el.textContent.includes('E2E 删除链路'))) throw new Error('时间线未出现新旅行'); 'created-ok'"
+  },
+  {
+    "name": "06-click-timeline-delete",
+    "wait": 700,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('E2E 删除链路')); const btn = h?.closest('.relative.flex')?.querySelector('button[title=\"删除这次旅行\"]'); if (!btn) throw new Error('找不到时间线删除按钮'); btn.click(); 'clicked'"
+  },
+  {
+    "name": "07-confirm-dialog",
+    "wait": 600
+  },
+  {
+    "name": "08-confirm-delete",
+    "wait": 1500,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '移入废纸篓'); if (!b) throw new Error('找不到确认删除按钮'); b.click(); 'confirmed'"
+  },
+  {
+    "name": "09-home-after",
+    "wait": 600,
+    "script": "const gone = ![...document.querySelectorAll('h3')].some(el => el.textContent.includes('E2E 删除链路')); if (!gone) throw new Error('时间线仍存在已删除旅行'); 'deleted-ok'"
+  },
+  {
+    "name": "10-open-trip",
+    "wait": 1800,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都卡片'); h.click(); 'ok'"
+  },
+  {
+    "name": "11-trip-topbar",
+    "wait": 600
+  },
+  {
+    "name": "12-click-trip-delete",
+    "wait": 700,
+    "script": "const b = document.querySelector('header button[title=\"删除这次旅行\"]'); if (!b) throw new Error('找不到旅行页顶栏删除按钮'); b.click(); 'clicked'"
+  },
+  {
+    "name": "13-trip-confirm-dialog",
+    "wait": 600
+  },
+  {
+    "name": "14-trip-cancel",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '取消'); if (!b) throw new Error('找不到取消按钮'); b.click(); await new Promise(r => setTimeout(r, 200)); const still = [...document.querySelectorAll('button')].some(x => x.textContent.trim() === '移入废纸篓'); if (still) throw new Error('取消后弹窗未关闭'); 'cancel-ok'"
+  }
+]

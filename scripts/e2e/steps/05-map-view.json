@@ -1,0 +1,68 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"地图视图（亮色）：照片/地图切换 → 标记数断言 → 点击标记开灯箱 → 空态文案。需联网加载 OSM 瓦片；城市夜行手册旅行无 GPS 承担空态。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-open-kyoto",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-switch-map",
+    "wait": 1200,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '地图'); if (!b) throw new Error('地图 tab 缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "04-map-tiles-loading",
+    "wait": 2500,
+    "script": "const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 10) throw new Error('应有 8 个标记，实际 ' + markers.length); 'markers-ok'"
+  },
+  {
+    "name": "05-map-loaded",
+    "wait": 1500
+  },
+  {
+    "name": "06-click-marker",
+    "wait": 1200,
+    "script": "const m = document.querySelector('.map-marker'); if (!m) throw new Error('标记缺失'); m.dispatchEvent(new MouseEvent('click', { bubbles: true })); 'ok'"
+  },
+  {
+    "name": "07-lightbox-from-marker",
+    "wait": 700,
+    "script": "const lb = document.querySelector('.fixed.inset-0.z-50'); if (!lb) throw new Error('灯箱未打开'); 'lightbox-ok'"
+  },
+  {
+    "name": "08-close-lightbox",
+    "wait": 600,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'ok'"
+  },
+  {
+    "name": "09-back-home",
+    "wait": 2400,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '返回'); if (!b) throw new Error('返回按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 800)); const n = [...document.querySelectorAll('h3')].length; if (n < 4) throw new Error('首页卡片缺失: ' + n); 'back-ok'",
+    "log": true
+  },
+  {
+    "name": "10-open-city",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('城市夜行手册')); if (!h) throw new Error('找不到城市夜行手册，当前: ' + [...document.querySelectorAll('h3')].map(x => x.textContent).join('|')); h.click(); 'ok'",
+    "log": true
+  },
+  {
+    "name": "11-city-map-empty",
+    "wait": 1400,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '地图'); if (!b) throw new Error('地图 tab 缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "12-map-empty-state",
+    "wait": 700,
+    "script": "if (!document.body.textContent.includes('还没有带位置的照片')) throw new Error('空态文案缺失'); 'empty-ok'"
+  }
+]

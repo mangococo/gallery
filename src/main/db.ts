@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { normalizeTagNames } from '../shared/tags'
+import { collectMatches, compareHits, rankOf } from '../shared/search'
 import type { Album, PhotoDTO, PhotoType, SearchHit, SearchMatchIn, ThumbStatus, TripDTO } from '../shared/types'
 
 let db: Database.Database
@@ -612,8 +613,6 @@ export function countPendingThumbs(albumId: string): number {
 
 // ---------- ⌘K 搜索 ----------
 
-const MATCH_RANK: Record<SearchMatchIn, number> = { title: 0, tags: 1, description: 2, caption: 3, photoTag: 4 }
-
 interface HitPhoto {
   id: string
   type: string
@@ -702,17 +701,19 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
   const hits: { hit: SearchHit; rank: number }[] = []
   for (const t of tripRows) {
     const tags = tagsByTrip.get(t.id) ?? []
-    const matchedIn: SearchMatchIn[] = []
-    if (t.title.toLowerCase().includes(lowerQ)) matchedIn.push('title')
-    if (t.description.toLowerCase().includes(lowerQ)) matchedIn.push('description')
-    if (tags.some((g) => g.toLowerCase().includes(lowerQ))) matchedIn.push('tags')
     const cap = capByTrip.get(t.id)
-    if (cap) matchedIn.push('caption')
     const ptagHit = ptagByTrip.get(t.id)
-    if (ptagHit) matchedIn.push('photoTag')
+    const matchedIn = collectMatches(
+      t.title,
+      t.description,
+      tags,
+      lowerQ,
+      cap !== undefined,
+      ptagHit !== undefined,
+    )
     if (matchedIn.length === 0) continue
 
-    const rank = Math.min(...matchedIn.map((m) => MATCH_RANK[m]))
+    const rank = rankOf(matchedIn)
     hits.push({
       rank,
       hit: {
@@ -730,7 +731,9 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
       },
     })
   }
-  hits.sort((a, b) => a.rank - b.rank || b.hit.startDate.localeCompare(a.hit.startDate))
+  hits.sort((a, b) =>
+    compareHits({ rank: a.rank, startDate: a.hit.startDate }, { rank: b.rank, startDate: b.hit.startDate }),
+  )
   return hits.slice(0, 50).map((h) => h.hit)
 }
 

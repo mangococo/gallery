@@ -1,0 +1,59 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"手账导出：顶栏导出手账 → PDF 与长图 PNG 双格式真实导出（GALLERY_E2E_EXPORT_DIR 直存），toast 断言 + 文件存在由 run-all.sh 复核。前置：gen-demo 演示数据 + 设置 GALLERY_E2E_EXPORT_DIR。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-open-kyoto",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-trip",
+    "wait": 900
+  },
+  {
+    "name": "04-open-export-menu",
+    "wait": 700,
+    "script": "const b = document.querySelector('button[title=\"导出手账\"]'); if (!b) throw new Error('导出按钮缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "05-export-menu",
+    "wait": 500
+  },
+  {
+    "name": "06-export-pdf",
+    "wait": 600,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('PDF · 可打印')); if (!b) throw new Error('PDF 选项缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "07-pdf-generating",
+    "wait": 200
+  },
+  {
+    "name": "08-pdf-done",
+    "wait": 200,
+    "script": "let t = ''; for (let i = 0; i < 30; i++) { t = [...document.querySelectorAll('.fixed.bottom-6 span')].map(x => x.textContent).join(''); if (t.includes('.pdf')) break; await new Promise(r => setTimeout(r, 300)); } if (!t.includes('.pdf')) throw new Error('未见 PDF toast'); 'toast-ok'"
+  },
+  {
+    "name": "09-open-export-menu2",
+    "wait": 700,
+    "script": "const b = document.querySelector('button[title=\"导出手账\"]'); b.click(); 'ok'"
+  },
+  {
+    "name": "10-export-png",
+    "wait": 600,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('长图 PNG')); if (!b) throw new Error('PNG 选项缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "11-png-done",
+    "wait": 200,
+    "script": "let t = ''; for (let i = 0; i < 40; i++) { t = [...document.querySelectorAll('.fixed.bottom-6 span')].map(x => x.textContent).join(''); if (t.includes('.png')) break; await new Promise(r => setTimeout(r, 300)); } if (!t.includes('.png')) throw new Error('未见 PNG toast'); 'toast-ok'"
+  }
+]

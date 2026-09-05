@@ -1,0 +1,40 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"删除旅行链路（暗色）：侧栏主题切换器切暗色 → 时间线删除城市夜行手册 → 确认弹窗与 toast。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-click-dark",
+    "wait": 900,
+    "script": "const b = [...document.querySelectorAll('[role=\"radiogroup\"][aria-label=\"主题\"] button')].find(x => x.textContent.trim() === '暗'); if (!b) throw new Error('暗色切换按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 300)); if (document.documentElement.dataset.theme !== 'dark') throw new Error('暗色未生效'); 'dark-ok'"
+  },
+  {
+    "name": "03-home-dark",
+    "wait": 900
+  },
+  {
+    "name": "04-click-timeline-delete",
+    "wait": 700,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('城市夜行手册')); const btn = h?.closest('.relative.flex')?.querySelector('button[title=\"删除这次旅行\"]'); if (!btn) throw new Error('找不到删除按钮'); btn.click(); 'clicked'"
+  },
+  {
+    "name": "05-confirm-dialog-dark",
+    "wait": 600
+  },
+  {
+    "name": "06-confirm-delete",
+    "wait": 1500,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '移入废纸篓'); if (!b) throw new Error('找不到确认按钮'); b.click(); 'confirmed'"
+  },
+  {
+    "name": "07-home-after-dark",
+    "wait": 700,
+    "script": "const gone = ![...document.querySelectorAll('h3')].some(el => el.textContent.includes('城市夜行手册')); if (!gone) throw new Error('删除失败'); 'deleted-ok'"
+  }
+]
