@@ -67,7 +67,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: docs/release-notes/v0.9.md
+          body_path: docs/release-notes/${{ github.ref_name }}.md
           files: |
             dist/*.dmg
             dist/*.exe

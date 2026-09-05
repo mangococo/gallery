@@ -6,3 +6,11 @@ dist-ssr
 .claude/settings.local.json
 out
 release
+
+# 开发过程文档（方案 / 计划 / 进度）：只留本地，不入库
+docs/plans/
+docs/dev/
+docs/*-plan.md
+PLAN.md
+PROGRESS.md
+TODO.md
