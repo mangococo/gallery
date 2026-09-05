@@ -15,6 +15,18 @@ let mainWindow: BrowserWindow | null = null
 // 必须在 app.ready 之前注册
 registerMediaScheme()
 
+// 固定数据目录为「画廊」（dev 模式默认跟随 package name）；测试可用 GALLERY_USER_DATA 隔离。
+// 必须先于 requestSingleInstanceLock：锁按 userData 目录 keyed，若先用默认目录申请，
+// 任何其它 Electron 开发实例都会把隔离 userData 的本实例（E2E 链路）误杀成秒退空跑。
+app.setName('画廊')
+const userDataDir = process.env.GALLERY_USER_DATA || join(app.getPath('appData'), '画廊')
+try {
+  mkdirSync(userDataDir, { recursive: true })
+} catch {
+  // 已存在
+}
+app.setPath('userData', userDataDir)
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
@@ -28,16 +40,6 @@ if (!gotLock) {
       createMainWindow()
     }
   })
-
-  app.setName('画廊')
-  // 固定数据目录为「画廊」（dev 模式默认跟随 package name）；测试可用 GALLERY_USER_DATA 隔离
-  const userDataDir = process.env.GALLERY_USER_DATA || join(app.getPath('appData'), '画廊')
-  try {
-    mkdirSync(userDataDir, { recursive: true })
-  } catch {
-    // 已存在
-  }
-  app.setPath('userData', userDataDir)
 
   app.whenReady().then(async () => {
     initDb()
