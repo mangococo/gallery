@@ -17,6 +17,9 @@ interface PhotoWallProps {
   onToggleFavorite?: (photoId: string, favorite: boolean) => void
 }
 
+/** 超过该张数走大相册模式：逐项 framer-motion 入场动画关闭（CSS 悬停替代），保滚动流畅 */
+const LARGE_ALBUM_THRESHOLD = 120
+
 /** 照片墙单元：图片用缩略图；视频用海报帧 + 播放角标 */
 function WallMedia({ photo }: { photo: PhotoDTO }) {
   const src = displaySrc(photo)
@@ -77,111 +80,163 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
     if (ok) onDeletePhoto?.(photo.id)
   }
 
+  const largeMode = photos.length > LARGE_ALBUM_THRESHOLD
+
   return (
     <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
-      {photos.map((photo, index) => (
-        <motion.div
-          key={photo.id}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.8) }}
-          whileHover={{ scale: 1.03, zIndex: 10 }}
-          className="break-inside-avoid cursor-pointer relative group"
-          onClick={() => onPhotoClick?.(photo)}
-        >
-          <div className="relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border border-line">
-            <WallMedia photo={photo} />
-
-            {/* 封面/收藏徽标 */}
-            {coverPhotoId === photo.id && (
-              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm flex items-center gap-1">
-                <StarIcon size={10} filled />
-                <span>封面</span>
-              </div>
-            )}
-            {photo.favorite && (
-              <div
-                className={`absolute top-2 ${coverPhotoId === photo.id ? 'left-[64px]' : 'left-2'} px-1.5 py-0.5 rounded-full bg-danger text-white shadow-sm flex items-center`}
-                title="已收藏"
-              >
-                <HeartIcon size={10} filled />
-              </div>
-            )}
-
-            {/* 悬停操作 */}
-            <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              {onToggleFavorite && (
-                <button
-                  title={photo.favorite ? '取消收藏' : '收藏'}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onToggleFavorite(photo.id, !photo.favorite)
-                  }}
-                  className={`w-7 h-7 rounded-full hover:bg-danger transition-colors flex items-center justify-center ${
-                    photo.favorite ? 'bg-danger/80 text-white' : 'bg-black/45 text-white'
-                  }`}
-                >
-                  <HeartIcon size={13} filled={photo.favorite} />
-                </button>
-              )}
-              {onEditCaption && (
-                <button
-                  title="编辑图注"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onEditCaption(photo)
-                  }}
-                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
-                >
-                  <PenIcon size={13} />
-                </button>
-              )}
-              {onSetCover && coverPhotoId !== photo.id && (
-                <button
-                  title="设为封面"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onSetCover(photo.id)
-                  }}
-                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
-                >
-                  <StarIcon size={13} filled />
-                </button>
-              )}
-              {showDeleteButton && onDeletePhoto && (
-                <button
-                  title="删除（移入废纸篓）"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleDelete(photo)
-                  }}
-                  className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center"
-                >
-                  <TrashIcon size={13} />
-                </button>
-              )}
+      {photos.map((photo, index) => {
+        const inner = (
+          <CardInner
+            photo={photo}
+            coverPhotoId={coverPhotoId}
+            onEditCaption={onEditCaption}
+            onSetCover={onSetCover}
+            showDeleteButton={showDeleteButton}
+            onDeletePhoto={onDeletePhoto}
+            onToggleFavorite={onToggleFavorite}
+            onDelete={handleDelete}
+          />
+        )
+        if (largeMode) {
+          return (
+            <div
+              key={photo.id}
+              className="wall-item wall-item-large break-inside-avoid cursor-pointer relative group"
+              onClick={() => onPhotoClick?.(photo)}
+            >
+              {inner}
             </div>
+          )
+        }
+        return (
+          <motion.div
+            key={photo.id}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.8) }}
+            whileHover={{ scale: 1.03, zIndex: 10 }}
+            className="wall-item break-inside-avoid cursor-pointer relative group"
+            onClick={() => onPhotoClick?.(photo)}
+          >
+            {inner}
+          </motion.div>
+        )
+      })}
+    </div>
+  )
+}
 
-            {/* 图注：点击直接编辑 */}
-            {photo.caption && (
-              <div
-                role="button"
-                title={onEditCaption ? '点击编辑图注' : undefined}
-                onClick={(e) => {
-                  if (!onEditCaption) return
-                  e.stopPropagation()
-                  onEditCaption(photo)
-                }}
-                className={`px-3 py-2 bg-surface text-xs text-ink-2 ${
-                  onEditCaption ? 'cursor-text hover:text-ink' : ''
-                }`}
-              >
-                {photo.caption}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      ))}
+/** 卡片本体（普通/大相册两种包装共用） */
+const CardInner: React.FC<{
+  photo: Photo
+  coverPhotoId: string | null
+  onEditCaption?: (photo: Photo) => void
+  onSetCover?: (photoId: string) => void
+  showDeleteButton: boolean
+  onDeletePhoto?: (photoId: string) => void
+  onToggleFavorite?: (photoId: string, favorite: boolean) => void
+  onDelete: (photo: Photo) => Promise<void>
+}> = ({
+  photo,
+  coverPhotoId,
+  onEditCaption,
+  onSetCover,
+  showDeleteButton,
+  onDeletePhoto,
+  onToggleFavorite,
+  onDelete,
+}) => {
+  return (
+    <div className="relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border border-line">
+      <WallMedia photo={photo} />
+
+      {/* 封面/收藏徽标 */}
+      {coverPhotoId === photo.id && (
+        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm flex items-center gap-1">
+          <StarIcon size={10} filled />
+          <span>封面</span>
+        </div>
+      )}
+      {photo.favorite && (
+        <div
+          className={`absolute top-2 ${coverPhotoId === photo.id ? 'left-[64px]' : 'left-2'} px-1.5 py-0.5 rounded-full bg-danger text-white shadow-sm flex items-center`}
+          title="已收藏"
+        >
+          <HeartIcon size={10} filled />
+        </div>
+      )}
+
+      {/* 悬停操作 */}
+      <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {onToggleFavorite && (
+          <button
+            title={photo.favorite ? '取消收藏' : '收藏'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleFavorite(photo.id, !photo.favorite)
+            }}
+            className={`w-7 h-7 rounded-full hover:bg-danger transition-colors flex items-center justify-center ${
+              photo.favorite ? 'bg-danger/80 text-white' : 'bg-black/45 text-white'
+            }`}
+          >
+            <HeartIcon size={13} filled={photo.favorite} />
+          </button>
+        )}
+        {onEditCaption && (
+          <button
+            title="编辑图注"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditCaption(photo)
+            }}
+            className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
+          >
+            <PenIcon size={13} />
+          </button>
+        )}
+        {onSetCover && coverPhotoId !== photo.id && (
+          <button
+            title="设为封面"
+            onClick={(e) => {
+              e.stopPropagation()
+              onSetCover(photo.id)
+            }}
+            className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
+          >
+            <StarIcon size={13} filled />
+          </button>
+        )}
+        {showDeleteButton && onDeletePhoto && (
+          <button
+            title="删除（移入废纸篓）"
+            onClick={(e) => {
+              e.stopPropagation()
+              void onDelete(photo)
+            }}
+            className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center"
+          >
+            <TrashIcon size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* 图注：点击直接编辑 */}
+      {photo.caption && (
+        <div
+          role="button"
+          title={onEditCaption ? '点击编辑图注' : undefined}
+          onClick={(e) => {
+            if (!onEditCaption) return
+            e.stopPropagation()
+            onEditCaption(photo)
+          }}
+          className={`px-3 py-2 bg-surface text-xs text-ink-2 ${
+            onEditCaption ? 'cursor-text hover:text-ink' : ''
+          }`}
+        >
+          {photo.caption}
+        </div>
+      )}
     </div>
   )
 }

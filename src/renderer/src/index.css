@@ -213,6 +213,23 @@ mark {
   }
 }
 
+/* —— 照片墙大相册性能 —— */
+
+/* 屏外卡片跳过渲染/布局（1000+ 张滚动流畅的关键）；intrinsic-size 取拍立得卡的常见高度估计值 */
+.wall-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 360px;
+}
+
+/* 大相册模式下替代 framer-motion 的 CSS 悬停缩放（视觉一致，零逐项动画开销） */
+.wall-item-large {
+  transition: transform 0.2s ease-out;
+}
+.wall-item-large:hover {
+  transform: scale(1.03);
+  z-index: 10;
+}
+
 /* —— 地图（Leaflet）—— */
 
 /* 照片标记：拍立得小卡，避开设默认 marker 图标（打包路径会 404） */

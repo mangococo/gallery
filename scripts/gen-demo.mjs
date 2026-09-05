@@ -5,6 +5,7 @@
  *  3. 演示 userData/gallery.db（预置浅色主题与窗口尺寸，schema 与 src/main/db.ts 一致）
  *
  * 用法：node scripts/gen-demo.mjs
+ *       GALLERY_DEMO_LARGE=420 node scripts/gen-demo.mjs   # 额外生成 420 张的大相册旅行（性能验收用）
  * 产物：/tmp/gallery-demo/{album,userdata}
  */
 import sharp from 'sharp'
@@ -461,6 +462,9 @@ const TRIPS = [
   },
 ]
 
+// —— 大相册模式（GALLERY_DEMO_LARGE=N）：随机拼贴已有场景的旅行 ——
+const LARGE_COUNT = Number.parseInt(process.env.GALLERY_DEMO_LARGE || '', 10) || 0
+
 // ————————————————— 执行 —————————————————
 
 mkdirSync(ALBUM, { recursive: true })
@@ -549,6 +553,44 @@ for (const trip of TRIPS) {
   }
   writeFileSync(join(dir, '.settings.json'), JSON.stringify({ ...trip.settings, photoCaptions }, null, 2))
   console.log(`${trip.dir} ✓ (${trip.count} 张${trip.gps ? ' +GPS' : ''})`)
+}
+
+// 2.5 大相册旅行（性能验收用）：场景循环复用，尺寸减半提速生成
+if (LARGE_COUNT > 0) {
+  const allScenes = [kyoto.scene, iceland.scene, dali.scene, cityTrip.scene]
+  const dir = join(ALBUM, 'grand-album-large')
+  mkdirSync(dir, { recursive: true })
+  const photoCaptions = {}
+  const bigW = W / 2
+  const bigH = H / 2
+  for (let i = 0; i < LARGE_COUNT; i++) {
+    const seed = Math.floor(rngee() * 1e9)
+    const name = `L${String(10000 + i * 3)}.jpg`
+    const gen = allScenes[i % allScenes.length]
+    const svg = gen(seed, i).replace(/width="1600"/, `width="${bigW}"`).replace(/height="1067"/, `height="${bigH}"`)
+      .replace(/viewBox="0 0 1600 1067"/, `viewBox="0 0 ${bigW} ${bigH}"`)
+    const dto = exifTakenAt('2026-03-10', i)
+    const jpeg = await sharp(Buffer.from(svg)).jpeg({ quality: 78, mozjpeg: true }).toBuffer()
+    writeFileSync(join(dir, name), withExifBytes(jpeg, dto, null, null))
+    photoCaptions[name] = i % 12 === 0 ? `大相册第 ${i + 1} 张` : ''
+  }
+  writeFileSync(
+    join(dir, '.settings.json'),
+    JSON.stringify(
+      {
+        title: '大相册压力测试',
+        description: `${LARGE_COUNT} 张照片的滚动性能验收旅行。`,
+        startDate: '2026-03-10',
+        endDate: '2026-03-15',
+        tags: ['性能'],
+        isFavorite: false,
+        photoCaptions,
+      },
+      null,
+      2,
+    ),
+  )
+  console.log(`grand-album-large ✓ (${LARGE_COUNT} 张)`)
 }
 
 // 3. 预置演示 userData：schema 与 src/main/db.ts migrate() 保持一致 + 浅色主题/窗口尺寸
