@@ -6,7 +6,7 @@ import { registerIpcHandlers, registerAlbumAt, fullRescan } from './ipc'
 import { runE2EIfEnabled } from './e2e'
 import { closeWatcher } from './services/watcher'
 import { disposeThumbResources } from './services/thumbnails'
-import { backfillExifTakenAt } from './services/backfill'
+import { backfillExifTakenAt, backfillPhotoGps } from './services/backfill'
 import { getAlbumPath, getAlbumRow, getSetting, setSetting, closeDb, initDb } from './db'
 import type { ThemeMode } from '../shared/types'
 
@@ -56,8 +56,9 @@ if (!gotLock) {
     registerIpcHandlers()
     installChineseMenu()
 
-    // 一次性回填存量照片的 EXIF 拍摄时间（后台执行，不阻塞启动）
+    // 一次性回填存量照片的 EXIF 拍摄时间与 GPS（后台执行，不阻塞启动）
     void backfillExifTakenAt()
+    void backfillPhotoGps()
 
     // 启动时对激活相册做增量校对并附加 watcher（覆盖关机期间的外部变更）
     const activeId = getSetting('active_album_id')

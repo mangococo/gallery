@@ -59,7 +59,9 @@ const BASELINE_SQL = `
     thumb_status TEXT DEFAULT 'pending',
     taken_at INTEGER,
     file_mtime INTEGER,
-    favorite INTEGER DEFAULT 0
+    favorite INTEGER DEFAULT 0,
+    gps_lat REAL,
+    gps_lon REAL
   );
 
   CREATE TABLE IF NOT EXISTS tags (
@@ -115,6 +117,15 @@ function migrate(): void {
       db.exec('ALTER TABLE photos ADD COLUMN favorite INTEGER DEFAULT 0')
     }
     db.pragma('user_version = 2')
+  }
+
+  if (version < 3) {
+    const cols = db.pragma('table_info(photos)') as { name: string }[]
+    if (!cols.some((c) => c.name === 'gps_lat')) {
+      db.exec('ALTER TABLE photos ADD COLUMN gps_lat REAL')
+      db.exec('ALTER TABLE photos ADD COLUMN gps_lon REAL')
+    }
+    db.pragma('user_version = 3')
   }
 }
 
@@ -385,6 +396,8 @@ interface PhotoRow {
   taken_at: number | null
   file_mtime: number | null
   favorite: number | null
+  gps_lat: number | null
+  gps_lon: number | null
 }
 
 function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean, tags: string[] = []): PhotoDTO {
@@ -403,6 +416,8 @@ function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean, tags: string
     isCover,
     favorite: !!r.favorite,
     tags,
+    gpsLat: r.gps_lat,
+    gpsLon: r.gps_lon,
     mediaUrl: `gallery-media://m/${albumId}/${encoded}`,
     thumbUrl: r.thumb_status === 'ready' ? `gallery-media://t/${r.id}.webp` : '',
   }
@@ -459,13 +474,16 @@ export interface NewPhotoRecord {
   takenAt: number
   /** 文件 mtime，对账用（taken_at 存 EXIF 拍摄时间，二者解耦） */
   fileMtime: number
+  /** EXIF GPS（无则为 null） */
+  gpsLat: number | null
+  gpsLon: number | null
 }
 
 export function insertPhotoRow(p: NewPhotoRecord): void {
   db.prepare(
-    `INSERT INTO photos (id, trip_id, file_name, rel_path, type, caption, taken_at, file_mtime)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(p.id, p.tripId, p.fileName, p.relPath, p.type, p.caption, p.takenAt, p.fileMtime)
+    `INSERT INTO photos (id, trip_id, file_name, rel_path, type, caption, taken_at, file_mtime, gps_lat, gps_lon)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(p.id, p.tripId, p.fileName, p.relPath, p.type, p.caption, p.takenAt, p.fileMtime, p.gpsLat, p.gpsLon)
 }
 
 export function listPhotoFilesOfTrip(
@@ -482,11 +500,16 @@ export function listPhotoFilesOfTrip(
   }[]
 }
 
-/** 文件被替换：更新拍摄时间与 file_mtime，缩略图重新生成 */
-export function updatePhotoFileMeta(id: string, takenAt: number, fileMtime: number): void {
+/** 文件被替换：更新拍摄时间/GPS/file_mtime，缩略图重新生成 */
+export function updatePhotoFileMeta(
+  id: string,
+  takenAt: number,
+  fileMtime: number,
+  gps: { lat: number; lon: number } | null,
+): void {
   db.prepare(
-    'UPDATE photos SET taken_at = ?, file_mtime = ?, thumb_status = ? WHERE id = ?',
-  ).run(takenAt, fileMtime, 'pending', id)
+    'UPDATE photos SET taken_at = ?, file_mtime = ?, gps_lat = ?, gps_lon = ?, thumb_status = ? WHERE id = ?',
+  ).run(takenAt, fileMtime, gps?.lat ?? null, gps?.lon ?? null, 'pending', id)
 }
 
 /** 仅更新拍摄时间（EXIF 回填用，不动缩略图状态） */
@@ -524,6 +547,25 @@ export function listPhotosForExifBackfill(): {
        FROM photos p JOIN trips t ON t.id = p.trip_id JOIN albums a ON a.id = t.album_id`,
     )
     .all() as { id: string; relPath: string; type: string; albumPath: string }[]
+}
+
+/** GPS 一次性回填：尚无坐标的图片（v3 之前入库的照片） */
+export function listPhotosForGpsBackfill(): {
+  id: string
+  relPath: string
+  albumPath: string
+}[] {
+  return db
+    .prepare(
+      `SELECT p.id, p.rel_path AS relPath, a.path AS albumPath
+       FROM photos p JOIN trips t ON t.id = p.trip_id JOIN albums a ON a.id = t.album_id
+       WHERE p.gps_lat IS NULL AND p.type = 'image'`,
+    )
+    .all() as { id: string; relPath: string; albumPath: string }[]
+}
+
+export function updatePhotoGps(id: string, lat: number, lon: number): void {
+  db.prepare('UPDATE photos SET gps_lat = ?, gps_lon = ? WHERE id = ?').run(lat, lon, id)
 }
 
 export function deletePhotoRow(id: string): void {

@@ -30,6 +30,9 @@ export interface PhotoDTO {
   favorite: boolean
   /** 照片级标签 */
   tags: string[]
+  /** EXIF GPS 十进制度；null 表示无坐标 */
+  gpsLat: number | null
+  gpsLon: number | null
   mediaUrl: string
   /** 缩略图 URL；空串表示尚未生成，渲染层回退到占位/原图 */
   thumbUrl: string

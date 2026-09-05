@@ -11,6 +11,7 @@ import TagInput from '../components/TagInput'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
 import PhotoTagEditor from '../components/PhotoTagEditor'
+import MapView from '../components/MapView'
 import { toast } from '../components/feedback'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import {
@@ -35,6 +36,8 @@ const TripPage: React.FC = () => {
   /** 照片墙过滤：只看收藏 / 按标签筛选（旅行页内） */
   const [favOnly, setFavOnly] = React.useState(false)
   const [tagFilter, setTagFilter] = React.useState<string | null>(null)
+  /** 旅行页内容视图：照片墙 / 地图 */
+  const [viewMode, setViewMode] = React.useState<'photos' | 'map'>('photos')
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
   const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
@@ -412,77 +415,100 @@ const TripPage: React.FC = () => {
           )}
         </motion.div>
 
-        {/* 照片墙 */}
+        {/* 照片墙 / 地图 */}
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display text-2xl font-bold text-ink">照片</h2>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-ink-3">
-              {visiblePhotos.length === photos.length
-                ? `${photos.length} 张`
-                : `${visiblePhotos.length} / ${photos.length} 张`}
-            </span>
-            <label className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
-              <PlusIcon size={13} />
-              <span>{isUploading ? '导入中…' : '添加照片'}</span>
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={handlePhotoUpload}
-                className="hidden"
-                disabled={isUploading}
-              />
-            </label>
+          <div className="flex items-center gap-3">
+            <h2 className="font-display text-2xl font-bold text-ink">照片</h2>
+            <div className="flex items-center bg-surface-2 rounded-full p-0.5">
+              {(['photos', 'map'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-3 py-1 rounded-full text-xs transition-colors ${
+                    viewMode === mode ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                  }`}
+                >
+                  {mode === 'photos' ? '照片' : '地图'}
+                </button>
+              ))}
+            </div>
           </div>
+          {viewMode === 'photos' && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-ink-3">
+                {visiblePhotos.length === photos.length
+                  ? `${photos.length} 张`
+                  : `${visiblePhotos.length} / ${photos.length} 张`}
+              </span>
+              <label className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
+                <PlusIcon size={13} />
+                <span>{isUploading ? '导入中…' : '添加照片'}</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  disabled={isUploading}
+                />
+              </label>
+            </div>
+          )}
         </div>
 
-        {/* 过滤 chips：只看收藏 / 按标签筛选 */}
-        {(photoTagList.length > 0 || favOnly) && (
-          <div className="flex flex-wrap items-center gap-2 mb-5">
-            <button
-              onClick={() => setFavOnly((v) => !v)}
-              className={`px-3 py-1 rounded-full text-xs flex items-center gap-1 transition-colors ${
-                favOnly ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
-              }`}
-            >
-              <HeartIcon size={11} filled={favOnly} />
-              <span>只看收藏</span>
-            </button>
-            {photoTagList.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => setTagFilter((cur) => (cur === tag ? null : tag))}
-                className={`px-3 py-1 rounded-full text-xs transition-colors ${
-                  tagFilter === tag ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
-                }`}
-              >
-                #{tag}
-              </button>
-            ))}
-            {(favOnly || tagFilter) && (
-              <button
-                onClick={() => {
-                  setFavOnly(false)
-                  setTagFilter(null)
-                }}
-                className="px-2.5 py-1 rounded-full text-xs text-ink-3 hover:text-ink flex items-center gap-1"
-              >
-                <XIcon size={10} />
-                <span>清除</span>
-              </button>
+        {viewMode === 'photos' ? (
+          <>
+            {/* 过滤 chips：只看收藏 / 按标签筛选 */}
+            {(photoTagList.length > 0 || favOnly) && (
+              <div className="flex flex-wrap items-center gap-2 mb-5">
+                <button
+                  onClick={() => setFavOnly((v) => !v)}
+                  className={`px-3 py-1 rounded-full text-xs flex items-center gap-1 transition-colors ${
+                    favOnly ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                  }`}
+                >
+                  <HeartIcon size={11} filled={favOnly} />
+                  <span>只看收藏</span>
+                </button>
+                {photoTagList.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setTagFilter((cur) => (cur === tag ? null : tag))}
+                    className={`px-3 py-1 rounded-full text-xs transition-colors ${
+                      tagFilter === tag ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+                {(favOnly || tagFilter) && (
+                  <button
+                    onClick={() => {
+                      setFavOnly(false)
+                      setTagFilter(null)
+                    }}
+                    className="px-2.5 py-1 rounded-full text-xs text-ink-3 hover:text-ink flex items-center gap-1"
+                  >
+                    <XIcon size={10} />
+                    <span>清除</span>
+                  </button>
+                )}
+              </div>
             )}
-          </div>
+            <PhotoWall
+              photos={visiblePhotos}
+              onPhotoClick={handlePhotoClick}
+              onDeletePhoto={handleDeletePhoto}
+              onEditCaption={setCaptionTarget}
+              showDeleteButton
+              coverPhotoId={editedTrip?.coverPhotoId ?? null}
+              onSetCover={handleSetCover}
+              onToggleFavorite={handleTogglePhotoFavorite}
+            />
+          </>
+        ) : (
+          <MapView photos={photos} onOpenPhoto={handlePhotoClick} />
         )}
-        <PhotoWall
-          photos={visiblePhotos}
-          onPhotoClick={handlePhotoClick}
-          onDeletePhoto={handleDeletePhoto}
-          onEditCaption={setCaptionTarget}
-          showDeleteButton
-          coverPhotoId={editedTrip?.coverPhotoId ?? null}
-          onSetCover={handleSetCover}
-          onToggleFavorite={handleTogglePhotoFavorite}
-        />
       </main>
 
       {/* 灯箱 */}

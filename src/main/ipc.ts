@@ -44,7 +44,7 @@ import {
 } from './db'
 import { scanAlbum } from './services/scanner'
 import { mediaTypeOf } from './services/scanner'
-import { resolvePhotoTakenAt } from './services/exif'
+import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
 
@@ -276,6 +276,7 @@ export function registerIpcHandlers(): void {
       const dest = join(destDir, name)
       const st = await fs.stat(dest)
       const photoId = nanoid(12)
+      const gps = type === 'image' ? await readExifGps(dest) : null
       insertPhotoRow({
         id: photoId,
         tripId,
@@ -285,6 +286,8 @@ export function registerIpcHandlers(): void {
         caption: '',
         takenAt: await resolvePhotoTakenAt(dest, type, st.mtimeMs),
         fileMtime: Math.round(st.mtimeMs),
+        gpsLat: gps?.lat ?? null,
+        gpsLon: gps?.lon ?? null,
       })
       importedIds.push(photoId)
     }

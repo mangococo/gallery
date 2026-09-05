@@ -8,7 +8,8 @@
  * 产物：/tmp/gallery-demo/{album,userdata}
  */
 import sharp from 'sharp'
-import { mkdirSync, writeFileSync } from 'fs'
+import piexif from 'piexifjs'
+import { mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { join } from 'path'
 import Database from 'better-sqlite3'
 
@@ -411,6 +412,7 @@ const TRIPS = [
     gen: kyoto.scene,
     count: 8,
     captions: ['常寂光寺的山门', '黄昏时分的鸟居', '岚山远眺', '渡月桥的傍晚', '红叶落满石阶', '寺前的小路', '天光将暗', '最后一抹秋色'],
+    gps: [35.0094, 135.6722], // 京都岚山一带
   },
   {
     dir: 'iceland-ring-2026',
@@ -425,6 +427,7 @@ const TRIPS = [
     gen: iceland.scene,
     count: 8,
     captions: ['杰古沙龙冰河湖', '极光爆发的那一刻', '黑沙滩的浪', '冰块搁浅在岸上', '帐篷外的绿光', '午夜1点的天空', '冰川徒步前', '环线无人区'],
+    gps: [64.0464, -16.1776], // 冰岛东南一线
   },
   {
     dir: 'dali-erhai-2026',
@@ -439,6 +442,7 @@ const TRIPS = [
     gen: dali.scene,
     count: 6,
     captions: ['洱西的水面', '才村码头', '环海西路', '云压得很低', '苍山如黛', '小船摇了一天'],
+    gps: [25.6533, 100.2289], // 洱海西岸
   },
   {
     dir: 'city-nights-2026',
@@ -453,6 +457,7 @@ const TRIPS = [
     gen: cityTrip.scene,
     count: 6,
     captions: ['天桥上看车流', '便利店的灯', '雨后的十字路口', '凌晨的写字楼', '巷子深处', '末班地铁口'],
+    gps: null, // 夜拍照片无定位：地图视图空态验收用
   },
 ]
 
@@ -470,6 +475,51 @@ function exifTakenAt(startDate, i) {
   d.setHours(8 + ((i * 3) % 12), (i * 17) % 60, 0, 0)
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+/** 十进制度 → EXIF 度分秒有理数（秒精确到 0.01） */
+function gpsExifDict(lat, lon) {
+  const toDms = (v) => {
+    const a = Math.abs(v)
+    let d = Math.floor(a)
+    const mF = (a - d) * 60
+    let m = Math.floor(mF)
+    let s = Math.round((mF - m) * 60 * 100)
+    if (s >= 6000) {
+      s = 0
+      m += 1
+      if (m >= 60) {
+        m = 0
+        d += 1
+      }
+    }
+    return [
+      [d, 1],
+      [m, 1],
+      [s, 100],
+    ]
+  }
+  const gps = {}
+  gps[piexif.GPSIFD.GPSLatitudeRef] = lat >= 0 ? 'N' : 'S'
+  gps[piexif.GPSIFD.GPSLatitude] = toDms(lat)
+  gps[piexif.GPSIFD.GPSLongitudeRef] = lon >= 0 ? 'E' : 'W'
+  gps[piexif.GPSIFD.GPSLongitude] = toDms(lon)
+  return gps
+}
+
+/**
+ * 给 JPEG buffer 注入 EXIF（拍摄时间 + GPS）。
+ * sharp 的 withExif 写不了 GPS IFD（libvips 丢弃 IFD1），故统一走 piexifjs（纯 JS）。
+ */
+function withExifBytes(jpegBuf, takenAtStr, lat, lon) {
+  const exif = {}
+  if (takenAtStr) exif[piexif.ExifIFD.DateTimeOriginal] = takenAtStr
+  const dump = piexif.dump({
+    Exif: exif,
+    GPS: lat != null && lon != null ? gpsExifDict(lat, lon) : {},
+  })
+  const dataUrl = 'data:image/jpeg;base64,' + jpegBuf.toString('base64')
+  return Buffer.from(piexif.insert(dump, dataUrl).split(',')[1], 'base64')
 }
 
 // 1. Windows 打包图标：icon.svg → icon.png（1024）
@@ -490,13 +540,15 @@ for (const trip of TRIPS) {
     const name = `DSC0${(50001 + i * 7 + Math.floor(rngee() * 5)).toString()}.jpg`
     const svg = trip.gen(seed, i)
     const dto = exifTakenAt(trip.settings.startDate, i)
-    let pipe = sharp(Buffer.from(svg))
-    if (dto) pipe = pipe.withExif({ IFD2: { DateTimeOriginal: dto } })
-    await pipe.jpeg({ quality: 82, mozjpeg: true }).toFile(join(dir, name))
+    // GPS：旅行中心点附近确定性抖动（±0.03° 约两三公里），无 gps 配置则不写
+    const jLat = trip.gps ? trip.gps[0] + (rngee() - 0.5) * 0.06 : null
+    const jLon = trip.gps ? trip.gps[1] + (rngee() - 0.5) * 0.08 : null
+    const jpeg = await sharp(Buffer.from(svg)).jpeg({ quality: 82, mozjpeg: true }).toBuffer()
+    writeFileSync(join(dir, name), withExifBytes(jpeg, dto, jLat, jLon))
     photoCaptions[name] = trip.captions[i] ?? ''
   }
   writeFileSync(join(dir, '.settings.json'), JSON.stringify({ ...trip.settings, photoCaptions }, null, 2))
-  console.log(`${trip.dir} ✓ (${trip.count} 张)`)
+  console.log(`${trip.dir} ✓ (${trip.count} 张${trip.gps ? ' +GPS' : ''})`)
 }
 
 // 3. 预置演示 userData：schema 与 src/main/db.ts migrate() 保持一致 + 浅色主题/窗口尺寸

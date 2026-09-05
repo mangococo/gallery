@@ -29,3 +29,27 @@ export async function resolvePhotoTakenAt(
   const exif = await readExifTakenAt(absPath)
   return exif ?? Math.round(mtimeMs)
 }
+
+export interface PhotoGps {
+  lat: number
+  lon: number
+}
+
+/**
+ * 读取照片 GPS 经纬度（exifr.gps 已完成度分秒→十进制与南西半球符号换算）。
+ * 全零坐标（某些软件的占位值）与超界值视为无效；视频/无 EXIF/解析失败一律 null。
+ */
+export async function readExifGps(absPath: string): Promise<PhotoGps | null> {
+  try {
+    const gps = await exifr.gps(absPath)
+    if (!gps) return null
+    const { latitude: lat, longitude: lon } = gps
+    if (typeof lat !== 'number' || typeof lon !== 'number') return null
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+    if (lat === 0 && lon === 0) return null
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null
+    return { lat, lon }
+  } catch {
+    return null
+  }
+}

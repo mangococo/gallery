@@ -18,7 +18,7 @@ import {
   updatePhotoFileMeta,
   updateTripRow,
 } from '../db'
-import { resolvePhotoTakenAt } from './exif'
+import { resolvePhotoTakenAt, readExifGps } from './exif'
 import { buildCaptionMap, compareFileNames, msToLocalDate, planReconciliation } from './reconcile'
 
 // —— 旧 .settings.json 解析 ——
@@ -197,11 +197,13 @@ async function reconcileTrip(
   const dbFiles = listPhotoFilesOfTrip(tripId)
   const plan = planReconciliation(diskFiles, dbFiles)
 
-  // 入库新文件：拍摄时间优先 EXIF DateTimeOriginal，回退 mtime
+  // 入库新文件：拍摄时间优先 EXIF DateTimeOriginal，回退 mtime；图片顺带读 GPS
   for (const disk of plan.inserts) {
     const type = mediaTypeOf(disk.name)!
     try {
-      const takenAt = await resolvePhotoTakenAt(join(dirPath, disk.name), type, disk.mtimeMs)
+      const absPath = join(dirPath, disk.name)
+      const takenAt = await resolvePhotoTakenAt(absPath, type, disk.mtimeMs)
+      const gps = type === 'image' ? await readExifGps(absPath) : null
       insertPhotoRow({
         id: nanoid(12),
         tripId,
@@ -211,6 +213,8 @@ async function reconcileTrip(
         caption: captionMap.get(disk.name.toLowerCase()) ?? '',
         takenAt,
         fileMtime: Math.round(disk.mtimeMs),
+        gpsLat: gps?.lat ?? null,
+        gpsLon: gps?.lon ?? null,
       })
       counters.photos++
     } catch {
@@ -218,12 +222,14 @@ async function reconcileTrip(
     }
   }
 
-  // 同名但文件内容被替换（file_mtime 变化）：重读拍摄时间并重新生成缩略图
+  // 同名但文件内容被替换（file_mtime 变化）：重读拍摄时间/GPS 并重新生成缩略图
   for (const { id, file } of plan.replaced) {
     const type = mediaTypeOf(file.name)!
     try {
-      const takenAt = await resolvePhotoTakenAt(join(dirPath, file.name), type, file.mtimeMs)
-      updatePhotoFileMeta(id, takenAt, Math.round(file.mtimeMs))
+      const absPath = join(dirPath, file.name)
+      const takenAt = await resolvePhotoTakenAt(absPath, type, file.mtimeMs)
+      const gps = type === 'image' ? await readExifGps(absPath) : null
+      updatePhotoFileMeta(id, takenAt, Math.round(file.mtimeMs), gps)
     } catch {
       // 竞态跳过
     }
