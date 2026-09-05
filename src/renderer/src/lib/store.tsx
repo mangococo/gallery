@@ -53,6 +53,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<ThemeMode>('system')
   const [systemDark, setSystemDark] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
+  /** 旅行数据请求序号：切相册/文件变化并发时，旧响应不再覆盖新相册的数据 */
+  const tripsSeq = React.useRef(0)
 
   const setFilters = React.useCallback((patch: Partial<TripFilters>) => {
     setFiltersState((prev) => ({ ...prev, ...patch }))
@@ -63,9 +65,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const reloadTrips = React.useCallback(async () => {
+    const seq = ++tripsSeq.current
     const id = await api.getActiveAlbumId()
+    const list = id ? await api.listTrips(id) : []
+    if (tripsSeq.current !== seq) return
     setActiveAlbumId(id)
-    setTrips(id ? await api.listTrips(id) : [])
+    setTrips(list)
   }, [])
 
   const reloadStats = React.useCallback(async () => {
@@ -117,9 +122,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setActiveAlbum = React.useCallback(
     async (id: string) => {
+      const seq = ++tripsSeq.current
       await api.setActiveAlbum(id)
+      const list = await api.listTrips(id)
+      if (tripsSeq.current !== seq) return // 已有更新的切换，丢弃本次结果
       setActiveAlbumId(id)
-      setTrips(await api.listTrips(id))
+      setTrips(list)
       // 切换相册后旧筛选（标签/年份）不再适用
       setFiltersState({ favoritesOnly: false, tags: [], year: null })
     },
