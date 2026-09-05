@@ -47,6 +47,8 @@ const TripPage: React.FC = () => {
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
   const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
+  /** 拖拽深度计数：dragenter/dragleave 在子元素边界会成对冒泡，凭单次 leave 判断会闪烁 */
+  const dragDepthRef = React.useRef(0)
   /** getTrip 是否已返回：区分「加载中」与「旅行不存在」 */
   const [tripLoaded, setTripLoaded] = React.useState(false)
 
@@ -111,6 +113,7 @@ const TripPage: React.FC = () => {
   const handleDrop = async (event: React.DragEvent) => {
     event.preventDefault()
     event.stopPropagation()
+    dragDepthRef.current = 0
     setDragOver(false)
     const paths = Array.from(event.dataTransfer.files)
       .filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || hasMediaExt(f.name))
@@ -290,14 +293,22 @@ const TripPage: React.FC = () => {
   return (
     <div
       className="min-h-screen bg-background"
+      onDragEnter={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        dragDepthRef.current++
+        setDragOver(true)
+      }}
       onDragOver={(e) => {
         e.preventDefault()
         e.stopPropagation()
+        if (dragDepthRef.current === 0) dragDepthRef.current = 1
         setDragOver(true)
       }}
       onDragLeave={(e) => {
         e.stopPropagation()
-        setDragOver(false)
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+        if (dragDepthRef.current === 0) setDragOver(false)
       }}
       onDrop={handleDrop}
     >

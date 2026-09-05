@@ -179,19 +179,30 @@ const HomePage: React.FC = () => {
 
           {trips.length === 0 && (
             <div className="text-center py-24">
-              <p className="text-ink-3 mb-2 font-display text-2xl">翻开第一页旅行手账</p>
-              <p className="text-ink-3 text-sm mb-8">
-                {activeAlbum
-                  ? '点右上角「新旅行」，或把照片拖进窗口'
-                  : '先在左侧「相册」点击加号注册照片目录'}
-              </p>
-              {activeAlbum && (
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
-                >
-                  创建第一次旅行
-                </button>
+              {activeAlbum?.status === 'missing' ? (
+                <>
+                  <p className="text-ink-3 mb-2 font-display text-2xl">相册目录暂不可访问</p>
+                  <p className="text-ink-3 text-sm mb-8">
+                    外置磁盘未连接，或目录被移走了。连上后在左侧点击该相册即可重新定位。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-ink-3 mb-2 font-display text-2xl">翻开第一页旅行手账</p>
+                  <p className="text-ink-3 text-sm mb-8">
+                    {activeAlbum
+                      ? '点右上角「新旅行」，或把照片拖进窗口'
+                      : '先在左侧「相册」点击加号注册照片目录'}
+                  </p>
+                  {activeAlbum && (
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
+                    >
+                      创建第一次旅行
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
