@@ -176,7 +176,7 @@ const TripPage: React.FC = () => {
     setExporting(format)
     try {
       const path = await api.exportJournal(trip.id, format)
-      if (path) toast(`手账已导出：${path.split('/').pop()}`, 'success')
+      if (path) toast(`手账已导出：${path.split(/[\\/]/).pop()}`, 'success')
     } catch (error: any) {
       toast('导出失败: ' + (error?.message ?? error), 'error')
     }

@@ -388,8 +388,11 @@ const Lightbox: React.FC<LightboxProps> = ({
           )}
         </motion.div>
 
-        {/* 底部胶片条 */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 max-w-[86vw] overflow-x-auto scroll-slim bg-black/45 backdrop-blur-sm rounded-xl px-2 py-1.5">
+        {/* 底部胶片条（容器本身也拦截冒泡：点缩略图之间的空隙不应当关闭灯箱） */}
+        <div
+          className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 max-w-[86vw] overflow-x-auto scroll-slim bg-black/45 backdrop-blur-sm rounded-xl px-2 py-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center gap-1.5">
             {photos.map((p, i) => {
               const src = displaySrc(p)

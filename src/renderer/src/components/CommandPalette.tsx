@@ -47,6 +47,7 @@ const CommandPalette: React.FC = () => {
   const [searching, setSearching] = React.useState(false)
   const [active, setActive] = React.useState(0)
   const listRef = React.useRef<HTMLDivElement>(null)
+  const searchSeq = React.useRef(0)
 
   // ⌘K / Ctrl+K 全局开关
   React.useEffect(() => {
@@ -70,7 +71,7 @@ const CommandPalette: React.FC = () => {
     }
   }, [searchOpen])
 
-  // 防抖搜索
+  // 防抖搜索（响应序号守卫：慢的旧请求回来不覆盖新词的结果）
   React.useEffect(() => {
     const q = query.trim()
     if (!searchOpen || !q || !activeAlbumId) {
@@ -79,14 +80,15 @@ const CommandPalette: React.FC = () => {
       return
     }
     setSearching(true)
+    const seq = ++searchSeq.current
     const timer = window.setTimeout(async () => {
       try {
         const result = await api.searchTrips(activeAlbumId, q)
-        setHits(result)
+        if (searchSeq.current === seq) setHits(result)
       } catch {
-        setHits([])
+        if (searchSeq.current === seq) setHits([])
       }
-      setSearching(false)
+      if (searchSeq.current === seq) setSearching(false)
     }, 150)
     return () => window.clearTimeout(timer)
   }, [query, searchOpen, activeAlbumId])
