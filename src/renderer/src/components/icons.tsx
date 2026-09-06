@@ -378,3 +378,37 @@ export function RefreshIcon(props: IconProps) {
     </Svg>
   )
 }
+
+export function RestoreIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 12a9 9 0 1 0 2.64-6.36" />
+      <path d="M3 3v6h6" />
+      <path d="M12 7v5l3 3" />
+    </Svg>
+  )
+}
+
+/** 首页视图切换：照片墙（九宫格） */
+export function GridIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </Svg>
+  )
+}
+
+/** 首页视图切换：时间线 */
+export function TimelineIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3v18" />
+      <circle cx="7" cy="7" r="2" />
+      <circle cx="17" cy="12" r="2" />
+      <circle cx="7" cy="17" r="2" />
+    </Svg>
+  )
+}
