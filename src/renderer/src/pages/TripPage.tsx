@@ -183,7 +183,7 @@ const TripPage: React.FC = () => {
       if (remaining.length === 0) return null
       return Math.min(cur > idx ? cur - 1 : cur, remaining.length - 1)
     })
-    toast('已移入废纸篓', 'success')
+    toast('已移入回收站', 'success')
     await refreshAll()
   }
 
@@ -318,13 +318,13 @@ const TripPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [favOnly, tagFilter, photoCount])
 
-  /** 批量删除：确认后逐张进废纸篓，本地同步收缩（含灯箱与多选状态） */
+  /** 批量删除：确认后移入回收站，本地同步收缩（含灯箱与多选状态） */
   const handleDeletePhotos = async (photos: Photo[]) => {
     if (!editedTrip || photos.length === 0) return
     const ok = await confirmDialog({
-      title: photos.length === 1 ? '把这张照片移入废纸篓？' : `把 ${photos.length} 项移入废纸篓？`,
-      body: photos.length === 1 ? photos[0].fileName : '所选照片与视频将移入废纸篓，不会直接删除。',
-      confirmText: '移入废纸篓',
+      title: photos.length === 1 ? '把这张照片移入回收站？' : `把 ${photos.length} 项移入回收站？`,
+      body: photos.length === 1 ? photos[0].fileName : '所选照片与视频将移入回收站，可随时恢复。',
+      confirmText: '移入回收站',
       danger: true,
     })
     if (!ok) return
@@ -350,7 +350,7 @@ const TripPage: React.FC = () => {
       if (next.size === 0) setSelectionMode(false)
       return next
     })
-    toast(`已移入废纸篓（${ids.size} 项）`, 'success')
+    toast(`已移入回收站（${ids.size} 项）`, 'success')
     await refreshAll()
   }
 

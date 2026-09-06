@@ -11,6 +11,7 @@ import type {
   MoveTarget,
   ScanProgress,
   ThemeMode,
+  TrashSelection,
   TripDTO,
   TripPatch,
 } from '../shared/types'
@@ -27,17 +28,18 @@ import {
   setAlbumStatus,
   removeAlbumRow,
   getTripRow,
+  getTripRowIncludingTrashed,
+  getPhotoRowIncludingTrashed,
+  getAnyTripIdByFolder,
   listTripRows,
   insertTripRow,
   updateTripRow,
-  deleteTripRow,
   deleteTripsOfAlbum,
   getTagsOfTrip,
   setTagsOfTrip,
   allTags,
   getPhotoRow,
   insertPhotoRow,
-  deletePhotoRow,
   updatePhotoLocations,
   setPhotoCaption,
   setPhotoFavorite,
@@ -48,15 +50,17 @@ import {
 } from './db'
 import { scanAlbum } from './services/scanner'
 import { mediaTypeOf } from './services/scanner'
-import { planTripRemoval } from './services/reconcile'
 import { collisionSafeDestName, planCoverReassignment, validateMovePhotos } from './services/move-plan'
+import { listTrash, purgeItems, restoreItems, trashPhoto, trashTrip } from './services/trash'
 import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
 import { exportJournal } from './services/journal'
+import { getMainWindow } from './windows'
 
+/** 主动推送的目标窗口（见 windows.ts 的说明——不能再用 getAllWindows()[0]） */
 function senderWindow(): BrowserWindow | null {
-  return BrowserWindow.getAllWindows()[0] ?? null
+  return getMainWindow()
 }
 
 function pushProgress(p: ScanProgress): void {
@@ -64,6 +68,8 @@ function pushProgress(p: ScanProgress): void {
 }
 
 function pushChanged(albumId: string): void {
+  const wins = BrowserWindow.getAllWindows()
+  console.log('[debug-push] fs-changed →', albumId, 'windows:', wins.length, 'first:', wins[0]?.id, wins[0]?.isDestroyed())
   senderWindow()?.webContents.send(IPC.pushFsChanged, { albumId })
 }
 
@@ -256,29 +262,9 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC.tripsDelete, async (_e, id: string) => {
-    const t = getTripRow(id)
-    if (!t) return
-    const album = getAlbumRow(t.albumId)
-    if (album) {
-      const rootOk = await fs
-        .access(album.path)
-        .then(() => true)
-        .catch(() => false)
-      const plan = planTripRemoval(rootOk, await tripFolderExists(album.path, t.folderName))
-      if (plan.action === 'root-missing') {
-        // 外置卷未挂载等场景：无法区分「真没了」和「暂时看不到」，删元数据不可逆，拒绝
-        throw new Error('相册目录当前不可访问，无法确认旅行文件夹状态，已取消删除')
-      }
-      if (plan.action === 'trash-folder') {
-        // 一律进废纸篓，不直接删除
-        await shell.trashItem(join(album.path, t.folderName)).catch((err) => {
-          throw new Error('移入废纸篓失败: ' + err.message)
-        })
-      }
-      // record-only：文件夹已被移出相册目录/外部删除，只清理库内元数据
-    }
-    deleteTripRow(id)
-    pushChanged(t.albumId)
+    await trashTrip(id)
+    const t = getTripRowIncludingTrashed(id)
+    if (t) pushChanged(t.albumId)
   })
 
   ipcMain.handle(IPC.tagsList, () => allTags())
@@ -354,25 +340,9 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC.photosDelete, async (_e, photoId: string) => {
-    const photo = getPhotoRow(photoId)
-    if (!photo) return
-    const album = getAlbumRow(photo.albumId)
-    if (album) {
-      const abs = join(album.path, photo.relPath)
-      // 与删除旅行同规则：相册根不可达时拒绝删记录（外置卷可能只是暂时看不到）；
-      // 根可达但文件已被外部移走/删除时只清记录，磁盘无东西可删
-      const plan = planTripRemoval(await pathAccessible(album.path), await pathAccessible(abs))
-      if (plan.action === 'root-missing') {
-        throw new Error('相册目录当前不可访问，无法确认照片文件状态，已取消删除')
-      }
-      if (plan.action === 'trash-folder') {
-        await shell.trashItem(abs).catch((err) => {
-          throw new Error('移入废纸篓失败: ' + err.message)
-        })
-      }
-    }
-    deletePhotoRow(photoId)
-    pushChanged(photo.albumId)
+    await trashPhoto(photoId)
+    const p = getPhotoRowIncludingTrashed(photoId)
+    if (p) pushChanged(p.albumId)
   })
 
   ipcMain.handle(IPC.photosSetCaption, (_e, photoId: string, caption: string) => {
@@ -539,6 +509,17 @@ export function registerIpcHandlers(): void {
     return res.canceled ? null : res.path ?? null
   })
 
+  // —— 回收站 ——
+  ipcMain.handle(IPC.trashList, () => listTrash())
+
+  ipcMain.handle(IPC.trashRestore, async (_e, sel: TrashSelection) =>
+    restoreItems(sel, (albumId) => pushChanged(albumId)),
+  )
+
+  ipcMain.handle(IPC.trashPurge, async (_e, sel: TrashSelection) =>
+    purgeItems(sel, (albumId) => pushChanged(albumId)),
+  )
+
   // —— 旧数据导入 ——
   ipcMain.handle(IPC.importLegacy, async (e): Promise<LegacyImportResult | null> => {
     const win = BrowserWindow.fromWebContents(e.sender)
@@ -580,7 +561,7 @@ function tripToDto(t: Omit<TripDTO, 'tags' | 'photos'>) {
 /** 在指定相册内创建旅行（目录+记录+标签）；tripsCreate 与「移动到新建旅行」共用 */
 function createTripInAlbum(album: Album, input: CreateTripInput) {
   const safeName = sanitizeFileName(input.title)
-  const folderName = dedupeFolderName(album.path, safeName)
+  const folderName = dedupeFolderName(album.path, safeName, (n) => !!getAnyTripIdByFolder(album.id, n))
   const t = {
     id: nanoid(12),
     albumId: album.id,
@@ -628,10 +609,11 @@ function sanitizeFileName(name: string): string {
   return cleaned || 'untitled'
 }
 
-function dedupeFolderName(root: string, base: string): string {
+function dedupeFolderName(root: string, base: string, takenInDb: (name: string) => boolean): string {
   let name = base
   let i = 2
-  while (existsSync(join(root, name))) {
+  // 磁盘与记录两个维度都要避让：缺失旅行的 folder_name 仍在库里（partial unique 只豁免回收站行）
+  while (existsSync(join(root, name)) || takenInDb(name)) {
     name = `${base} (${i})`
     i++
   }

@@ -55,6 +55,10 @@ const api: GalleryApi = {
 
   exportJournal: (tripId, format) => ipcRenderer.invoke(IPC.journalsExport, tripId, format),
 
+  listTrash: () => ipcRenderer.invoke(IPC.trashList),
+  trashRestore: (sel) => ipcRenderer.invoke(IPC.trashRestore, sel),
+  trashPurge: (sel) => ipcRenderer.invoke(IPC.trashPurge, sel),
+
   onScanProgress: (cb: (p: ScanProgress) => void) => subscribe(IPC.pushScanProgress, cb),
   onFsChanged: (cb) => subscribe(IPC.pushFsChanged, cb),
   onThemeSystemChanged: (cb) => subscribe(IPC.pushThemeSystemChanged, cb),

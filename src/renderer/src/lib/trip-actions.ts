@@ -25,8 +25,8 @@ export async function confirmAndDeleteTrip(trip: {
         title: '删除这次旅行？',
         body: `「${trip.title}」的整个旅行文件夹${
           trip.photoCount > 0 ? `（含 ${trip.photoCount} 张照片）` : ''
-        }将移入废纸篓，不会直接删除。`,
-        confirmText: '移入废纸篓',
+        }将移入回收站，可随时恢复。`,
+        confirmText: '移入回收站',
         danger: true,
       })
   if (!ok) return false
