@@ -88,9 +88,9 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
 }) => {
   const handleDelete = async (photo: Photo) => {
     const ok = await confirmDialog({
-      title: '把这张照片移入废纸篓？',
+      title: '把这张照片移入回收站？',
       body: photo.fileName,
-      confirmText: '移入废纸篓',
+      confirmText: '移入回收站',
       danger: true,
     })
     if (ok) onDeletePhoto?.(photo.id)
@@ -267,7 +267,7 @@ const CardInner: React.FC<{
           )}
           {showDeleteButton && onDeletePhoto && (
             <button
-              title="删除（移入废纸篓）"
+              title="删除（移入回收站）"
               onClick={(e) => {
                 e.stopPropagation()
                 void onDelete(photo)

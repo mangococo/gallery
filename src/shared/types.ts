@@ -63,6 +63,8 @@ export interface Stats {
   trips: number
   photos: number
   storageBytes: number
+  /** 回收站中的项目数（旅行+媒体） */
+  trash: number
 }
 
 /** 扫描/缩略图生成进度（主进程推送） */
@@ -137,6 +139,47 @@ export type JournalFormat = 'pdf' | 'png'
 /** ⌘K 搜索命中字段（photoTag = 照片级标签命中，聚合到所属旅行） */
 export type SearchMatchIn = 'title' | 'description' | 'tags' | 'caption' | 'photoTag'
 
+/**
+ * 回收站条目：删除只是把旅行/媒体移进回收站（软删除 + 文件挪入相册内的隐藏目录），
+ * 恢复即回到原位；「彻底删除」才真正移除。
+ */
+export interface TrashItem {
+  kind: 'trip' | 'photo'
+  /** trip 项 = 旅行 id；photo 项 = 照片 id */
+  id: string
+  /** 旅行标题 / 文件名 */
+  name: string
+  /** 照片专属：媒体类型 */
+  type?: PhotoType
+  albumId: string
+  albumName: string
+  /** 照片专属：所属旅行 */
+  tripId?: string
+  tripTitle?: string
+  deletedAt: number
+  /** 旅行 = 封面缩略图；照片 = 自身缩略图；'' 表示无可用缩略图 */
+  thumbUrl: string
+  /** 源文件/文件夹已不在（记录仍在，恢复后由扫描对账清理） */
+  fileMissing: boolean
+  /** 照片专属：所属旅行也在回收站，恢复照片将连旅行一起恢复 */
+  tripTrashed?: boolean
+  /** 旅行专属：其中的照片数 */
+  photoCount?: number
+}
+
+/** 回收站批量操作的选择集 */
+export interface TrashSelection {
+  photoIds: string[]
+  tripIds: string[]
+}
+
+/** 回收站批量恢复/彻底删除的结果（单项目失败不中断整批） */
+export interface TrashOpResult {
+  /** 成功恢复的照片数（含随旅行一起恢复的） */
+  tripsCount: number
+  photosCount: number
+  failed: { name: string; reason: string }[]
+}
 /** ⌘K 搜索结果：按旅行聚合（图注命中也归到所属旅行） */
 export interface SearchHit {
   tripId: string
@@ -174,7 +217,7 @@ export interface GalleryApi {
   getTrip(id: string): Promise<TripDTO | null>
   createTrip(input: CreateTripInput): Promise<TripDTO>
   updateTrip(id: string, patch: TripPatch): Promise<TripDTO>
-  /** 移入废纸篓 */
+  /** 移入回收站（可随时在回收站恢复） */
   deleteTrip(id: string): Promise<void>
 
   /** 全部已有标签（常用在前），标签输入联想用 */
@@ -182,7 +225,7 @@ export interface GalleryApi {
 
   /** 复制文件进旅行目录并入库（单个失败不中断整批，见 ImportPhotosResult.failed） */
   importPhotos(tripId: string, paths: string[]): Promise<ImportPhotosResult>
-  /** 移入废纸篓 */
+  /** 移入回收站（可随时在回收站恢复） */
   deletePhoto(photoId: string): Promise<void>
   setCaption(photoId: string, caption: string): Promise<void>
   setCover(tripId: string, photoId: string): Promise<void>
@@ -208,6 +251,13 @@ export interface GalleryApi {
 
   /** 导出手账（隐藏窗口渲染模板；返回保存路径，用户取消返回 null） */
   exportJournal(tripId: string, format: JournalFormat): Promise<string | null>
+
+  /** 回收站：全部已删除项目（各相册合并，按删除时间倒序） */
+  listTrash(): Promise<TrashItem[]>
+  /** 回收站：恢复（旅行整体恢复；照片所属旅行在回收站时一并恢复） */
+  trashRestore(sel: TrashSelection): Promise<TrashOpResult>
+  /** 回收站：彻底删除（不可从画廊恢复，二次确认由调用方负责） */
+  trashPurge(sel: TrashSelection): Promise<TrashOpResult>
 
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
@@ -256,6 +306,10 @@ export const IPC = {
   searchTrips: 'search:trips',
 
   journalsExport: 'journals:export',
+
+  trashList: 'trash:list',
+  trashRestore: 'trash:restore',
+  trashPurge: 'trash:purge',
 
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',

@@ -1,11 +1,11 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { Album } from '../types'
 import { confirmDialog, toast } from './feedback'
-import { SearchIcon } from './icons'
+import { SearchIcon, TrashIcon } from './icons'
 import ThemeSwitch from './ThemeSwitch'
 import SettingsModal from './SettingsModal'
 import {
@@ -16,9 +16,10 @@ import {
   WarningIcon,
 } from './icons'
 
-/** 左侧常驻侧栏：收藏 / 相册 / 标签 / 年份 + 底部统计与主题 */
+/** 左侧常驻侧栏：收藏 / 回收站 / 相册 / 标签 / 年份 + 底部统计与主题 */
 const Sidebar: React.FC = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const {
     albums,
     activeAlbumId,
@@ -118,9 +119,15 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col border-r border-line bg-surface">
-      {/* 顶部留出红绿灯区域 */}
+      {/* 顶部留出红绿灯区域；「画廊」题名可点击回主页（回收站/旅行页的通用返航入口） */}
       <div className="drag-region h-12 shrink-0 flex items-end pl-20 pr-3 pb-1">
-        <span className="font-display font-bold text-xl text-primary tracking-wide">画廊</span>
+        <button
+          onClick={() => navigate('/')}
+          title="回到主页"
+          className="no-drag font-display font-bold text-xl text-primary tracking-wide hover:opacity-80 transition-opacity"
+        >
+          画廊
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto scroll-slim px-3 pb-3 space-y-5">
@@ -180,6 +187,8 @@ const Sidebar: React.FC = () => {
                         void handleRelocate(album)
                       } else {
                         void setActiveAlbum(album.id)
+                        // 点相册 = 看这个相册的主视图：从回收站/旅行页回来
+                        if (location.pathname !== '/') navigate('/')
                       }
                     }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-left transition-colors ${
@@ -311,8 +320,33 @@ const Sidebar: React.FC = () => {
         )}
       </nav>
 
-      {/* 底部固定：进度 / 统计 / 主题 / 设置 */}
+      {/* 底部固定：回收站 / 进度 / 统计 / 主题 / 设置 */}
       <footer className="shrink-0 border-t border-line px-4 py-3 space-y-2.5">
+        {/* 回收站：仿访达「废纸篓」的底部常驻位。开关语义与收藏/标签一致——
+            第一次进入，再点一次退出到进入前的路由 */}
+        <button
+          onClick={() => {
+            if (location.pathname === '/trash') {
+              navigate((location.state as { from?: string } | null)?.from ?? '/')
+            } else {
+              navigate('/trash', { state: { from: location.pathname } })
+            }
+          }}
+          data-testid="sidebar-trash"
+          className={`w-full flex items-center gap-2 px-3 py-2 -mx-1 rounded-lg text-sm transition-colors ${
+            location.pathname === '/trash'
+              ? 'bg-primary-soft text-primary font-medium'
+              : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
+          }`}
+        >
+          <span className="flex items-center">
+            <TrashIcon size={16} />
+          </span>
+          <span>回收站</span>
+          {(stats?.trash ?? 0) > 0 && (
+            <span className="ml-auto text-xs text-ink-3">{stats?.trash}</span>
+          )}
+        </button>
         {progress && (
           <div>
             <div className="flex justify-between text-xs text-ink-3 mb-1">
@@ -363,7 +397,7 @@ const Sidebar: React.FC = () => {
       {renamingAlbum &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"
+            className="fixed inset-0 z-50 no-drag bg-black/30 flex items-center justify-center"
             onClick={() => setRenamingAlbum(null)}
           >
           <div

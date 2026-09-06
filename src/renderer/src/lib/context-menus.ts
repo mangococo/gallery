@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { MenuEntry } from '../components/ContextMenu'
-import type { Photo, Trip } from '../types'
+import type { Photo, Trip, TrashItem } from '../types'
 
 /**
  * 上下文菜单的纯组装层：按「上下文 + 选择状态 + 媒体类型」产出菜单项。
@@ -124,7 +124,7 @@ export function buildPhotoMenu(
   if (handlers.onDelete) {
     entries.push({ kind: 'separator' })
     entries.push({
-      label: photo.type === 'video' ? '删除视频（移入废纸篓）' : '删除照片（移入废纸篓）',
+      label: photo.type === 'video' ? '删除视频（移入回收站）' : '删除照片（移入回收站）',
       icon: icons.trash,
       danger: true,
       onSelect: () => handlers.onDelete?.([photo]),
@@ -160,7 +160,7 @@ export function buildPhotoBatchMenu(
   if (handlers.onDelete) {
     entries.push({ kind: 'separator' })
     entries.push({
-      label: `删除 ${photos.length} 项（移入废纸篓）`,
+      label: `删除 ${photos.length} 项（移入回收站）`,
       icon: icons.trash,
       danger: true,
       onSelect: () => handlers.onDelete?.(photos),
@@ -268,4 +268,86 @@ export function buildEmptyAreaMenu(
     entries.push({ label: '刷新', icon: icons.refresh, onSelect: handlers.onRefresh })
   }
   return entries
+}
+
+// —— 回收站 ——
+
+export interface TrashMenuIcons {
+  restore?: React.ReactNode
+  purge?: React.ReactNode
+  select?: React.ReactNode
+  trip?: React.ReactNode
+}
+
+export interface TrashMenuHandlers {
+  onRestore: (items: TrashItem[]) => void
+  onPurge: (items: TrashItem[]) => void
+  /** 照片专属：跳到所属旅行（仅旅行还在业务视图时可用） */
+  onViewTrip?: (item: TrashItem) => void
+  onEnterSelect?: (item: TrashItem) => void
+}
+
+/** 回收站单个条目右键：恢复 / 彻底删除 / 查看原旅行 / 选择多张 */
+export function buildTrashItemMenu(
+  item: TrashItem,
+  handlers: TrashMenuHandlers,
+  icons: TrashMenuIcons = {},
+): MenuEntry[] {
+  const entries: MenuEntry[] = [
+    {
+      label: '恢复',
+      icon: icons.restore,
+      onSelect: () => handlers.onRestore([item]),
+    },
+  ]
+  if (item.kind === 'photo' && handlers.onViewTrip && !item.tripTrashed && item.tripId) {
+    entries.push({
+      label: `查看原旅行「${item.tripTitle ?? ''}」`,
+      icon: icons.trip,
+      onSelect: () => handlers.onViewTrip?.(item),
+    })
+  }
+  if (handlers.onEnterSelect) {
+    entries.push({
+      label: '选择多张…',
+      icon: icons.select,
+      onSelect: () => handlers.onEnterSelect?.(item),
+    })
+  }
+  entries.push({ kind: 'separator' })
+  entries.push({
+    label: '彻底删除…',
+    icon: icons.purge,
+    danger: true,
+    onSelect: () => handlers.onPurge([item]),
+  })
+  return entries
+}
+
+/** 回收站多选右键：批量恢复 / 批量彻底删除 */
+export function buildTrashBatchMenu(
+  items: TrashItem[],
+  handlers: TrashMenuHandlers,
+  icons: TrashMenuIcons = {},
+): MenuEntry[] {
+  const trips = items.filter((i) => i.kind === 'trip').length
+  const videos = items.filter((i) => i.kind === 'photo' && i.type === 'video').length
+  const parts = [`已选择 ${items.length} 项`]
+  if (trips > 0) parts.push(`${trips} 个旅行`)
+  if (videos > 0) parts.push(`${videos} 个视频`)
+  return [
+    { kind: 'header', label: parts.join('（') + (parts.length > 1 ? '）' : '') },
+    {
+      label: '恢复全部',
+      icon: icons.restore,
+      onSelect: () => handlers.onRestore(items),
+    },
+    { kind: 'separator' },
+    {
+      label: `彻底删除 ${items.length} 项…`,
+      icon: icons.purge,
+      danger: true,
+      onSelect: () => handlers.onPurge(items),
+    },
+  ]
 }

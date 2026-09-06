@@ -4,6 +4,7 @@ import { AppProvider, useApp } from './lib/store'
 import Sidebar from './components/Sidebar'
 import HomePage from './pages/HomePage'
 import TripPage from './pages/TripPage'
+import TrashPage from './pages/TrashPage'
 import CommandPalette from './components/CommandPalette'
 import DropImportLayer from './components/DropImport'
 import { FeedbackHost } from './components/feedback'
@@ -28,6 +29,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/trip/:id" element={<TripPage />} />
+          <Route path="/trash" element={<TrashPage />} />
         </Routes>
       </main>
       {/* 窗口级拖拽导入（TripPage 内部拖拽会 stopPropagation） */}

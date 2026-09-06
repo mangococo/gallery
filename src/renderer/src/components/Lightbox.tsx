@@ -7,10 +7,12 @@ import { showContextMenuAt } from './ContextMenu'
 import { buildPhotoMenu, revealInLabel, type PhotoMenuHandlers } from '../lib/context-menus'
 import {
   clampView,
+  cursorForView,
   formatTakenStamp,
   formatVideoClock,
   MIN_ZOOM,
   MAX_ZOOM,
+  toggleZoomAtPoint,
   zoomAtPoint,
   type ViewBox,
 } from '../lib/viewer'
@@ -57,9 +59,14 @@ interface LightboxProps {
   onCopyPath?: (photo: Photo) => void
   /** 所属旅行标题（信息卡与顶栏展示） */
   tripTitle?: string
+  /** 跨旅行浏览时按照片解析所属旅行（优先于固定 tripTitle） */
+  tripTitleOf?: (photo: Photo) => string | undefined
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+
+/** 单击切换缩放的防抖窗：双击的第一次 click 在此窗口内被取消，避免 放大→还原→又放大 */
+const CLICK_TOGGLE_DELAY = 220
 
 const menuIcons = {
   caption: <PenIcon size={14} />,
@@ -92,8 +99,10 @@ const Lightbox: React.FC<LightboxProps> = ({
   onReveal,
   onCopyPath,
   tripTitle,
+  tripTitleOf,
 }) => {
   const photo = photos[index]
+  const photoTripTitle = tripTitleOf?.(photo) ?? tripTitle
   const [view, setView] = React.useState<ViewBox>({ zoom: 1, x: 0, y: 0 })
   const [dragging, setDragging] = React.useState(false)
   const [loaded, setLoaded] = React.useState(false)
@@ -102,18 +111,35 @@ const Lightbox: React.FC<LightboxProps> = ({
   const stageRef = React.useRef<HTMLDivElement>(null)
   const polaroidRef = React.useRef<HTMLDivElement>(null)
   const dragRef = React.useRef<{ px: number; py: number; ox: number; oy: number } | null>(null)
+  /** 拖拽平移发生过的位移标记：平移结束后的 click 不再触发缩放切换 */
+  const dragMovedRef = React.useRef(false)
+  /** 单击缩放切换的防抖定时器：双击到达时取消，只执行一次切换 */
+  const clickTimerRef = React.useRef<number | null>(null)
   const activeThumbRef = React.useRef<HTMLButtonElement>(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const videoRef = React.useRef<HTMLVideoElement | null>(null)
 
   const isVideo = photo.type === 'video'
 
-  // 切换照片：复位缩放/平移/加载态
+  // 切换照片：复位缩放/平移/加载态，并取消未生效的单击切换（旧照片的缩放不该落到新照片上）
   React.useEffect(() => {
     setView({ zoom: 1, x: 0, y: 0 })
     setLoaded(false)
     setFailed(false)
+    dragMovedRef.current = false
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+    }
   }, [photo.id])
+
+  // 卸载时清理防抖定时器
+  React.useEffect(
+    () => () => {
+      if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current)
+    },
+    [],
+  )
 
   // 预加载相邻原图，切换更跟手（视频不预载，省内存）
   React.useEffect(() => {
@@ -189,9 +215,9 @@ const Lightbox: React.FC<LightboxProps> = ({
   const handleDelete = async () => {
     if (!onDeletePhoto) return
     const ok = await confirmDialog({
-      title: '把这张照片移入废纸篓？',
+      title: '把这张照片移入回收站？',
       body: photo.fileName,
-      confirmText: '移入废纸篓',
+      confirmText: '移入回收站',
       danger: true,
     })
     if (ok) onDeletePhoto(photo.id)
@@ -256,9 +282,55 @@ const Lightbox: React.FC<LightboxProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, photos.length, isVideo, onClose, onNavigate, photo.id])
 
+  // —— 缩放切换（单击图片：fit ↔ zoom） ——
+
+  /** 以屏幕点为锚点做一次 fit ↔ zoom 切换（函数式更新，定时器回调里也不会读到旧值） */
+  const toggleZoomAt = React.useCallback((clientX: number, clientY: number) => {
+    const stage = stageRef.current
+    if (!stage) return
+    setView((v) => {
+      const rect = stage.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2 + v.x
+      const cy = rect.top + rect.height / 2 + v.y
+      const stageW = stage.clientWidth
+      const stageH = stage.clientHeight
+      const box = polaroidRef.current
+      const boxW = box?.offsetWidth ?? 0
+      const boxH = box?.offsetHeight ?? 0
+      return toggleZoomAtPoint(v, clientX - cx, clientY - cy, stageW, stageH, boxW, boxH)
+    })
+  }, [])
+
+  const cancelScheduledToggle = () => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+    }
+  }
+
+  /** 单击图片：延迟触发切换，给双击的第一次 click 留出取消窗口 */
+  const handleImageClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (dragMovedRef.current) return
+    const { clientX, clientY } = e
+    cancelScheduledToggle()
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null
+      toggleZoomAt(clientX, clientY)
+    }, CLICK_TOGGLE_DELAY)
+  }
+
+  /** 双击图片：取消挂起的单击切换，本次只执行一次切换 */
+  const handleImageDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    cancelScheduledToggle()
+    toggleZoomAt(e.clientX, e.clientY)
+  }
+
   // —— 平移拖拽（zoom > 1 时） ——
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isVideo || view.zoom <= MIN_ZOOM) return
+    dragMovedRef.current = false
     ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
     dragRef.current = { px: e.clientX, py: e.clientY, ox: view.x, oy: view.y }
     setDragging(true)
@@ -266,46 +338,36 @@ const Lightbox: React.FC<LightboxProps> = ({
   const handlePointerMove = (e: React.PointerEvent) => {
     const d = dragRef.current
     if (!d) return
-    applyView({ ...view, x: d.ox + (e.clientX - d.px), y: d.oy + (e.clientY - d.py) })
+    const dx = e.clientX - d.px
+    const dy = e.clientY - d.py
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMovedRef.current = true
+    applyView({ ...view, x: d.ox + dx, y: d.oy + dy })
   }
   const handlePointerUp = () => {
     dragRef.current = null
     setDragging(false)
   }
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (isVideo) return
-    if (view.zoom > MIN_ZOOM) applyView({ zoom: MIN_ZOOM, x: 0, y: 0 })
-    else zoomAt(e.clientX, e.clientY, 2.5)
-  }
-
-  /** 背景点击：放大态先复位，复位后再点才关闭 */
+  /** 背景点击：直接关闭灯箱（光标状态与文案提示保持这一预期） */
   const handleBackdropClick = () => {
-    if (!isVideo && view.zoom > MIN_ZOOM) {
-      applyView({ zoom: MIN_ZOOM, x: 0, y: 0 })
-      return
-    }
     onClose()
   }
 
-  const cursor = isVideo
-    ? undefined
-    : view.zoom > MIN_ZOOM
-      ? dragging
-        ? 'grabbing'
-        : 'grab'
-      : 'zoom-in'
+  // 光标只属于图片区域（纯函数推导）：fit=zoom-in（点击放大）、非 fit=zoom-out（点击还原）、
+  // 平移中=grabbing；图片之外（房间/留白）保持默认光标，点击即关闭
+  const imageCursor = isVideo ? undefined : cursorForView(view.zoom, dragging)
 
   const takenStamp = formatTakenStamp(photo.takenAt)
 
   return (
     <motion.div
       ref={rootRef}
+      data-testid="lightbox-root"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.16 }}
-      className="fixed inset-0 z-50 bg-viewer flex flex-col select-none"
+      className="fixed inset-0 z-50 no-drag bg-viewer flex flex-col select-none"
       onContextMenu={(e) => {
         // 灯箱内右键 = 当前媒体操作菜单（覆盖浏览器默认）
         e.preventDefault()
@@ -325,7 +387,7 @@ const Lightbox: React.FC<LightboxProps> = ({
             </button>
             <div className="min-w-0 hidden sm:block">
               <div className="font-display text-viewer-ink text-base leading-tight truncate">
-                {tripTitle ?? photo.fileName}
+                {photoTripTitle ?? photo.fileName}
               </div>
               {takenStamp && (
                 <div className="text-[11px] text-viewer-ink-2 tabular-nums truncate">
@@ -400,13 +462,12 @@ const Lightbox: React.FC<LightboxProps> = ({
       {/* —— 主舞台 —— */}
       <div
         ref={stageRef}
+        data-testid="lightbox-stage"
         className="relative flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden px-4 md:px-10 pb-24 pt-16"
-        style={{ cursor }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
         onClick={handleBackdropClick}
       >
         {/* 左右切换 */}
@@ -469,6 +530,9 @@ const Lightbox: React.FC<LightboxProps> = ({
                         setLoaded(true)
                         setFailed(true)
                       }}
+                      onClick={handleImageClick}
+                      onDoubleClick={handleImageDoubleClick}
+                      style={{ cursor: imageCursor }}
                       className="max-h-[min(68vh,900px)] max-w-[min(86vw,1200px)] w-auto h-auto object-contain rounded-[2px]"
                     />
                     {!loaded && (
@@ -546,7 +610,7 @@ const Lightbox: React.FC<LightboxProps> = ({
               value={isVideo ? '视频' : '照片'}
               icon={isVideo ? <FilmIcon size={12} /> : <ImageIcon size={12} />}
             />
-            {tripTitle && <InfoRow label="所属旅行" value={tripTitle} />}
+            {photoTripTitle && <InfoRow label="所属旅行" value={photoTripTitle} />}
             {photo.gpsLat != null && photo.gpsLon != null && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-ink-3 flex items-center gap-1 shrink-0">

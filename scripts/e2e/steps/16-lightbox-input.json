@@ -1,0 +1,115 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"灯箱真实输入链路（sendInputEvent 走完整输入管线）：真实点击照片开灯箱 → 灯箱根 no-drag 断言（拖拽区不再吞点击）→ 真实点击 X 关闭 → 真实点击 ... 出菜单（置于最上层）→ 单击缩放/双击防抖/滚轮/背景关闭。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 4500
+  },
+  {
+    "name": "02-open-kyoto",
+    "wait": 200,
+    "script": "for (let i = 0; i < 20; i++) { const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (h) { h.click(); return 'ok'; } await new Promise(r => setTimeout(r, 500)); } throw new Error('找不到京都（超时）')"
+  },
+  {
+    "name": "03-wall-loaded",
+    "wait": 1600,
+    "script": "if (!document.querySelector('[data-testid=photo-wall] img')) throw new Error('照片墙未加载'); 'wall-ok'"
+  },
+  {
+    "name": "04-real-click-photo-opens-lightbox",
+    "click": {
+      "selector": "[data-testid=photo-wall] > div img"
+    },
+    "wait": 900,
+    "script": "if (!document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img')) throw new Error('真实点击照片未打开灯箱'); 'lightbox-open-ok'"
+  },
+  {
+    "name": "05-lightbox-no-drag-assert",
+    "wait": 300,
+    "script": "const root = document.querySelector('[data-testid=lightbox-root]'); if (!root) throw new Error('灯箱缺失'); const region = getComputedStyle(root).webkitAppRegion; if (region !== 'no-drag') throw new Error('灯箱根未豁免窗口拖拽区（顶栏按钮会被吞点击）: ' + region); 'no-drag-ok'"
+  },
+  {
+    "name": "06-real-click-x-closes",
+    "click": {
+      "selector": "[title='关闭（Esc）']"
+    },
+    "wait": 900,
+    "script": "for (let i = 0; i < 16; i++) { if (!document.querySelector('[data-testid=lightbox-root]')) return 'x-close-ok'; await new Promise(r => setTimeout(r, 250)); } throw new Error('真实点击 X 未关闭灯箱（drag-region 或命中问题仍在）')"
+  },
+  {
+    "name": "07-reopen-and-real-click-more",
+    "click": {
+      "selector": "[data-testid=photo-wall] > div img"
+    },
+    "wait": 900
+  },
+  {
+    "name": "08-real-click-more-menu",
+    "click": {
+      "selector": "[title='更多操作']"
+    },
+    "wait": 700,
+    "script": "const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('真实点击 ... 未出现菜单'); const item = panel.querySelector('[role=menuitem]'); if (!item) throw new Error('菜单无条目'); const r = item.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); if (!hit || !hit.closest('.ctx-menu-panel')) throw new Error('菜单被其他层盖住（elementFromPoint 命中: ' + (hit && hit.className) + '）'); 'more-menu-ok'"
+  },
+  {
+    "name": "09-real-click-menu-item",
+    "click": {
+      "selector": ".ctx-menu-panel [role=menuitem]"
+    },
+    "wait": 800,
+    "script": "if (document.querySelector('.ctx-menu-panel')) throw new Error('点击菜单项后菜单未关闭'); 'menu-item-click-ok'"
+  },
+  {
+    "name": "09b-close-caption-editor",
+    "wait": 500,
+    "script": "const cancel = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '取消'); if (cancel) { cancel.click(); await new Promise(r => setTimeout(r, 400)); } if ([...document.querySelectorAll('button')].some(b => b.textContent.trim() === '保存' && b.closest('.fixed'))) throw new Error('图注编辑器未关闭'); 'editor-closed'"
+  },
+  {
+    "name": "10-menu-shot",
+    "wait": 300,
+    "script": "document.querySelector('[title=更多操作]').click(); await new Promise(r => setTimeout(r, 400)); if (!document.querySelector('.ctx-menu-panel')) throw new Error('菜单未再次出现'); 'menu-open'"
+  },
+  {
+    "name": "11-outside-click-closes-menu",
+    "wait": 300,
+    "script": "document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); await new Promise(r => setTimeout(r, 350)); if (document.querySelector('.ctx-menu-panel')) throw new Error('点击菜单外未关闭菜单'); if (!document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img')) throw new Error('菜单外点击误关了灯箱'); 'outside-menu-ok'"
+  },
+  {
+    "name": "12-zoom-initial-cursor",
+    "wait": 200,
+    "script": "const img = document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img'); if (!img) throw new Error('灯箱图片缺失'); if (getComputedStyle(img).cursor !== 'zoom-in') throw new Error('初始光标应为 zoom-in: ' + getComputedStyle(img).cursor); const stage = document.querySelector('[data-testid=lightbox-stage]'); if (getComputedStyle(stage).cursor === 'zoom-in') throw new Error('图片外不应显示放大镜'); 'cursor-init-ok'"
+  },
+  {
+    "name": "13-single-click-zoom",
+    "wait": 300,
+    "script": "const img = document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img'); img.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: img.getBoundingClientRect().left + 20, clientY: img.getBoundingClientRect().top + 20 })); await new Promise(r => setTimeout(r, 500)); const box = document.querySelector('[data-testid=lightbox-stage-box]'); const style = box.getAttribute('style') ?? ''; if (!/scale\\(2\\.5\\)/.test(style)) throw new Error('单击未放大: ' + style); if (getComputedStyle(img).cursor !== 'zoom-out') throw new Error('放大后光标应为 zoom-out: ' + getComputedStyle(img).cursor); 'click-zoom-ok'"
+  },
+  {
+    "name": "14-single-click-back-fit",
+    "wait": 300,
+    "script": "const img = document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img'); img.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: img.getBoundingClientRect().left + 20, clientY: img.getBoundingClientRect().top + 20 })); await new Promise(r => setTimeout(r, 500)); const style = document.querySelector('[data-testid=lightbox-stage-box]').getAttribute('style') ?? ''; if (/scale\\((?!1\\)).*\\)/.test(style)) throw new Error('单击未复位: ' + style); if (getComputedStyle(img).cursor !== 'zoom-in') throw new Error('复位后光标应为 zoom-in'); 'click-fit-ok'"
+  },
+  {
+    "name": "15-double-click-single-toggle",
+    "wait": 300,
+    "script": "const img = document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img'); const r = img.getBoundingClientRect(); const opt = { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 20 }; img.dispatchEvent(new MouseEvent('click', opt)); img.dispatchEvent(new MouseEvent('click', opt)); img.dispatchEvent(new MouseEvent('dblclick', opt)); await new Promise(r => setTimeout(r, 600)); const style = document.querySelector('[data-testid=lightbox-stage-box]').getAttribute('style') ?? ''; if (!/scale\\(2\\.5\\)/.test(style)) throw new Error('双击应恰好切换一次到放大: ' + style); 'dblclick-ok'"
+  },
+  {
+    "name": "16-wheel-zoom-and-back",
+    "wait": 300,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: '0' })); await new Promise(r => setTimeout(r, 350)); const stage = document.querySelector('[data-testid=lightbox-stage]'); const r = stage.getBoundingClientRect(); stage.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -120, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); await new Promise(r2 => setTimeout(r2, 300)); let style = document.querySelector('[data-testid=lightbox-stage-box]').getAttribute('style') ?? ''; if (!/scale\\(1\\.[1-9]/.test(style)) throw new Error('滚轮未放大: ' + style); const img = document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img'); if (getComputedStyle(img).cursor !== 'zoom-out') throw new Error('滚轮放大后光标应为 zoom-out'); for (let i = 0; i < 10; i++) { stage.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); await new Promise(r2 => setTimeout(r2, 60)); } await new Promise(r2 => setTimeout(r2, 300)); style = document.querySelector('[data-testid=lightbox-stage-box]').getAttribute('style') ?? ''; if (/scale\\((?!1\\)).*\\)/.test(style)) throw new Error('滚轮未缩回 fit: ' + style); if (getComputedStyle(img).cursor !== 'zoom-in') throw new Error('滚轮缩回 fit 后光标应恢复 zoom-in'); 'wheel-ok'"
+  },
+  {
+    "name": "17-backdrop-click-closes",
+    "wait": 300,
+    "script": "const stage = document.querySelector('[data-testid=lightbox-stage]'); stage.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: stage.getBoundingClientRect().left + 30, clientY: stage.getBoundingClientRect().top + 30 })); for (let i = 0; i < 16; i++) { if (!document.querySelector('[data-testid=lightbox-root]')) return 'backdrop-close-ok'; await new Promise(r => setTimeout(r, 250)); } throw new Error('点击图片外未关闭灯箱')"
+  },
+  {
+    "name": "18-final-shot",
+    "wait": 400
+  }
+]

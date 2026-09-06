@@ -125,7 +125,8 @@ function ConfirmHost() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+      data-testid="confirm-backdrop"
+      className="fixed inset-0 z-[80] no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
       onClick={() => close(false)}
     >
       <motion.div

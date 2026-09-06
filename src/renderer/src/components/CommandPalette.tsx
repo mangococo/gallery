@@ -140,7 +140,7 @@ const CommandPalette: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[75] bg-black/30 backdrop-blur-[2px] flex items-start justify-center"
+          className="fixed inset-0 z-[75] no-drag bg-black/30 backdrop-blur-[2px] flex items-start justify-center"
           onClick={() => setSearchOpen(false)}
         >
           <motion.div

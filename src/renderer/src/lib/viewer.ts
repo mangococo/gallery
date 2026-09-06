@@ -66,6 +66,34 @@ export function zoomAtPoint(
   return clampView(next, stageW, stageH, boxW, boxH)
 }
 
+/** 单击图片的缩放切换倍率（fit → zoom 一步到位） */
+export const TOGGLE_ZOOM_FACTOR = 2.5
+
+/**
+ * 单击图片的缩放切换：fit → 以指针为锚点放大；非 fit → 复位 fit。
+ * 双击的防抖（click/dblclick 合并）在组件层处理，这里只管一次切换的纯计算。
+ */
+export function toggleZoomAtPoint(
+  v: ViewBox,
+  px: number,
+  py: number,
+  stageW = Infinity,
+  stageH = Infinity,
+  boxW = Infinity,
+  boxH = Infinity,
+  factor = TOGGLE_ZOOM_FACTOR,
+): ViewBox {
+  if (v.zoom > MIN_ZOOM) return { zoom: MIN_ZOOM, x: 0, y: 0 }
+  return zoomAtPoint(v, px, py, factor, stageW, stageH, boxW, boxH)
+}
+
+/** 图片区光标：fit=zoom-in（点击放大）、非 fit=zoom-out（点击还原）、平移中=grabbing */
+export type ViewerCursor = 'zoom-in' | 'zoom-out' | 'grabbing'
+export function cursorForView(zoom: number, dragging: boolean): ViewerCursor {
+  if (dragging) return 'grabbing'
+  return zoom > MIN_ZOOM ? 'zoom-out' : 'zoom-in'
+}
+
 /** 视频时钟：87 → 1:27；3675 → 1:01:15 */
 export function formatVideoClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'

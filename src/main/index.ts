@@ -8,6 +8,7 @@ import { closeWatcher } from './services/watcher'
 import { disposeThumbResources } from './services/thumbnails'
 import { backfillExifTakenAt, backfillPhotoGps } from './services/backfill'
 import { getAlbumPath, getAlbumRow, getSetting, setSetting, closeDb, initDb } from './db'
+import { setMainWindow } from './windows'
 import type { ThemeMode } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -151,9 +152,13 @@ function createMainWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // E2E 驱动时窗口常被真实窗口遮挡，macOS 会判定 occluded 并把 rAF/动画降到约 1/10 速度，
+      // framer-motion 退场动画被拉长导致「看似未关闭」的假阴性——E2E 下关掉节流
+      backgroundThrottling: process.env.GALLERY_E2E !== '1',
     },
   })
 
+  setMainWindow(mainWindow)
   mainWindow.once('ready-to-show', () => mainWindow?.show())
 
   // 记忆窗口位置尺寸
@@ -167,6 +172,7 @@ function createMainWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+    setMainWindow(null)
   })
 
   // 加载渲染层

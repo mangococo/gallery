@@ -30,7 +30,7 @@
   {
     "name": "06-confirm-delete",
     "wait": 1500,
-    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '移入废纸篓'); if (!b) throw new Error('找不到确认按钮'); b.click(); 'confirmed'"
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '移入回收站'); if (!b) throw new Error('找不到确认按钮'); b.click(); 'confirmed'"
   },
   {
     "name": "07-home-after-dark",

@@ -1,0 +1,79 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"首页视图链路：时间线默认 → 切照片墙（数量/视频标识/右键/批量/灯箱） → 删除+回收站角标+恢复 → 切回时间线。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-timeline-default",
+    "wait": 400,
+    "script": "const t = document.querySelector('[data-testid=home-view-timeline]'); const w = document.querySelector('[data-testid=home-view-wall]'); if (!t || !w) throw new Error('视图切换按钮缺失'); if (t.getAttribute('aria-selected') !== 'true') throw new Error('时间线不是默认选中视图'); if (w.getAttribute('aria-selected') === 'true') throw new Error('照片墙不应默认选中'); if (!document.querySelector('h3')) throw new Error('时间线卡片缺失'); 'timeline-default-ok'"
+  },
+  {
+    "name": "03-switch-to-wall",
+    "wait": 500,
+    "script": "document.querySelector('[data-testid=home-view-wall]').click(); await new Promise(r => setTimeout(r, 500)); const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('照片墙未渲染'); const cards = wall.querySelectorAll(':scope > div').length; if (cards === 0) throw new Error('照片墙没有卡片'); if (!document.body.textContent.includes('按拍摄时间')) throw new Error('排序说明缺失'); window.__e2e = { wallCards: cards }; return { cards }"
+  },
+  {
+    "name": "04-wall-count-matches",
+    "wait": 300,
+    "script": "const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const total = trips.reduce((acc, t) => acc + (t.photos?.length || 0), 0); if (total === 0) throw new Error('演示数据没有照片'); if (window.__e2e.wallCards < Math.min(total, 500)) throw new Error('照片墙卡片数 ' + window.__e2e.wallCards + ' < 期望 ' + total); window.__e2e.total = total; 'count-ok'"
+  },
+  {
+    "name": "05-wall-photo-shot",
+    "wait": 500
+  },
+  {
+    "name": "06-photo-context-menu",
+    "wait": 500,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img') && !el.querySelector('.border-l-primary') && !el.textContent.includes('视频海报')); const card = cards[0]; if (!card) throw new Error('照片卡缺失'); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('右键菜单未出现'); const text = panel.textContent; for (const key of ['打开查看', '编辑图注', '加入收藏', '移动到旅行…', '在 Finder 中显示', '复制文件路径', '选择多张', '删除照片（移入回收站）']) { if (!text.includes(key)) throw new Error('首页菜单缺少: ' + key); } if (text.includes('设为旅行封面')) throw new Error('首页不应提供设为封面'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'photo-menu-ok'"
+  },
+  {
+    "name": "07-video-context-menu",
+    "wait": 500,
+    "script": "const videoCard = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.querySelector('.border-l-primary') || el.textContent.includes('视频海报')); if (!videoCard) throw new Error('视频卡缺失（大理应含视频样张）'); videoCard.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('视频菜单未出现'); if (!panel.textContent.includes('播放视频')) throw new Error('视频菜单缺少播放视频'); if (!panel.textContent.includes('删除视频')) throw new Error('视频菜单删除文案不对'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'video-menu-ok'"
+  },
+  {
+    "name": "08-multi-select-and-batch",
+    "wait": 500,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img') && !el.querySelector('.border-l-primary') && !el.textContent.includes('视频海报')); if (cards.length < 2) throw new Error('照片不足'); cards[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const item = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('选择多张')); if (!item) throw new Error('选择多张缺失'); item.click(); await new Promise(r => setTimeout(r, 250)); cards[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); await new Promise(r => setTimeout(r, 250)); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar || !bar.textContent.includes('已选 2 张')) throw new Error('首页多选失败: ' + (bar?.textContent ?? '无工具条')); cards[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel || !panel.textContent.includes('已选择 2 项')) throw new Error('批量菜单未出现'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 200)); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'batch-ok'"
+  },
+  {
+    "name": "09-open-lightbox-from-wall",
+    "wait": 500,
+    "script": "const card = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img') && !el.querySelector('.border-l-primary') && !el.textContent.includes('视频海报'))[0]; if (!card) throw new Error('照片卡缺失'); card.querySelector('img').click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=lightbox-root] .viewer-polaroid img')) throw new Error('首页灯箱未打开'); 'lightbox-ok'"
+  },
+  {
+    "name": "10-lightbox-shot",
+    "wait": 500
+  },
+  {
+    "name": "11-close-lightbox-esc",
+    "wait": 400,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); for (let i = 0; i < 16; i++) { if (!document.querySelector('[data-testid=lightbox-root]')) return 'esc-ok'; await new Promise(r => setTimeout(r, 250)); } throw new Error('ESC 未关闭灯箱')"
+  },
+  {
+    "name": "12-delete-from-wall",
+    "wait": 500,
+    "script": "const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const firstPhoto = trips.flatMap(t => t.photos || [])[0]; if (!firstPhoto) throw new Error('没有照片可删'); window.__e2e = { deleteId: firstPhoto.id, total: window.__e2e.total }; await window.api.deletePhoto(firstPhoto.id); await new Promise(r => setTimeout(r, 600)); const badge = document.querySelector('[data-testid=sidebar-trash]'); if (!badge.textContent.match(/回收站\\s*1/)) throw new Error('侧栏回收站角标未显示 1: ' + badge.textContent); 'wall-delete-ok'"
+  },
+  {
+    "name": "13-restore-back",
+    "wait": 500,
+    "script": "const st = window.__e2e; const result = await window.api.trashRestore({ photoIds: [st.deleteId], tripIds: [] }); if (result.photosCount !== 1) throw new Error('恢复失败: ' + JSON.stringify(result)); await new Promise(r => setTimeout(r, 800)); const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const total = trips.reduce((acc, t) => acc + (t.photos?.length || 0), 0); if (total !== st.total) throw new Error('恢复后总数不对: ' + total); 'restore-back-ok'"
+  },
+  {
+    "name": "14-back-to-timeline",
+    "wait": 500,
+    "script": "document.querySelector('[data-testid=home-view-timeline]').click(); await new Promise(r => setTimeout(r, 500)); if (!document.querySelector('h3')) throw new Error('切回时间线后卡片缺失'); if (document.querySelector('[data-testid=home-view-timeline]').getAttribute('aria-selected') !== 'true') throw new Error('时间线未选中'); 'back-ok'"
+  },
+  {
+    "name": "15-final-shot",
+    "wait": 500
+  }
+]

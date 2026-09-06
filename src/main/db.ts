@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { normalizeTagNames } from '../shared/tags'
+import { needsTripsRebuild, rebuildTripsWithoutTableUnique } from './services/migrations'
 import { collectMatches, compareHits, rankOf } from '../shared/search'
 import type { Album, PhotoDTO, PhotoType, SearchHit, SearchMatchIn, ThumbStatus, TripDTO } from '../shared/types'
 
@@ -24,6 +25,9 @@ export function closeDb(): void {
 /**
  * 基线建表（幂等，覆盖全新数据库）。
  * v0.10 起 photos.file_mtime 承担文件对账职责（taken_at 改存 EXIF 拍摄时间，只管展示）。
+ * v0.12 起回收站：trips/photos 软删除（deleted_at 非空即回收站中）；
+ * 旅行的 (album_id, folder_name) 唯一性只约束未删除行（partial unique index）——
+ * 同名旅行允许与回收站中的旅行共存，恢复时再去重。
  */
 const BASELINE_SQL = `
   CREATE TABLE IF NOT EXISTS albums (
@@ -46,7 +50,7 @@ const BASELINE_SQL = `
     cover_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
     created_at INTEGER,
     updated_at INTEGER,
-    UNIQUE(album_id, folder_name)
+    deleted_at INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS photos (
@@ -63,7 +67,8 @@ const BASELINE_SQL = `
     file_mtime INTEGER,
     favorite INTEGER DEFAULT 0,
     gps_lat REAL,
-    gps_lon REAL
+    gps_lon REAL,
+    deleted_at INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS tags (
@@ -91,17 +96,37 @@ const BASELINE_SQL = `
   CREATE INDEX IF NOT EXISTS idx_photos_trip ON photos(trip_id);
   CREATE INDEX IF NOT EXISTS idx_trip_tags_tag ON trip_tags(tag_id);
   CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id);
+  /* deleted_at 相关索引（partial unique uq_trips_live_folder 等）在 v4 迁移里建：
+     存量库走到 BASELINE_SQL 时列还没补上，索引必须等 v4 加列后再创建 */
 `
 
 /**
  * user_version pragma 迁移：
- * - 全新库：基线建表（已含 file_mtime/favorite/photo_tags）→ 逐版迁移全为空操作 → 置 user_version
- * - v0.9 存量库：表已存在，v1 给 photos 补 file_mtime 列并把 taken_at（即当时的 mtime）回填进去
+ * - 全新库：基线建表（已含 file_mtime/favorite/photo_tags/deleted_at/partial unique）→ 逐版迁移全为空操作 → 置 user_version
+ * - v0.9 存量库：v1 给 photos 补 file_mtime 列并把 taken_at（即当时的 mtime）回填进去
  * - v0.10 存量库：v2 给 photos 补 favorite 列（默认 0，无需回填）；photo_tags 建表在基线 SQL 里幂等完成
+ * - v0.11 存量库：v3 给 photos 补 GPS 列
+ * - v0.12 回收站：v4 给 trips/photos 补 deleted_at 列；trips 表若还带表级 UNIQUE(album_id, folder_name)
+ *   则整表重建去掉（唯一性改由 partial unique index 只约束未删除行，见 BASELINE_SQL 注释）
  */
 function migrate(): void {
   const version = db.pragma('user_version', { simple: true }) as number
   db.exec(BASELINE_SQL)
+
+  // v4 的 trips 表重建必须发生在任何事务之外（见 rebuildTripsWithoutTableUnique 的
+  // inTransaction 守卫）。幂等：重建过一次后建表 SQL 不再含表级 UNIQUE，不会重跑；
+  // 重建成功但后续步骤失败时，version 仍未写入，下次启动会跳过重建继续补齐其余步骤
+  if (version < 4) {
+    const createSql =
+      (
+        db
+          .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'trips'")
+          .get() as { sql: string } | undefined
+      )?.sql ?? ''
+    if (needsTripsRebuild(createSql)) {
+      rebuildTripsWithoutTableUnique(db)
+    }
+  }
 
   // 事务保证 ALTER/回填/版本号同生共死（中途断电不会留下「列已加但版本未写」的中间态；
   // 各步本身也按列存在性幂等，双保险）
@@ -131,6 +156,25 @@ function migrate(): void {
         db.exec('ALTER TABLE photos ADD COLUMN gps_lon REAL')
       }
       db.pragma('user_version = 3')
+    }
+
+    if (version < 4) {
+      const photoCols = db.pragma('table_info(photos)') as { name: string }[]
+      if (!photoCols.some((c) => c.name === 'deleted_at')) {
+        db.exec('ALTER TABLE photos ADD COLUMN deleted_at INTEGER')
+      }
+      // trips 的表级 UNIQUE 重建已在事务外完成（或在全新库中本就不需要）；
+      // 这里只补 deleted_at 列（重建后的表已含，幂等）与索引
+      const tripCols = db.pragma('table_info(trips)') as { name: string }[]
+      if (!tripCols.some((c) => c.name === 'deleted_at')) {
+        db.exec('ALTER TABLE trips ADD COLUMN deleted_at INTEGER')
+      }
+      db.exec(
+        'CREATE UNIQUE INDEX IF NOT EXISTS uq_trips_live_folder ON trips(album_id, folder_name) WHERE deleted_at IS NULL',
+      )
+      db.exec('CREATE INDEX IF NOT EXISTS idx_trips_trashed ON trips(deleted_at) WHERE deleted_at IS NOT NULL')
+      db.exec('CREATE INDEX IF NOT EXISTS idx_photos_trashed ON photos(deleted_at) WHERE deleted_at IS NOT NULL')
+      db.pragma('user_version = 4')
     }
   })
   applyMigrations()
@@ -231,6 +275,7 @@ interface TripRow {
   cover_photo_id: string | null
   created_at: number | null
   updated_at: number | null
+  deleted_at: number | null
 }
 
 function rowToTrip(r: TripRow): Omit<TripDTO, 'tags' | 'photos'> {
@@ -271,13 +316,13 @@ export function insertTripRow(t: NewTripRecord): void {
 }
 
 export function getTripRow(id: string): Omit<TripDTO, 'tags' | 'photos'> | null {
-  const r = db.prepare('SELECT * FROM trips WHERE id = ?').get(id) as TripRow | undefined
+  const r = db.prepare('SELECT * FROM trips WHERE id = ? AND deleted_at IS NULL').get(id) as TripRow | undefined
   return r ? rowToTrip(r) : null
 }
 
 export function getTripIdByFolder(albumId: string, folderName: string): string | null {
   const r = db
-    .prepare('SELECT id FROM trips WHERE album_id = ? AND folder_name = ?')
+    .prepare('SELECT id FROM trips WHERE album_id = ? AND folder_name = ? AND deleted_at IS NULL')
     .get(albumId, folderName) as { id: string } | undefined
   return r?.id ?? null
 }
@@ -286,7 +331,7 @@ export function listTripRows(albumId: string): Omit<TripDTO, 'tags' | 'photos'>[
   return (
     db
       .prepare(
-        `SELECT * FROM trips WHERE album_id = ?
+        `SELECT * FROM trips WHERE album_id = ? AND deleted_at IS NULL
          ORDER BY CASE WHEN start_date IS NULL OR start_date = '' THEN 1 ELSE 0 END,
                   start_date DESC, created_at DESC`,
       )
@@ -382,9 +427,11 @@ export function allTags(): string[] {
       .prepare(
         `SELECT t.name FROM tags t
          LEFT JOIN trip_tags tt ON tt.tag_id = t.id
+         LEFT JOIN trips tr ON tr.id = tt.trip_id AND tr.deleted_at IS NULL
          LEFT JOIN photo_tags pt ON pt.tag_id = t.id
+         LEFT JOIN photos ph ON ph.id = pt.photo_id AND ph.deleted_at IS NULL
          GROUP BY t.id
-         ORDER BY (COUNT(DISTINCT tt.trip_id) + COUNT(DISTINCT pt.photo_id)) DESC, t.name`,
+         ORDER BY (COUNT(DISTINCT tr.id) + COUNT(DISTINCT ph.id)) DESC, t.name`,
       )
       .all() as { name: string }[]
   ).map((r) => r.name)
@@ -407,6 +454,7 @@ interface PhotoRow {
   favorite: number | null
   gps_lat: number | null
   gps_lon: number | null
+  deleted_at: number | null
 }
 
 function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean, tags: string[] = []): PhotoDTO {
@@ -435,7 +483,7 @@ function rowToPhoto(r: PhotoRow, albumId: string, isCover: boolean, tags: string
 export function getPhotoRow(id: string): (PhotoDTO & { albumId: string }) | null {
   const r = db
     .prepare(
-      'SELECT p.*, t.album_id AS album_id, t.cover_photo_id AS _cover FROM photos p JOIN trips t ON t.id = p.trip_id WHERE p.id = ?',
+      'SELECT p.*, t.album_id AS album_id, t.cover_photo_id AS _cover FROM photos p JOIN trips t ON t.id = p.trip_id WHERE p.id = ? AND p.deleted_at IS NULL',
     )
     .get(id) as (PhotoRow & { album_id: string; _cover: string | null }) | undefined
   if (!r) return null
@@ -446,7 +494,7 @@ export function getPhotoRow(id: string): (PhotoDTO & { albumId: string }) | null
 /** 大小写不敏感按文件名取照片 id */
 export function getPhotoIdByTripAndName(tripId: string, fileName: string): string | null {
   const r = db
-    .prepare('SELECT id FROM photos WHERE trip_id = ? AND lower(file_name) = lower(?)')
+    .prepare('SELECT id FROM photos WHERE trip_id = ? AND lower(file_name) = lower(?) AND deleted_at IS NULL')
     .get(tripId, fileName) as { id: string } | undefined
   return r?.id ?? null
 }
@@ -458,7 +506,7 @@ export function listPhotosOfTrip(tripId: string, albumId: string, coverPhotoId: 
       `SELECT pt.photo_id AS photoId, g.name AS name
        FROM photo_tags pt
        JOIN tags g ON g.id = pt.tag_id
-       WHERE pt.photo_id IN (SELECT id FROM photos WHERE trip_id = ?)
+       WHERE pt.photo_id IN (SELECT id FROM photos WHERE trip_id = ? AND deleted_at IS NULL)
        ORDER BY g.name`,
     )
     .all(tripId) as { photoId: string; name: string }[]
@@ -468,7 +516,7 @@ export function listPhotosOfTrip(tripId: string, albumId: string, coverPhotoId: 
     list.push(r.name)
     tagsByPhoto.set(r.photoId, list)
   }
-  return (db.prepare('SELECT * FROM photos WHERE trip_id = ? ORDER BY rowid').all(tripId) as PhotoRow[]).map(
+  return (db.prepare('SELECT * FROM photos WHERE trip_id = ? AND deleted_at IS NULL ORDER BY rowid').all(tripId) as PhotoRow[]).map(
     (r) => rowToPhoto(r, albumId, coverPhotoId === r.id, tagsByPhoto.get(r.id) ?? []),
   )
 }
@@ -500,7 +548,7 @@ export function listPhotoFilesOfTrip(
 ): { id: string; fileName: string; fileMtime: number | null }[] {
   return db
     .prepare(
-      'SELECT id, file_name AS fileName, file_mtime AS fileMtime FROM photos WHERE trip_id = ?',
+      'SELECT id, file_name AS fileName, file_mtime AS fileMtime FROM photos WHERE trip_id = ? AND deleted_at IS NULL',
     )
     .all(tripId) as {
     id: string
@@ -529,7 +577,7 @@ export function updatePhotoTakenAtOnly(id: string, takenAt: number): void {
 /** 旅行内最早拍摄时间（旅行开始日期推断用）；无照片返回 null */
 export function getEarliestTakenAtOfTrip(tripId: string): number | null {
   const r = db
-    .prepare('SELECT MIN(taken_at) AS min FROM photos WHERE trip_id = ? AND taken_at IS NOT NULL')
+    .prepare('SELECT MIN(taken_at) AS min FROM photos WHERE trip_id = ? AND taken_at IS NOT NULL AND deleted_at IS NULL')
     .get(tripId) as { min: number | null }
   return r.min
 }
@@ -553,7 +601,8 @@ export function listPhotosForExifBackfill(): {
   return db
     .prepare(
       `SELECT p.id, p.rel_path AS relPath, p.type, a.path AS albumPath
-       FROM photos p JOIN trips t ON t.id = p.trip_id JOIN albums a ON a.id = t.album_id`,
+       FROM photos p JOIN trips t ON t.id = p.trip_id JOIN albums a ON a.id = t.album_id
+       WHERE p.deleted_at IS NULL`,
     )
     .all() as { id: string; relPath: string; type: string; albumPath: string }[]
 }
@@ -568,7 +617,7 @@ export function listPhotosForGpsBackfill(): {
     .prepare(
       `SELECT p.id, p.rel_path AS relPath, a.path AS albumPath
        FROM photos p JOIN trips t ON t.id = p.trip_id JOIN albums a ON a.id = t.album_id
-       WHERE p.gps_lat IS NULL AND p.type = 'image'`,
+       WHERE p.gps_lat IS NULL AND p.type = 'image' AND p.deleted_at IS NULL`,
     )
     .all() as { id: string; relPath: string; albumPath: string }[]
 }
@@ -603,6 +652,13 @@ export function setPhotoCaption(id: string, caption: string): void {
   db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption, id)
 }
 
+/** 只填空图注：.settings.json 修复通道用，绝不覆盖已有/用户编辑过的图注 */
+export function fillPhotoCaptionIfEmpty(tripId: string, fileName: string, caption: string): void {
+  db.prepare(
+    "UPDATE photos SET caption = ? WHERE trip_id = ? AND lower(file_name) = lower(?) AND (caption IS NULL OR caption = '') AND deleted_at IS NULL",
+  ).run(caption, tripId, fileName)
+}
+
 export function setPhotoFavorite(id: string, favorite: boolean): void {
   db.prepare('UPDATE photos SET favorite = ? WHERE id = ?').run(favorite ? 1 : 0, id)
 }
@@ -620,7 +676,7 @@ export function listPendingThumbPhotos(albumId: string): (PhotoDTO & { albumId: 
     .prepare(
       `SELECT p.*, t.album_id AS album_id, t.cover_photo_id AS _cover
        FROM photos p JOIN trips t ON t.id = p.trip_id
-       WHERE t.album_id = ? AND p.thumb_status = 'pending'
+       WHERE t.album_id = ? AND p.thumb_status = 'pending' AND p.deleted_at IS NULL
        ORDER BY p.rowid`,
     )
     .all(albumId) as (PhotoRow & { album_id: string; _cover: string | null })[]
@@ -631,11 +687,174 @@ export function countPendingThumbs(albumId: string): number {
   const r = db
     .prepare(
       `SELECT COUNT(*) AS n FROM photos p JOIN trips t ON t.id = p.trip_id
-       WHERE t.album_id = ? AND p.thumb_status = 'pending'`,
+       WHERE t.album_id = ? AND p.thumb_status = 'pending' AND p.deleted_at IS NULL`,
     )
     .get(albumId) as { n: number }
   return r.n
 }
+
+// ---------- 回收站（软删除） ----------
+
+/** 按 id 取旅行行，含回收站中的（删除/恢复流程用，业务视图一律走 getTripRow）；deletedAt 供恢复流程区分时间戳 */
+export function getTripRowIncludingTrashed(
+  id: string,
+): (Omit<TripDTO, 'tags' | 'photos'> & { deletedAt: number | null }) | null {
+  const r = db.prepare('SELECT * FROM trips WHERE id = ?').get(id) as TripRow | undefined
+  return r ? { ...rowToTrip(r), deletedAt: r.deleted_at ?? null } : null
+}
+
+/** 按 id 取照片行，含回收站中的（恢复/彻底删除流程用）；业务视图一律走 getPhotoRow */
+export function getPhotoRowIncludingTrashed(
+  id: string,
+): (PhotoRow & { albumId: string }) | null {
+  const r = db
+    .prepare(
+      'SELECT p.*, t.album_id AS albumId FROM photos p JOIN trips t ON t.id = p.trip_id WHERE p.id = ?',
+    )
+    .get(id) as (PhotoRow & { albumId: string }) | undefined
+  return r ?? null
+}
+
+/** 文件名占用的旅行行（含回收站）：新建旅行/恢复旅行的重名判定用 */
+export function getAnyTripIdByFolder(albumId: string, folderName: string): string | null {
+  const r = db
+    .prepare('SELECT id FROM trips WHERE album_id = ? AND folder_name = ?')
+    .get(albumId, folderName) as { id: string } | undefined
+  return r?.id ?? null
+}
+
+/** 整个旅行（含其下全部未删除照片）标记进入回收站；deleted_at 取同一时间戳，恢复时凭它区分「随旅行删除」与「被单独删除」的照片 */
+export function markTripTrashed(tripId: string, ts: number): void {
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE trips SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').run(ts, tripId)
+    db.prepare('UPDATE photos SET deleted_at = ? WHERE trip_id = ? AND deleted_at IS NULL').run(ts, tripId)
+  })
+  tx()
+}
+
+export function markPhotoTrashed(photoId: string, ts: number): void {
+  db.prepare('UPDATE photos SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').run(ts, photoId)
+}
+
+/** 旅行出回收站：清自身与「随旅行一起删除」（时间戳相同）的照片；folder_name 同步为去重后的新名。返回随旅行复活的照片数 */
+export function restoreTripRows(tripId: string, trashTs: number, folderName: string): number {
+  let revived = 0
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE trips SET deleted_at = NULL, folder_name = ?, updated_at = ? WHERE id = ?').run(
+      folderName,
+      Date.now(),
+      tripId,
+    )
+    const r = db
+      .prepare('UPDATE photos SET deleted_at = NULL WHERE trip_id = ? AND deleted_at = ?')
+      .run(tripId, trashTs)
+    revived = r.changes
+    // rel_path 以 folder_name 为前缀：旅行改名时照片的相对路径跟着改
+    db.prepare("UPDATE photos SET rel_path = ? || '/' || file_name WHERE trip_id = ?").run(
+      folderName,
+      tripId,
+    )
+  })
+  tx()
+  return revived
+}
+
+/** 恢复一张被单独删除的照片（所属旅行已在业务视图中的场景） */
+export function restorePhotoRow(photoId: string): void {
+  db.prepare('UPDATE photos SET deleted_at = NULL WHERE id = ?').run(photoId)
+}
+
+/** 恢复时目标重名（同旅行内已被重新导入同名文件）→ 更新文件名与相对路径 */
+export function updatePhotoFileName(id: string, fileName: string, relPath: string): void {
+  db.prepare('UPDATE photos SET file_name = ?, rel_path = ? WHERE id = ?').run(fileName, relPath, id)
+}
+
+/** 恢复旅行时若目标文件夹名变化，需要回写（照片 rel_path 由 restoreTripRows 统一重算） */
+export function setTripFolderName(id: string, folderName: string): void {
+  db.prepare('UPDATE trips SET folder_name = ? WHERE id = ?').run(folderName, id)
+}
+
+/** 旅行下全部照片行（含回收站中的）：彻底删除时的文件/缩略图清理枚举用 */
+export function listPhotoRowsOfTripIncludingTrashed(tripId: string): PhotoRow[] {
+  return db.prepare('SELECT * FROM photos WHERE trip_id = ?').all(tripId) as PhotoRow[]
+}
+
+export function hardDeletePhotoRows(ids: string[]): void {
+  const tx = db.transaction((rowIds: string[]) => {
+    const stmt = db.prepare('DELETE FROM photos WHERE id = ?')
+    for (const id of rowIds) stmt.run(id)
+  })
+  tx(ids)
+}
+
+interface TrashedTripRow {
+  id: string
+  title: string
+  folder_name: string
+  album_id: string
+  album_name: string
+  cover_photo_id: string | null
+  deleted_at: number
+  photo_count: number
+}
+
+export function listTrashedTripRows(): TrashedTripRow[] {
+  return db
+    .prepare(
+      `SELECT tr.id, tr.title, tr.folder_name, tr.album_id AS album_id, a.name AS album_name,
+              tr.cover_photo_id, tr.deleted_at,
+              (SELECT COUNT(*) FROM photos p WHERE p.trip_id = tr.id AND p.deleted_at = tr.deleted_at) AS photo_count
+       FROM trips tr JOIN albums a ON a.id = tr.album_id
+       WHERE tr.deleted_at IS NOT NULL
+       ORDER BY tr.deleted_at DESC`,
+    )
+    .all() as TrashedTripRow[]
+}
+
+interface TrashedPhotoRow {
+  id: string
+  file_name: string
+  rel_path: string
+  type: string
+  thumb_status: string | null
+  trip_id: string
+  trip_title: string
+  trip_folder_name: string
+  trip_deleted_at: number | null
+  album_id: string
+  album_name: string
+  deleted_at: number
+}
+
+export function listTrashedPhotoRows(): TrashedPhotoRow[] {
+  return db
+    .prepare(
+      `SELECT p.id, p.file_name, p.rel_path, p.type, p.thumb_status, p.deleted_at,
+              tr.id AS trip_id, tr.title AS trip_title, tr.folder_name AS trip_folder_name,
+              tr.deleted_at AS trip_deleted_at,
+              a.id AS album_id, a.name AS album_name
+       FROM photos p
+       JOIN trips tr ON tr.id = p.trip_id
+       JOIN albums a ON a.id = tr.album_id
+       WHERE p.deleted_at IS NOT NULL
+         AND (tr.deleted_at IS NULL OR p.deleted_at != tr.deleted_at)
+       ORDER BY p.deleted_at DESC`,
+    )
+    .all() as TrashedPhotoRow[]
+}
+
+/** 回收站项目数（侧栏角标用）。与回收站列表同口径：随旅行删除的照片并入旅行项，不单独计数 */
+export function countTrashed(): number {
+  const t = db.prepare('SELECT COUNT(*) AS n FROM trips WHERE deleted_at IS NOT NULL').get() as { n: number }
+  const p = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM photos p JOIN trips tr ON tr.id = p.trip_id
+       WHERE p.deleted_at IS NOT NULL AND (tr.deleted_at IS NULL OR p.deleted_at != tr.deleted_at)`,
+    )
+    .get() as { n: number }
+  return t.n + p.n
+}
+
 
 // ---------- ⌘K 搜索 ----------
 
@@ -689,7 +908,7 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
               p.thumb_status AS thumbStatus, p.caption, tr.album_id AS albumId
        FROM photos p
        JOIN trips tr ON tr.id = p.trip_id
-       WHERE tr.album_id = ? AND p.caption LIKE ? ESCAPE '\\'
+       WHERE tr.album_id = ? AND p.deleted_at IS NULL AND p.caption LIKE ? ESCAPE '\\'
        ORDER BY p.rowid`,
     )
     .all(albumId, like) as (HitPhoto & { tripId: string; caption: string })[]
@@ -705,7 +924,7 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
        JOIN tags g ON g.id = pt.tag_id
        JOIN photos p ON p.id = pt.photo_id
        JOIN trips tr ON tr.id = p.trip_id
-       WHERE tr.album_id = ? AND g.name LIKE ? ESCAPE '\\'
+       WHERE tr.album_id = ? AND p.deleted_at IS NULL AND g.name LIKE ? ESCAPE '\\'
        ORDER BY p.rowid`,
     )
     .all(albumId, like) as (HitPhoto & { tripId: string; tagName: string })[]
@@ -717,7 +936,7 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
     if (!t.coverPhotoId || coverById.has(t.coverPhotoId)) continue
     const r = db
       .prepare(
-        'SELECT p.id, p.type, p.rel_path AS relPath, p.thumb_status AS thumbStatus, t.album_id AS albumId FROM photos p JOIN trips t ON t.id = p.trip_id WHERE p.id = ?',
+        'SELECT p.id, p.type, p.rel_path AS relPath, p.thumb_status AS thumbStatus, t.album_id AS albumId FROM photos p JOIN trips t ON t.id = p.trip_id WHERE p.id = ? AND p.deleted_at IS NULL',
       )
       .get(t.coverPhotoId) as HitPhoto | undefined
     if (r) coverById.set(t.coverPhotoId, r)
@@ -765,10 +984,16 @@ export function searchTripHits(albumId: string, rawQ: string): SearchHit[] {
 
 // ---------- stats ----------
 
-export function getStats(): { albums: number; trips: number; photos: number; storageBytes: number } {
+export function getStats(): {
+  albums: number
+  trips: number
+  photos: number
+  storageBytes: number
+  trash: number
+} {
   const a = db.prepare('SELECT COUNT(*) AS n FROM albums').get() as { n: number }
-  const t = db.prepare('SELECT COUNT(*) AS n FROM trips').get() as { n: number }
-  const p = db.prepare('SELECT COUNT(*) AS n FROM photos').get() as { n: number }
+  const t = db.prepare('SELECT COUNT(*) AS n FROM trips WHERE deleted_at IS NULL').get() as { n: number }
+  const p = db.prepare('SELECT COUNT(*) AS n FROM photos WHERE deleted_at IS NULL').get() as { n: number }
   // 存储占用：缩略图缓存 + 数据库文件
   let storageBytes = 0
   try {
@@ -780,5 +1005,5 @@ export function getStats(): { albums: number; trips: number; photos: number; sto
   } catch {
     // 忽略统计失败
   }
-  return { albums: a.n, trips: t.n, photos: p.n, storageBytes }
+  return { albums: a.n, trips: t.n, photos: p.n, storageBytes, trash: countTrashed() }
 }
