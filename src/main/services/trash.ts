@@ -28,6 +28,7 @@ import {
   PHOTOS_DIR,
   TRIPS_DIR,
   dedupeRestoreName,
+  restoreNameOccupied,
   trashedPhotoFileRelPath,
   trashedTripDirRelPath,
 } from './trash-plan'
@@ -209,10 +210,14 @@ async function restoreTrip(tripId: string): Promise<number> {
   if (!(await pathAccessible(album.path))) {
     throw new Error('相册目录当前不可访问，无法恢复')
   }
-  // 目标名避让：磁盘已存在同名文件夹，或记录（含回收站中的行）已占用同名
-  const folderName = dedupeRestoreName(
-    trip.folderName,
-    (n) => existsSync(join(album.path, n)) || !!getAnyTripIdByFolder(album.id, n),
+  // 目标名避让：磁盘已存在同名文件夹，或同名记录属于其他旅行（含回收站中的行；
+  // 自身记录豁免，否则每次恢复都会被误判重名）
+  const folderName = dedupeRestoreName(trip.folderName, (n) =>
+    restoreNameOccupied(
+      tripId,
+      existsSync(join(album.path, n)),
+      getAnyTripIdByFolder(album.id, n),
+    ),
   )
   const slotAbs = join(album.path, trashedTripDirRelPath(tripId))
   if (await pathAccessible(slotAbs)) {

@@ -7,6 +7,7 @@ import {
   trashedTripFileRelPath,
   trashedPhotoFileRelPath,
   dedupeRestoreName,
+  restoreNameOccupied,
 } from '../src/main/services/trash-plan.ts'
 
 test('旅行回收站槽位：以 tripId 为键（目录本体即文件夹）', () => {
@@ -55,4 +56,20 @@ test('dedupeRestoreName：恢复目标与回收站中的另一旅行同名也不
   })
   assert.equal(name, '大理 (2)')
   assert.equal(calls, 2)
+})
+
+test('restoreNameOccupied：同名记录是旅行自己 → 不算占用（否则每次恢复都被改名 X (2)）', () => {
+  // 回归：记录查询（getAnyTripIdByFolder）不排除回收站也不排除自己，
+  // 旅行自身行命中查询时必须豁免，原名无冲突应原样恢复
+  assert.equal(restoreNameOccupied('trip1', false, 'trip1'), false)
+  assert.equal(restoreNameOccupied('trip1', false, null), false)
+})
+
+test('restoreNameOccupied：同名记录属于其他旅行（含回收站中的行）→ 占用', () => {
+  assert.equal(restoreNameOccupied('trip1', false, 'trip2'), true)
+})
+
+test('restoreNameOccupied：磁盘已存在同名文件夹 → 占用（与记录归属无关）', () => {
+  assert.equal(restoreNameOccupied('trip1', true, null), true)
+  assert.equal(restoreNameOccupied('trip1', true, 'trip1'), true)
 })

@@ -46,3 +46,16 @@ export function dedupeRestoreName(base: string, occupied: (name: string) => bool
   while (occupied(`${base} (${i})`)) i++
   return `${base} (${i})`
 }
+
+/**
+ * 恢复目标名的单项占用判定：磁盘已存在，或同名记录属于**其他**旅行（含回收站中的行）。
+ * 记录查询（getAnyTripIdByFolder）不排除回收站、也不排除自己——同名其他旅行确实占名，
+ * 但被恢复旅行自身的记录必须豁免，否则每次恢复都会被误判成重名而改名「X (2)」。
+ */
+export function restoreNameOccupied(
+  selfTripId: string,
+  diskExists: boolean,
+  recordOwnerId: string | null,
+): boolean {
+  return diskExists || (recordOwnerId !== null && recordOwnerId !== selfTripId)
+}
