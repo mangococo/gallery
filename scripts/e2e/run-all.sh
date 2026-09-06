@@ -81,6 +81,13 @@ for f in "$STEPS_DIR"/*.json; do
     FAILED_LIST="$FAILED_LIST $name"
   else
     SHOTS=$(ls "$WORK/shots-$name" | wc -l | tr -d ' ')
+    # 截图为 0 说明应用根本没跑起来（如单实例锁被占导致秒退），不能算 PASS
+    if [ "$SHOTS" -eq 0 ]; then
+      echo "     FAIL（0 截图，应用未运行？日志: ${OUT}）"
+      FAIL=$((FAIL + 1))
+      FAILED_LIST="$FAILED_LIST $name"
+      continue
+    fi
     if [ "$name" = "07-export-journal" ]; then
       N_FILES=$(ls "$WORK/exports" | wc -l | tr -d ' ')
       if [ "$N_FILES" -lt 2 ]; then

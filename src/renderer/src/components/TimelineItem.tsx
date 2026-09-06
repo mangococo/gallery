@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Trip } from '../types'
 import PhotoStack from './PhotoStack'
 import { HeartIcon, TrashIcon, WarningIcon } from './icons'
+import { formatDotDate, parseLocalDate } from '@shared/dates'
 
 interface TimelineItemProps {
   trip: Trip
@@ -15,16 +16,10 @@ interface TimelineItemProps {
 
 const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavorite, onDelete, onContextMenu }) => {
   const missing = trip.status === 'missing'
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '——'
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return dateStr
-    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-  }
 
   const getDaysDiff = () => {
-    const start = new Date(trip.startDate)
-    const end = new Date(trip.endDate)
+    const start = parseLocalDate(trip.startDate)
+    const end = parseLocalDate(trip.endDate)
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return '?'
     const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
     return diff + 1
@@ -41,7 +36,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
       {/* 书脊 + 和纸胶带日期贴 */}
       <div className="flex flex-col items-center w-36 shrink-0 relative">
         <div className="washi-label px-3.5 py-1 text-sm whitespace-nowrap z-10 rounded-[3px]">
-          {formatDate(trip.startDate)}
+          {formatDotDate(trip.startDate)}
         </div>
       </div>
 

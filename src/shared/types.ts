@@ -125,6 +125,12 @@ export interface MovePhotosResult {
   targetTrip: TripDTO
 }
 
+/** photos:import 返回：成功入库的照片 + 失败文件清单（源被移走/无权限等，不中断整批） */
+export interface ImportPhotosResult {
+  photos: PhotoDTO[]
+  failed: { name: string; reason: string }[]
+}
+
 /** 手账导出格式：PDF（矢量可打印）或长图 PNG */
 export type JournalFormat = 'pdf' | 'png'
 
@@ -174,8 +180,8 @@ export interface GalleryApi {
   /** 全部已有标签（常用在前），标签输入联想用 */
   listTags(): Promise<string[]>
 
-  /** 复制文件进旅行目录并入库 */
-  importPhotos(tripId: string, paths: string[]): Promise<PhotoDTO[]>
+  /** 复制文件进旅行目录并入库（单个失败不中断整批，见 ImportPhotosResult.failed） */
+  importPhotos(tripId: string, paths: string[]): Promise<ImportPhotosResult>
   /** 移入废纸篓 */
   deletePhoto(photoId: string): Promise<void>
   setCaption(photoId: string, caption: string): Promise<void>

@@ -35,7 +35,7 @@ function WallMedia({ photo }: { photo: PhotoDTO }) {
   if (photo.type === 'video' && !src) {
     return (
       <div className="relative aspect-[4/3]">
-        <PlaceholderBackdrop />
+        <PlaceholderBackdrop failed={photo.thumbStatus === 'failed'} />
         <PlayBadge />
       </div>
     )
@@ -51,10 +51,12 @@ function WallMedia({ photo }: { photo: PhotoDTO }) {
   return <img src={src} alt="" className="w-full h-auto" loading="lazy" />
 }
 
-function PlaceholderBackdrop() {
+function PlaceholderBackdrop({ failed }: { failed: boolean }) {
   return (
     <div className="absolute inset-0 bg-surface-2 flex items-center justify-center">
-      <span className="font-display text-ink-3 text-xs">视频海报生成中…</span>
+      <span className="font-display text-ink-3 text-xs">
+        {failed ? '视频海报生成失败' : '视频海报生成中…'}
+      </span>
     </div>
   )
 }

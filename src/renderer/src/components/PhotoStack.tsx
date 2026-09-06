@@ -12,8 +12,8 @@ interface PhotoStackProps {
 function StackMedia({ photo, className }: { photo: PhotoDTO; className?: string }) {
   const src = displaySrc(photo)
   if (photo.type === 'video' && !src) {
-    // 视频缩略图未就绪：降级为元数据预览
-    return <video src={photo.mediaUrl} className={className} muted preload="metadata" />
+    // 视频缩略图未就绪：降级为元数据预览（#t 让 Chromium 定位到首帧，否则常渲染黑帧）
+    return <video src={`${photo.mediaUrl}#t=0.1`} className={className} muted preload="metadata" />
   }
   return <img src={src} alt="" className={className} loading="lazy" />
 }

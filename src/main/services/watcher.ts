@@ -9,10 +9,19 @@ let watchedAlbumId: string | null = null
 let debounceTimer: NodeJS.Timeout | null = null
 let scanning = false
 let rescanQueued = false
+/** watchAlbum 并发守卫：快速连续切换相册时，过期的附加请求直接放弃 */
+let watchSeq = 0
 
 export interface WatchHooks {
   progress(p: ScanProgress): void
   changed(albumId: string): void
+}
+
+/** 事件路径是否落在相册内的隐藏文件/隐藏目录里（.DS_Store、编辑器临时目录等，扫描本来就会跳过）。
+ * 只检查相册内的相对部分——相册根自身允许位于点开头的目录（如 ~/.gallery-demo）。 */
+function isHiddenPath(albumPath: string, path: string): boolean {
+  const rel = path.startsWith(albumPath) ? path.slice(albumPath.length) : path
+  return rel.split(/[\\/]/).some((seg) => seg.startsWith('.'))
 }
 
 /**
@@ -21,7 +30,9 @@ export interface WatchHooks {
  */
 export async function watchAlbum(albumId: string, hooks: WatchHooks): Promise<void> {
   if (watchedAlbumId === albumId && watcher) return
+  const seq = ++watchSeq
   await closeWatcher()
+  if (seq !== watchSeq) return // 已有更新的切换请求，本请求过期
   const album = getAlbumRow(albumId)
   if (!album) return
 
@@ -33,11 +44,13 @@ export async function watchAlbum(albumId: string, hooks: WatchHooks): Promise<vo
   })
 
   watcher.on('all', (event, path) => {
-    // 忽略隐藏文件（.DS_Store 等）
-    const base = path.split('/').pop() ?? ''
-    if (base.startsWith('.')) return
-    console.log(`[watcher] ${event}: ${base}`)
+    if (isHiddenPath(album.path, path)) return
+    console.log(`[watcher] ${event}: ${path.split(/[\\/]/).pop()}`)
     scheduleRescan(albumId, hooks)
+  })
+  // 外置卷拔出等场景 chokidar 会 emit error；不监听会以未捕获异常打断主进程
+  watcher.on('error', (err: unknown) => {
+    console.error('[watcher] 监听异常:', (err as Error)?.message ?? err)
   })
   console.log('[watcher] 已附加监听:', album.path)
 }

@@ -29,33 +29,42 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
     endDate: '',
     tags: [] as string[],
   });
-  const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
+  // 选中文件与预览一对一（视频无预览为 null）——此前两个独立数组在混选图片+视频时下标错位
+  const [items, setItems] = React.useState<{ id: number; file: File; url: string | null }[]>([]);
+  const itemIdRef = React.useRef(0);
   const [submitting, setSubmitting] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setSelectedFiles([...selectedFiles, ...files]);
-
-    // 生成预览
-    files.forEach((file) => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewUrls((prev) => [...prev, e.target?.result as string]);
-      };
-      reader.readAsDataURL(file);
+    const added = Array.from(e.target.files || []).map((file) => {
+      const item = { id: ++itemIdRef.current, file, url: null as string | null };
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          // 按 id 回填，与文件列表严格对齐
+          setItems((prev) =>
+            prev.map((it) =>
+              it.id === item.id ? { ...it, url: ev.target?.result as string } : it,
+            ),
+          );
+        };
+        reader.readAsDataURL(file);
+      }
+      return item;
     });
+    setItems((prev) => [...prev, ...added]);
   };
 
-  const removeFile = (index: number) => {
-    setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
-    setPreviewUrls(previewUrls.filter((_, i) => i !== index));
+  const removeItem = (id: number) => {
+    setItems((prev) => prev.filter((it) => it.id !== id));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
+      toast('结束日期不能早于开始日期', 'error');
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -68,9 +77,13 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
       });
 
       // 文件经主进程复制进旅行目录
-      const paths = selectedFiles.map((f) => api.getPathForFile(f));
+      const paths = items.map((it) => api.getPathForFile(it.file));
       if (paths.length > 0) {
-        await api.importPhotos(trip.id, paths);
+        const { failed } = await api.importPhotos(trip.id, paths);
+        if (failed.length > 0) {
+          const etc = failed.length > 1 ? ` 等 ${failed.length} 个` : '';
+          toast(`旅行已创建，但 ${failed[0].name}${etc}导入失败（${failed[0].reason}）`, 'info');
+        }
       }
 
       onSuccess();
@@ -153,6 +166,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                 <input
                   type="date"
                   required
+                  min={formData.startDate || undefined}
                   value={formData.endDate}
                   onChange={(e) =>
                     setFormData({ ...formData, endDate: e.target.value })
@@ -207,23 +221,30 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               <span className="font-medium">精彩瞬间</span>
             </div>
             <div className="flex flex-wrap gap-3">
-              {previewUrls.map((url, index) => (
+              {items.map((item) => (
                 <motion.div
-                  key={index}
+                  key={item.id}
                   initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
                   animate={{ opacity: 1, scale: 1, rotate: 0 }}
                   className="relative group"
                 >
                   <div className="w-28 h-28 bg-surface p-2 rounded-xl shadow-md transform hover:scale-105 hover:rotate-2 transition-all">
-                    <img
-                      src={url}
-                      alt=""
-                      className="w-full h-full object-cover rounded-lg"
-                    />
+                    {item.url ? (
+                      <img
+                        src={item.url}
+                        alt=""
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-lg bg-primary-soft flex flex-col items-center justify-center text-primary text-xs gap-1">
+                        <CameraIcon size={18} />
+                        <span>视频</span>
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeFile(index)}
+                    onClick={() => removeItem(item.id)}
                     className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:opacity-80 flex items-center justify-center"
                   >
                     <XIcon size={13} />

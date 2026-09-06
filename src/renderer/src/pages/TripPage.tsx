@@ -24,6 +24,7 @@ import {
   type PhotoMenuIcons,
 } from '../lib/context-menus'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
+import { dateToLocalStr, formatDotDate, parseLocalDate } from '@shared/dates'
 import {
   ArrowLeftIcon,
   HeartIcon,
@@ -88,16 +89,32 @@ const TripPage: React.FC = () => {
   /** 移动到旅行对话框的待移动清单（null 关闭） */
   const [moveTarget, setMoveTarget] = React.useState<Photo[] | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  /** 拖拽深度计数：dragenter/dragleave 在子元素边界会成对冒泡，凭单次 leave 判断会闪烁 */
+  const dragDepthRef = React.useRef(0)
+  /** getTrip 是否已返回：区分「加载中」与「旅行不存在」 */
+  const [tripLoaded, setTripLoaded] = React.useState(false)
 
   React.useEffect(() => {
+    // ⌘K 可在旅行页之间直接跳转（同一路由组件复用）：慢的旧请求回来会覆盖新旅行，
+    // 用取消标记丢弃过期响应
+    let cancelled = false
     const loadTrip = async () => {
-      const tripData = await api.getTrip(id!)
-      setTrip(tripData)
-      setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
+      try {
+        const tripData = await api.getTrip(id!)
+        if (cancelled) return
+        setTrip(tripData)
+        setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
+      } catch {
+        if (!cancelled) setTrip(null)
+      }
+      if (!cancelled) setTripLoaded(true)
     }
-    loadTrip()
+    void loadTrip()
     // 时间线右键「编辑旅行信息」直达编辑态
     if ((location.state as { edit?: boolean } | null)?.edit) setIsEditing(true)
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   const applyUpdate = async (updated: Trip) => {
@@ -109,11 +126,16 @@ const TripPage: React.FC = () => {
     if (!trip || paths.length === 0) return
     setIsUploading(true)
     try {
-      const newPhotos = await api.importPhotos(trip.id, paths)
+      const { photos: newPhotos, failed } = await api.importPhotos(trip.id, paths)
       if (editedTrip && newPhotos.length > 0) {
         await applyUpdate({ ...editedTrip, photos: [...editedTrip.photos, ...newPhotos] })
       }
-      toast(`已导入 ${newPhotos.length} 张照片`, 'success')
+      if (failed.length > 0) {
+        const etc = failed.length > 1 ? ` 等 ${failed.length} 个` : ''
+        toast(`已导入 ${newPhotos.length} 张；${failed[0].name}${etc}导入失败（${failed[0].reason}）`, 'info')
+      } else {
+        toast(`已导入 ${newPhotos.length} 张照片`, 'success')
+      }
       await refreshAll()
     } catch (error: any) {
       toast('导入照片失败: ' + error.message, 'error')
@@ -135,6 +157,7 @@ const TripPage: React.FC = () => {
   const handleDrop = async (event: React.DragEvent) => {
     event.preventDefault()
     event.stopPropagation()
+    dragDepthRef.current = 0
     setDragOver(false)
     const paths = Array.from(event.dataTransfer.files)
       .filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || hasMediaExt(f.name))
@@ -166,7 +189,12 @@ const TripPage: React.FC = () => {
 
   const handleSetCover = async (photoId: string) => {
     if (!editedTrip) return
-    await api.setCover(editedTrip.id, photoId)
+    try {
+      await api.setCover(editedTrip.id, photoId)
+    } catch (error: any) {
+      toast('设置封面失败: ' + (error?.message ?? error), 'error')
+      return
+    }
     await applyUpdate({ ...editedTrip, coverPhotoId: photoId })
     await refreshAll()
   }
@@ -195,7 +223,7 @@ const TripPage: React.FC = () => {
     setExporting(format)
     try {
       const path = await api.exportJournal(trip.id, format)
-      if (path) toast(`手账已导出：${path.split('/').pop()}`, 'success')
+      if (path) toast(`手账已导出：${path.split(/[\\/]/).pop()}`, 'success')
     } catch (error: any) {
       toast('导出失败: ' + (error?.message ?? error), 'error')
     }
@@ -456,7 +484,16 @@ const TripPage: React.FC = () => {
   }
 
   const handleSave = async () => {
-    if (editedTrip) {
+    if (!editedTrip) return
+    if (
+      editedTrip.startDate &&
+      editedTrip.endDate &&
+      editedTrip.endDate < editedTrip.startDate
+    ) {
+      toast('结束日期不能早于开始日期', 'error')
+      return
+    }
+    try {
       const saved = await api.updateTrip(editedTrip.id, {
         title: editedTrip.title,
         description: editedTrip.description,
@@ -467,6 +504,8 @@ const TripPage: React.FC = () => {
       if (saved) setTrip(saved)
       setIsEditing(false)
       await refreshAll()
+    } catch (error: any) {
+      toast('保存失败: ' + (error?.message ?? error), 'error')
     }
   }
 
@@ -475,17 +514,28 @@ const TripPage: React.FC = () => {
     setLightboxIndex(list.findIndex((p: Photo) => p.id === photo.id))
   }
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '——'
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return dateStr
-    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+  /** DatePicker 展示值：date-only 字符串按本地时区解析（UTC 解析会在西半球偏一天） */
+  const asDate = (s: string): Date | null => {
+    const d = parseLocalDate(s)
+    return isNaN(d.getTime()) ? null : d
   }
 
   if (!trip) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-ink-3">加载中…</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        {tripLoaded ? (
+          <>
+            <p className="text-ink-3 font-display text-lg">旅行不存在或已被删除</p>
+            <button
+              onClick={() => navigate('/')}
+              className="px-5 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
+            >
+              回到首页
+            </button>
+          </>
+        ) : (
+          <p className="text-ink-3">加载中…</p>
+        )}
       </div>
     )
   }
@@ -502,14 +552,22 @@ const TripPage: React.FC = () => {
   return (
     <div
       className="min-h-screen bg-background"
+      onDragEnter={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        dragDepthRef.current++
+        setDragOver(true)
+      }}
       onDragOver={(e) => {
         e.preventDefault()
         e.stopPropagation()
+        if (dragDepthRef.current === 0) dragDepthRef.current = 1
         setDragOver(true)
       }}
       onDragLeave={(e) => {
         e.stopPropagation()
-        setDragOver(false)
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+        if (dragDepthRef.current === 0) setDragOver(false)
       }}
       onDrop={handleDrop}
     >
@@ -641,12 +699,12 @@ const TripPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-2">开始日期</label>
                   <DatePicker
-                    selected={editedTrip?.startDate ? new Date(editedTrip.startDate) : null}
+                    selected={editedTrip?.startDate ? asDate(editedTrip.startDate) : null}
                     onChange={(date: Date | null) => {
                       if (editedTrip && date) {
                         setEditedTrip({
                           ...editedTrip,
-                          startDate: date.toISOString().split('T')[0],
+                          startDate: dateToLocalStr(date),
                         })
                       }
                     }}
@@ -658,12 +716,12 @@ const TripPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-2">结束日期</label>
                   <DatePicker
-                    selected={editedTrip?.endDate ? new Date(editedTrip.endDate) : null}
+                    selected={editedTrip?.endDate ? asDate(editedTrip.endDate) : null}
                     onChange={(date: Date | null) => {
                       if (editedTrip && date) {
                         setEditedTrip({
                           ...editedTrip,
-                          endDate: date.toISOString().split('T')[0],
+                          endDate: dateToLocalStr(date),
                         })
                       }
                     }}
@@ -709,7 +767,7 @@ const TripPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-sm text-ink-3 mb-4">
                 <span className="font-display">
-                  {formatDate(trip.startDate)} — {formatDate(trip.endDate)}
+                  {formatDotDate(trip.startDate)} — {formatDotDate(trip.endDate)}
                 </span>
                 <span>·</span>
                 <span>{trip.photos.length} 张照片</span>

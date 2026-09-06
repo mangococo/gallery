@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
+import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { normalizeTagNames } from '../shared/tags'
 import { collectMatches, compareHits, rankOf } from '../shared/search'
@@ -102,32 +103,37 @@ function migrate(): void {
   const version = db.pragma('user_version', { simple: true }) as number
   db.exec(BASELINE_SQL)
 
-  if (version < 1) {
-    const cols = db.pragma('table_info(photos)') as { name: string }[]
-    if (!cols.some((c) => c.name === 'file_mtime')) {
-      db.exec('ALTER TABLE photos ADD COLUMN file_mtime INTEGER')
-      // 存量 taken_at 一直是文件 mtime，直接平移给 file_mtime 承担对账职责
-      db.exec('UPDATE photos SET file_mtime = taken_at WHERE file_mtime IS NULL')
+  // 事务保证 ALTER/回填/版本号同生共死（中途断电不会留下「列已加但版本未写」的中间态；
+  // 各步本身也按列存在性幂等，双保险）
+  const applyMigrations = db.transaction(() => {
+    if (version < 1) {
+      const cols = db.pragma('table_info(photos)') as { name: string }[]
+      if (!cols.some((c) => c.name === 'file_mtime')) {
+        db.exec('ALTER TABLE photos ADD COLUMN file_mtime INTEGER')
+        // 存量 taken_at 一直是文件 mtime，直接平移给 file_mtime 承担对账职责
+        db.exec('UPDATE photos SET file_mtime = taken_at WHERE file_mtime IS NULL')
+      }
+      db.pragma('user_version = 1')
     }
-    db.pragma('user_version = 1')
-  }
 
-  if (version < 2) {
-    const cols = db.pragma('table_info(photos)') as { name: string }[]
-    if (!cols.some((c) => c.name === 'favorite')) {
-      db.exec('ALTER TABLE photos ADD COLUMN favorite INTEGER DEFAULT 0')
+    if (version < 2) {
+      const cols = db.pragma('table_info(photos)') as { name: string }[]
+      if (!cols.some((c) => c.name === 'favorite')) {
+        db.exec('ALTER TABLE photos ADD COLUMN favorite INTEGER DEFAULT 0')
+      }
+      db.pragma('user_version = 2')
     }
-    db.pragma('user_version = 2')
-  }
 
-  if (version < 3) {
-    const cols = db.pragma('table_info(photos)') as { name: string }[]
-    if (!cols.some((c) => c.name === 'gps_lat')) {
-      db.exec('ALTER TABLE photos ADD COLUMN gps_lat REAL')
-      db.exec('ALTER TABLE photos ADD COLUMN gps_lon REAL')
+    if (version < 3) {
+      const cols = db.pragma('table_info(photos)') as { name: string }[]
+      if (!cols.some((c) => c.name === 'gps_lat')) {
+        db.exec('ALTER TABLE photos ADD COLUMN gps_lat REAL')
+        db.exec('ALTER TABLE photos ADD COLUMN gps_lon REAL')
+      }
+      db.pragma('user_version = 3')
     }
-    db.pragma('user_version = 3')
-  }
+  })
+  applyMigrations()
 }
 
 // ---------- settings ----------
@@ -766,7 +772,6 @@ export function getStats(): { albums: number; trips: number; photos: number; sto
   // 存储占用：缩略图缓存 + 数据库文件
   let storageBytes = 0
   try {
-    const { statSync, readdirSync } = require('fs') as typeof import('fs')
     storageBytes = statSync(join(app.getPath('userData'), 'gallery.db')).size
     const thumbDir = join(app.getPath('userData'), 'thumbnails')
     for (const f of readdirSync(thumbDir)) {

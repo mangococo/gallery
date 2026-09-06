@@ -188,8 +188,13 @@ const HomePage: React.FC = () => {
       .filter((p) => !!p)
     if (paths.length === 0) return
     try {
-      const imported = await api.importPhotos(target.id, paths)
-      toast(`已导入 ${imported.length} 张到「${target.title}」`, 'success')
+      const { photos: imported, failed } = await api.importPhotos(target.id, paths)
+      if (failed.length > 0) {
+        const etc = failed.length > 1 ? ` 等 ${failed.length} 个` : ''
+        toast(`已导入 ${imported.length} 张到「${target.title}」；${failed[0].name}${etc}导入失败（${failed[0].reason}）`, 'info')
+      } else {
+        toast(`已导入 ${imported.length} 张到「${target.title}」`, 'success')
+      }
       await refreshAll()
     } catch (error: any) {
       toast('导入照片失败: ' + error.message, 'error')
@@ -272,19 +277,30 @@ const HomePage: React.FC = () => {
 
           {trips.length === 0 && (
             <div className="text-center py-24">
-              <p className="text-ink-3 mb-2 font-display text-2xl">翻开第一页旅行手账</p>
-              <p className="text-ink-3 text-sm mb-8">
-                {activeAlbum
-                  ? '点右上角「新旅行」，或把照片拖进窗口'
-                  : '先在左侧「相册」点击加号注册照片目录'}
-              </p>
-              {activeAlbum && (
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
-                >
-                  创建第一次旅行
-                </button>
+              {activeAlbum?.status === 'missing' ? (
+                <>
+                  <p className="text-ink-3 mb-2 font-display text-2xl">相册目录暂不可访问</p>
+                  <p className="text-ink-3 text-sm mb-8">
+                    外置磁盘未连接，或目录被移走了。连上后在左侧点击该相册即可重新定位。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-ink-3 mb-2 font-display text-2xl">翻开第一页旅行手账</p>
+                  <p className="text-ink-3 text-sm mb-8">
+                    {activeAlbum
+                      ? '点右上角「新旅行」，或把照片拖进窗口'
+                      : '先在左侧「相册」点击加号注册照片目录'}
+                  </p>
+                  {activeAlbum && (
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
+                    >
+                      创建第一次旅行
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}

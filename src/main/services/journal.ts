@@ -3,6 +3,7 @@ import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import sharp from 'sharp'
 import type { JournalFormat, PhotoDTO, TripDTO } from '../../shared/types'
+import { formatDotDate, formatDotFromMs } from '../../shared/dates'
 import { getTagsOfTrip, getTripRow, listPhotosOfTrip } from '../db'
 
 /**
@@ -25,13 +26,6 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function fmtDate(d: string): string {
-  if (!d) return '——'
-  const date = new Date(d)
-  if (isNaN(date.getTime())) return d
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-}
-
 function photoSrc(p: PhotoDTO): string {
   if (p.thumbStatus === 'ready' && p.thumbUrl) return p.thumbUrl
   return p.mediaUrl
@@ -49,7 +43,7 @@ function buildJournalHtml(trip: TripDTO): string {
         <img src="${photoSrc(p)}" alt="">
         <figcaption>
           ${p.caption ? `<span class="cap">${esc(p.caption)}</span>` : '<span class="cap dim">未写图注</span>'}
-          ${p.takenAt != null ? `<span class="taken">${esc(fmtDate(new Date(p.takenAt).toISOString().slice(0, 10)))}</span>` : ''}
+          ${p.takenAt != null ? `<span class="taken">${esc(formatDotFromMs(p.takenAt))}</span>` : ''}
         </figcaption>
       </figure>`,
     )
@@ -156,7 +150,7 @@ function buildJournalHtml(trip: TripDTO): string {
 <body>
   <div class="page">
     <section class="cover">
-      <span class="washi display">${esc(fmtDate(trip.startDate))} — ${esc(fmtDate(trip.endDate))}</span>
+      <span class="washi display">${esc(formatDotDate(trip.startDate))} — ${esc(formatDotDate(trip.endDate))}</span>
       <h1 class="title display">${esc(trip.title)}</h1>
       <div class="dates display">旅 行 手 账</div>
       ${trip.description ? `<p class="desc">${esc(trip.description)}</p>` : ''}
@@ -189,12 +183,14 @@ function buildJournalHtml(trip: TripDTO): string {
 </html>`
 }
 
-/** 等待窗口内全部图片加载完成（15s 兜底超时） */
+/** 等待窗口内全部图片加载完成（15s 兜底超时）。
+ * 只等 !complete：加载失败（文件缺失等）的图片 complete=true 而 naturalWidth=0，
+ * 若一并计入会永远等不到、白耗满 15s 超时——失败图由模板自身呈现空底即可。 */
 async function waitImagesLoaded(win: BrowserWindow): Promise<void> {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
     const pending = await win.webContents.executeJavaScript(
-      `[...document.images].filter(i => !i.complete || i.naturalWidth === 0).length`,
+      `[...document.images].filter(i => !i.complete).length`,
     )
     if (pending === 0) return
     await new Promise((r) => setTimeout(r, 120))
@@ -222,14 +218,16 @@ export async function exportJournal(
   }
 
   const ext = format === 'pdf' ? 'pdf' : 'png'
+  // 标题是自由文本：含 / 等字符时 join 会凭空多出不存在的目录层级，写入必失败
+  const safeTitle = trip.title.replace(/[/\\:*?"<>|]/g, '_').trim() || '未命名旅行'
   let target = savePath
   if (!target) {
     if (process.env.GALLERY_E2E === '1' && process.env.GALLERY_E2E_EXPORT_DIR) {
-      target = join(process.env.GALLERY_E2E_EXPORT_DIR, `${trip.title}.${ext}`)
+      target = join(process.env.GALLERY_E2E_EXPORT_DIR, `${safeTitle}.${ext}`)
     } else {
       const res = await dialog.showSaveDialog(parentWin, {
         title: '导出手账',
-        defaultPath: join(app.getPath('downloads'), `${trip.title}.${ext}`),
+        defaultPath: join(app.getPath('downloads'), `${safeTitle}.${ext}`),
         filters: [
           format === 'pdf' ? { name: 'PDF', extensions: ['pdf'] } : { name: 'PNG 长图', extensions: ['png'] },
         ],
