@@ -3,15 +3,18 @@ import { join } from 'path'
 import { nanoid } from 'nanoid'
 import type { ScanProgress } from '../../shared/types'
 import {
+  fillPhotoCaptionIfEmpty,
   getAlbumRow,
   getEarliestTakenAtOfTrip,
   getPhotoIdByTripAndName,
+  getTagsOfTrip,
   getTripIdByFolder,
   getTripRow,
   insertPhotoRow,
   insertTripRow,
   listPhotoFilesOfTrip,
   setAlbumStatus,
+  getSetting,
   setSetting,
   setTagsOfTrip,
   deletePhotoRow,
@@ -106,6 +109,11 @@ export async function scanAlbum(albumId: string, hooks: ScanHooks): Promise<Scan
   const total = dirs.length
   push({ albumId, albumName: album.name, phase: 'scan', done: 0, total })
 
+  // 一次性修复通道（per 相册，settings 打点）：老版本升级/历史级联事故后，
+  // 从 .settings.json 把标签/图注补回「空着」的旅行与照片。只填空，绝不覆盖用户编辑；
+  // 扫描成功收尾后写入标记，此后不再运行（用户清空标签/图注不会被反复填回）
+  const repairLegacy = getSetting(`repair_v4_${albumId}`) == null
+
   for (const folderName of dirs) {
     const dirPath = join(album.path, folderName)
     const settings = await readLegacySettings(dirPath)
@@ -121,7 +129,7 @@ export async function scanAlbum(albumId: string, hooks: ScanHooks): Promise<Scan
     // 决策 15：含媒体或已有 .settings.json 才收录
     if (fileNames.length === 0 && !settings) continue
 
-    await reconcileTrip(albumId, folderName, dirPath, settings, fileNames, counters, (label) =>
+    await reconcileTrip(albumId, folderName, dirPath, settings, fileNames, repairLegacy, counters, (label) =>
       push({ albumId, albumName: album.name, phase: 'scan', done: counters.trips, total, label }),
     )
   }
@@ -129,6 +137,7 @@ export async function scanAlbum(albumId: string, hooks: ScanHooks): Promise<Scan
   push({ albumId, albumName: album.name, phase: 'scan', done: total, total })
 
   setSetting(`last_scan_${albumId}`, String(Date.now()))
+  if (repairLegacy) setSetting(`repair_v4_${albumId}`, String(Date.now()))
   hooks.finished(albumId, counters)
   return counters
 }
@@ -144,6 +153,7 @@ async function reconcileTrip(
   dirPath: string,
   settings: LegacySettings | null,
   fileNames: string[],
+  repairLegacy: boolean,
   counters: ScanCounters,
   tick: (label: string) => void,
 ): Promise<void> {
@@ -168,6 +178,9 @@ async function reconcileTrip(
     tripId = id
     isNew = true
     counters.trips++
+  } else if (repairLegacy && settings?.tags?.length && getTagsOfTrip(tripId).length === 0) {
+    // 一次性修复：旅行没有任何标签而 .settings.json 带标签 → 导入（不覆盖用户编辑）
+    setTagsOfTrip(tripId, settings.tags)
   }
 
   // 磁盘文件表（key: 小写文件名 → 原名 + mtime）
@@ -229,8 +242,17 @@ async function reconcileTrip(
   // 清理磁盘上已不存在的记录
   for (const { id } of plan.removed) deletePhotoRow(id)
 
-  // 新旅行默认第一张为封面
-  if (isNew && diskFiles.size > 0) {
+  // 一次性修复：图注只填空（重导入/历史事故后从 .settings.json 补回）
+  if (repairLegacy && captionMap.size > 0) {
+    for (const [key, caption] of captionMap) {
+      if (caption) fillPhotoCaptionIfEmpty(tripId, key, caption)
+    }
+  }
+
+  // 封面自愈：新旅行默认第一张；已有旅行封面缺失（历史级联事故/FK 置空）也补第一张。
+  // 只填空，绝不覆盖用户已设封面
+  const tripNow = getTripRow(tripId)
+  if (tripNow && !tripNow.coverPhotoId && diskFiles.size > 0) {
     const firstName = diskFiles.values().next().value!.name
     const coverId = getPhotoIdByTripAndName(tripId, firstName)
     if (coverId) updateTripRow(tripId, { coverPhotoId: coverId })

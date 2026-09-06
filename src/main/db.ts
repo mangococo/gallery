@@ -113,6 +113,21 @@ function migrate(): void {
   const version = db.pragma('user_version', { simple: true }) as number
   db.exec(BASELINE_SQL)
 
+  // v4 的 trips 表重建必须发生在任何事务之外（见 rebuildTripsWithoutTableUnique 的
+  // inTransaction 守卫）。幂等：重建过一次后建表 SQL 不再含表级 UNIQUE，不会重跑；
+  // 重建成功但后续步骤失败时，version 仍未写入，下次启动会跳过重建继续补齐其余步骤
+  if (version < 4) {
+    const createSql =
+      (
+        db
+          .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'trips'")
+          .get() as { sql: string } | undefined
+      )?.sql ?? ''
+    if (needsTripsRebuild(createSql)) {
+      rebuildTripsWithoutTableUnique(db)
+    }
+  }
+
   // 事务保证 ALTER/回填/版本号同生共死（中途断电不会留下「列已加但版本未写」的中间态；
   // 各步本身也按列存在性幂等，双保险）
   const applyMigrations = db.transaction(() => {
@@ -148,17 +163,8 @@ function migrate(): void {
       if (!photoCols.some((c) => c.name === 'deleted_at')) {
         db.exec('ALTER TABLE photos ADD COLUMN deleted_at INTEGER')
       }
-      // trips 的表级 UNIQUE 挡住「同名旅行在回收站」的语义，需整表重建才能去掉；
-      // 全新库的基线表已无该约束，靠建表 SQL 探测区分
-      const createSql =
-        (
-          db
-            .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'trips'")
-            .get() as { sql: string } | undefined
-        )?.sql ?? ''
-      if (needsTripsRebuild(createSql)) {
-        rebuildTripsWithoutTableUnique(db)
-      }
+      // trips 的表级 UNIQUE 重建已在事务外完成（或在全新库中本就不需要）；
+      // 这里只补 deleted_at 列（重建后的表已含，幂等）与索引
       const tripCols = db.pragma('table_info(trips)') as { name: string }[]
       if (!tripCols.some((c) => c.name === 'deleted_at')) {
         db.exec('ALTER TABLE trips ADD COLUMN deleted_at INTEGER')
@@ -644,6 +650,13 @@ export function updatePhotoLocations(records: PhotoLocationUpdate[]): void {
 
 export function setPhotoCaption(id: string, caption: string): void {
   db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption, id)
+}
+
+/** 只填空图注：.settings.json 修复通道用，绝不覆盖已有/用户编辑过的图注 */
+export function fillPhotoCaptionIfEmpty(tripId: string, fileName: string, caption: string): void {
+  db.prepare(
+    "UPDATE photos SET caption = ? WHERE trip_id = ? AND lower(file_name) = lower(?) AND (caption IS NULL OR caption = '') AND deleted_at IS NULL",
+  ).run(caption, tripId, fileName)
 }
 
 export function setPhotoFavorite(id: string, favorite: boolean): void {

@@ -134,3 +134,24 @@ test('v4 重建后：旅行删除级联照片、照片删除置空封面引用�
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get('t1') as any
   assert.equal(trip.cover_photo_id, null)
 })
+
+test('v4 重建保留 photos 与 trip_tags 标签链接（FK 数据在场）', () => {
+  const db = makeV3Db()
+  db.prepare("INSERT INTO tags (name) VALUES ('红叶')").run()
+  db.prepare("INSERT INTO trip_tags (trip_id, tag_id) VALUES ('t1', 1)").run()
+  rebuildTripsWithoutTableUnique(db)
+  const link = db
+    .prepare('SELECT t.name FROM trip_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.trip_id = ?')
+    .all('t1') as { name: string }[]
+  assert.equal(link.length, 1)
+  assert.equal(link[0].name, '红叶')
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM photos').get() as { n: number }).n, 1)
+})
+
+test('重建拒绝在事务内执行（防级联清库硬守卫，守卫先于任何副作用）', () => {
+  const db = makeV3Db()
+  assert.throws(() => db.transaction(() => rebuildTripsWithoutTableUnique(db))(), /事务外/)
+  // 抛出后库仍是旧 schema 且数据完好，可正常重建
+  rebuildTripsWithoutTableUnique(db)
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM trips').get() as { n: number }).n, 1)
+})

@@ -37,6 +37,13 @@ export function needsTripsRebuild(createSql: string): boolean {
  * 数据拷贝本身在事务里，断电不留半张表。
  */
 export function rebuildTripsWithoutTableUnique(db: Database.Database): void {
+  // 硬守卫：PRAGMA foreign_keys 在事务（含 SAVEPOINT）内是 no-op，若在此状态下
+  // DROP TABLE trips，隐式 DELETE 会带着 ON DELETE CASCADE 清空 photos 与
+  // trip_tags/photo_tags（封面随 ON DELETE SET NULL 置空）——数据全灭。
+  // 必须在任何事务之外调用。
+  if (db.inTransaction) {
+    throw new Error('trips 表重建必须在事务外执行（PRAGMA foreign_keys 在事务内不生效，会导致级联清库）')
+  }
   db.pragma('foreign_keys = OFF')
   try {
     const tx = db.transaction(() => {
