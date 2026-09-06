@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Trip, PhotoDTO } from '../types'
 import { displaySrc } from '../lib/api'
+import { coverFirstOrder } from '../lib/media'
 
 interface PhotoStackProps {
   trip: Trip
@@ -20,7 +21,8 @@ function StackMedia({ photo, className }: { photo: PhotoDTO; className?: string 
 
 const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
   const [isHovered, setIsHovered] = React.useState(false)
-  const displayPhotos = trip.photos.slice(0, 9)
+  // 封面优先：「设为封面」在时间线卡片上立即生效（此前堆叠永远按导入顺序，封面只改徽标）
+  const displayPhotos = coverFirstOrder(trip.photos, trip.coverPhotoId).slice(0, 9)
 
   return (
     <div
@@ -30,7 +32,7 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
       onClick={onClick}
     >
       {!isHovered ? (
-        // 堆叠状态：拍立得白边斜叠
+        // 堆叠状态：拍立得白边斜叠，封面在最上层
         <div className="relative w-full h-full">
           {displayPhotos.length === 0 && (
             <div className="polaroid-frame absolute inset-0 flex items-center justify-center">
@@ -41,7 +43,8 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
             <motion.div
               key={`stacked-${photo.id}`}
               className="polaroid-frame absolute inset-0"
-              style={{ zIndex: index }}
+              // 封面（index 0）z 最高盖在最上；旋转/位移保持斜叠节奏
+              style={{ zIndex: 4 - index }}
               animate={{
                 rotate: index * 3 - 4.5,
                 x: index * 8,

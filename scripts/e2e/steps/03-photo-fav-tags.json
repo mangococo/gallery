@@ -3,7 +3,7 @@
     "name": "_meta",
     "wait": 1,
     "log": true,
-    "script": "return \"照片级收藏与标签（亮色）：照片墙悬停收藏 → 灯箱收藏 → 标签编辑弹层保存 → 信息栏标签 chips → 只看收藏/标签过滤 → ⌘K 照片标签徽章。前置：gen-demo 演示数据。\""
+    "script": "return \"照片级收藏与标签（亮色）：照片墙悬停收藏 → 灯箱收藏 → 标签编辑弹层保存 → 信息栏标签 chips → 只看收藏/标签过滤 → ⌘K 照片标签徽章 → 设为封面（徽标迁移 + 时间线堆叠首图立即生效）。前置：gen-demo 演示数据。\""
   },
   {
     "name": "01-home",
@@ -111,5 +111,22 @@
     "name": "23-search-phototag",
     "wait": 600,
     "script": "const badge = [...document.querySelectorAll('span')].find(s => s.textContent.trim() === '照片标签'); if (!badge) throw new Error('未命中照片标签徽章'); 'ok'"
+  },
+  {
+    "name": "24-esc-cmdk",
+    "wait": 700,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 300)); 'ok'"
+  },
+  {
+    "name": "25-set-cover",
+    "wait": 700,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img')); if (cards.length < 2) throw new Error('照片墙卡片不足'); const target = cards[1]; if (target.textContent.includes('封面')) throw new Error('目标卡已是封面，用例前提不成立'); const star = target.querySelector('button[title=\"设为封面\"]'); if (!star) throw new Error('设为封面按钮缺失'); star.click(); await new Promise(r => setTimeout(r, 900)); if (!target.textContent.includes('封面')) throw new Error('封面徽标未迁移到目标卡'); const firstCard = cards[0]; if (firstCard.textContent.includes('封面')) throw new Error('原封面卡仍带徽标'); window.__coverSrc = target.querySelector('img').src; 'cover-set: ' + window.__coverSrc",
+    "log": true
+  },
+  {
+    "name": "26-back-timeline",
+    "wait": 1600,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '返回'); if (!b) throw new Error('返回按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 800)); const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); const card = h.closest('.relative.flex'); if (!card) throw new Error('旅行卡片缺失'); const first = card.querySelector('.polaroid-frame img'); if (!first) throw new Error('时间线堆叠首图缺失'); if (first.src !== window.__coverSrc) throw new Error('时间线堆叠首图未跟随封面: ' + first.src + ' vs ' + window.__coverSrc); 'timeline-cover-ok'",
+    "log": true
   }
 ]
