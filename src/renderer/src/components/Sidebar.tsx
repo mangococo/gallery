@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { Album } from '../types'
 import { confirmDialog, toast } from './feedback'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import { SearchIcon, TrashIcon } from './icons'
 import ThemeSwitch from './ThemeSwitch'
 import SettingsModal from './SettingsModal'
@@ -51,6 +52,20 @@ const Sidebar: React.FC = () => {
     return () => window.removeEventListener('mousedown', onDown)
   }, [menuAlbum])
 
+  // 重命名弹层：Esc 关闭
+  const renameEscRef = useEscClaim(!!renamingAlbum)
+  React.useEffect(() => {
+    if (!renamingAlbum) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(renameEscRef.current)) return
+      setRenamingAlbum(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renamingAlbum, renameEscRef])
+
   const allTags = React.useMemo(() => {
     const s = new Set<string>()
     trips.forEach((t) => t.tags.forEach((tag) => s.add(tag)))
@@ -78,11 +93,16 @@ const Sidebar: React.FC = () => {
   }
 
   const handleRelocate = async (album: Album) => {
-    const updated = await api.relocateAlbum(album.id)
-    setMenuAlbum(null)
-    if (updated) {
-      await reloadAlbums()
-      await refreshAll()
+    try {
+      const updated = await api.relocateAlbum(album.id)
+      setMenuAlbum(null)
+      if (updated) {
+        await reloadAlbums()
+        await refreshAll()
+      }
+    } catch (err: any) {
+      setMenuAlbum(null)
+      toast('重新定位失败: ' + (err?.message ?? err), 'error')
     }
   }
 
@@ -103,14 +123,25 @@ const Sidebar: React.FC = () => {
 
   const handleRescan = async (album: Album) => {
     setMenuAlbum(null)
-    await api.rescanAlbum(album.id)
-    await refreshAll()
+    try {
+      await api.rescanAlbum(album.id)
+      await refreshAll()
+    } catch (err: any) {
+      toast('重新扫描失败: ' + (err?.message ?? err), 'error')
+    }
   }
 
   const handleRenameSubmit = async () => {
-    if (renamingAlbum && renameText.trim()) {
-      await api.renameAlbum(renamingAlbum.id, renameText.trim())
-      await reloadAlbums()
+    const target = renamingAlbum
+    const name = renameText.trim()
+    if (!target) return
+    if (name) {
+      try {
+        await api.renameAlbum(target.id, name)
+        await reloadAlbums()
+      } catch (err: any) {
+        toast('重命名失败: ' + (err?.message ?? err), 'error')
+      }
     }
     setRenamingAlbum(null)
   }

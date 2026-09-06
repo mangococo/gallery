@@ -6,6 +6,7 @@ import { useApp } from '../lib/store'
 import { hasMediaExt } from '../lib/media'
 import { Trip } from '../types'
 import { toast } from './feedback'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import { CameraIcon, PlusIcon } from './icons'
 
 /**
@@ -79,6 +80,18 @@ const ImportPickerModal: React.FC<ImportPickerModalProps> = ({ paths, onClose })
   const [creating, setCreating] = React.useState(false)
   const [newTitle, setNewTitle] = React.useState('')
   const [busy, setBusy] = React.useState(false)
+  // Esc 关闭（导入进行中不关）
+  const escRef = useEscClaim()
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(escRef.current)) return
+      if (!busy) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, escRef])
 
   const list = trips.filter(
     (t) => !query || t.title.toLowerCase().includes(query.toLowerCase()),
