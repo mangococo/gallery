@@ -322,9 +322,16 @@ const Sidebar: React.FC = () => {
 
       {/* 底部固定：回收站 / 进度 / 统计 / 主题 / 设置 */}
       <footer className="shrink-0 border-t border-line px-4 py-3 space-y-2.5">
-        {/* 回收站：仿访达「废纸篓」的底部常驻位，与上方内容导航自然隔开 */}
+        {/* 回收站：仿访达「废纸篓」的底部常驻位。开关语义与收藏/标签一致——
+            第一次进入，再点一次退出到进入前的路由 */}
         <button
-          onClick={() => navigate('/trash')}
+          onClick={() => {
+            if (location.pathname === '/trash') {
+              navigate((location.state as { from?: string } | null)?.from ?? '/')
+            } else {
+              navigate('/trash', { state: { from: location.pathname } })
+            }
+          }}
           data-testid="sidebar-trash"
           className={`w-full flex items-center gap-2 px-3 py-2 -mx-1 rounded-lg text-sm transition-colors ${
             location.pathname === '/trash'

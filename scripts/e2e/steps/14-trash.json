@@ -91,6 +91,21 @@
   {
     "name": "16-album-click-back",
     "wait": 400,
-    "script": "document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); const albumBtn = [...document.querySelectorAll('aside nav li button')].find(b => b.textContent.includes('album')); if (!albumBtn) throw new Error('找不到相册按钮'); albumBtn.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('点相册未回到主页'); 'album-back-ok'"
+    "script": "document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); const albumBtn = document.querySelector('aside nav li button'); if (!albumBtn) throw new Error('找不到相册按钮'); albumBtn.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('点相册未回到主页'); 'album-back-ok'"
+  },
+  {
+    "name": "17-re-click-trash-toggles-exit",
+    "wait": 400,
+    "script": "document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); if (!location.hash.includes('/trash')) throw new Error('第一次点击未进入回收站'); document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('再次点击回收站未退出'); 're-click-toggle-ok'"
+  },
+  {
+    "name": "18-esc-exits-trash",
+    "wait": 400,
+    "script": "document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); if (!location.hash.includes('/trash')) throw new Error('未进入回收站'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 600)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('ESC 未退出回收站'); 'esc-exit-ok'"
+  },
+  {
+    "name": "19-esc-from-trip-returns-to-trip",
+    "wait": 400,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); await new Promise(r => setTimeout(r, 1000)); const tripHash = location.hash; if (!tripHash.includes('/trip/')) throw new Error('未进入旅行页: ' + tripHash); document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 600)); if (location.hash !== tripHash) throw new Error('ESC 未回到进入前的旅行页: ' + location.hash); if (!document.querySelector('[data-testid=photo-wall]')) throw new Error('旅行页内容缺失'); 'esc-from-trip-ok'"
   }
 ]

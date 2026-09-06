@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
@@ -52,6 +52,8 @@ function formatDeletedAt(ms: number): string {
 
 const TrashPage: React.FC = () => {
   const navigate = useNavigate()
+  // 进入回收站前的路由（侧栏/返回/ESC 的退出目标），由 navigate('/trash', { state }) 传入
+  const location = useLocation()
   const { refreshAll } = useApp()
   const [items, setItems] = React.useState<TrashItem[] | null>(null)
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
@@ -84,18 +86,24 @@ const TrashPage: React.FC = () => {
 
   const exitSelection = () => setSelectedIds(new Set())
 
-  // ESC 退出多选
+  // ESC 分层退出：有多选先退多选；否则退出回收站、回到进入前的路由。
+  // 右键菜单/确认弹窗打开时不抢（它们有自己的 ESC 处理）
   React.useEffect(() => {
-    if (selectedIds.size === 0) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      exitSelection()
+      if (document.querySelector('.ctx-menu-panel') || document.querySelector('[data-testid=confirm-backdrop]')) return
+      if (selectedIds.size > 0) {
+        setSelectedIds(new Set())
+        return
+      }
+      navigate((location.state as { from?: string } | null)?.from ?? '/')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedIds.size])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds.size, location.state, location.key])
 
   /** 恢复（单选/批量共用）：成功后重拉列表 + 全局刷新（侧栏角标/时间线） */
   const handleRestore = async (targets: TrashItem[]) => {
@@ -188,7 +196,8 @@ const TrashPage: React.FC = () => {
       <header className="drag-region sticky top-0 z-10 h-12 bg-background/85 backdrop-blur-sm border-b border-line flex items-center justify-between pl-5 pr-5">
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate((location.state as { from?: string } | null)?.from ?? '/')}
+            title="返回上一个页面（Esc）"
             className="no-drag flex items-center gap-1.5 text-sm text-ink-2 hover:text-primary transition-colors"
           >
             <ArrowLeftIcon size={16} />
