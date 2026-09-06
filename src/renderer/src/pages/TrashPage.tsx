@@ -11,6 +11,7 @@ import {
 } from '../lib/context-menus'
 import { confirmDialog, toast } from '../components/feedback'
 import {
+  ArrowLeftIcon,
   CheckCircleIcon,
   FilmIcon,
   ImageIcon,
@@ -184,8 +185,15 @@ const TrashPage: React.FC = () => {
   return (
     <div className="min-h-screen" onContextMenu={handleWallContextMenu}>
       {/* 顶栏（可拖拽） */}
-      <header className="drag-region sticky top-0 z-10 h-12 bg-background/85 backdrop-blur-sm border-b border-line flex items-center justify-between pl-8 pr-5">
-        <div className="flex items-baseline gap-3 min-w-0">
+      <header className="drag-region sticky top-0 z-10 h-12 bg-background/85 backdrop-blur-sm border-b border-line flex items-center justify-between pl-5 pr-5">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => navigate('/')}
+            className="no-drag flex items-center gap-1.5 text-sm text-ink-2 hover:text-primary transition-colors"
+          >
+            <ArrowLeftIcon size={16} />
+            <span>返回</span>
+          </button>
           <h1 className="font-display font-bold text-xl text-ink">回收站</h1>
           <span className="text-xs text-ink-3 whitespace-nowrap">
             {items === null ? '读取中…' : items.length > 0 ? `${items.length} 项已删除` : ''}

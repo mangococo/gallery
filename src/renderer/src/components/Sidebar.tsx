@@ -119,9 +119,15 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col border-r border-line bg-surface">
-      {/* 顶部留出红绿灯区域 */}
+      {/* 顶部留出红绿灯区域；「画廊」题名可点击回主页（回收站/旅行页的通用返航入口） */}
       <div className="drag-region h-12 shrink-0 flex items-end pl-20 pr-3 pb-1">
-        <span className="font-display font-bold text-xl text-primary tracking-wide">画廊</span>
+        <button
+          onClick={() => navigate('/')}
+          title="回到主页"
+          className="no-drag font-display font-bold text-xl text-primary tracking-wide hover:opacity-80 transition-opacity"
+        >
+          画廊
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto scroll-slim px-3 pb-3 space-y-5">
@@ -181,6 +187,8 @@ const Sidebar: React.FC = () => {
                         void handleRelocate(album)
                       } else {
                         void setActiveAlbum(album.id)
+                        // 点相册 = 看这个相册的主视图：从回收站/旅行页回来
+                        if (location.pathname !== '/') navigate('/')
                       }
                     }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-left transition-colors ${

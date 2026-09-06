@@ -77,5 +77,20 @@
     "name": "13-empty-trash-shot",
     "wait": 600,
     "script": "const refresh = [...document.querySelectorAll('button')].find(b => b.title === '刷新'); if (refresh) { refresh.click(); await new Promise(r => setTimeout(r, 900)); } const grid = document.querySelector('[data-testid=trash-grid]'); if (grid) throw new Error('回收站应为空态'); if (!document.body.textContent.includes('回收站是空的')) throw new Error('空态文案缺失'); 'empty-ok'"
+  },
+  {
+    "name": "14-back-button-returns-home",
+    "wait": 500,
+    "script": "const back = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '返回'); if (!back) throw new Error('回收站页没有返回按钮'); back.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('返回按钮未回到主页'); 'back-btn-ok'"
+  },
+  {
+    "name": "15-brand-title-back",
+    "wait": 400,
+    "script": "document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); if (!document.body.textContent.includes('回收站是空的')) throw new Error('未进入回收站页'); const brand = document.querySelector('button[title=回到主页]'); if (!brand) throw new Error('侧栏画廊题名不可点击'); brand.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('点画廊题名未回到主页'); 'brand-back-ok'"
+  },
+  {
+    "name": "16-album-click-back",
+    "wait": 400,
+    "script": "document.querySelector('[data-testid=sidebar-trash]').click(); await new Promise(r => setTimeout(r, 600)); const albumBtn = [...document.querySelectorAll('aside nav li button')].find(b => b.textContent.includes('album')); if (!albumBtn) throw new Error('找不到相册按钮'); albumBtn.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=home-view-timeline]')) throw new Error('点相册未回到主页'); 'album-back-ok'"
   }
 ]
