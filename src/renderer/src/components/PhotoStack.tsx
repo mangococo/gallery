@@ -32,6 +32,11 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
       {!isHovered ? (
         // 堆叠状态：拍立得白边斜叠
         <div className="relative w-full h-full">
+          {displayPhotos.length === 0 && (
+            <div className="polaroid-frame absolute inset-0 flex items-center justify-center">
+              <span className="font-display text-xs text-ink-3">还没有照片</span>
+            </div>
+          )}
           {displayPhotos.slice(0, 4).map((photo, index) => (
             <motion.div
               key={`stacked-${photo.id}`}
@@ -58,6 +63,11 @@ const PhotoStack: React.FC<PhotoStackProps> = ({ trip, onClick }) => {
       ) : (
         // 散开状态
         <div className="grid grid-cols-3 gap-1.5 w-full h-full">
+          {displayPhotos.length === 0 && (
+            <div className="col-span-3 flex items-center justify-center rounded-md bg-surface border border-dashed border-line">
+              <span className="font-display text-xs text-ink-3">还没有照片</span>
+            </div>
+          )}
           {displayPhotos.map((photo, index) => (
             <motion.div
               key={`spread-${photo.id}`}
