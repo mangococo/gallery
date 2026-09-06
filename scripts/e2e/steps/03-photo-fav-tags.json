@@ -44,7 +44,7 @@
   {
     "name": "09-open-tag-editor",
     "wait": 700,
-    "script": "const b = document.querySelector('button[title=\"编辑标签\"]'); if (!b) throw new Error('编辑标签按钮缺失'); b.click(); 'ok'"
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); await new Promise(r => setTimeout(r, 400)); const b = document.querySelector('button[title=\"编辑标签\"]'); if (!b) throw new Error('信息面板编辑标签按钮缺失'); b.click(); 'ok'"
   },
   {
     "name": "10-tag-editor",

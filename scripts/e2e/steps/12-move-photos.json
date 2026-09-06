@@ -1,0 +1,98 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"移动到旅行链路：单张照片右键移动到已有旅行（京都） → 视频右键移动 → 多选 2 张经工具条移动 → 移动对话框内新建旅行一气呵成 → 首页时间线断言新旅行与计数。前置：gen-demo 演示数据（大理旅行含 2 个视频样张）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-open-dali",
+    "wait": 2200,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大理')); if (!h) throw new Error('找不到大理'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-dali-wall",
+    "wait": 1500,
+    "script": "const el = [...document.querySelectorAll('main')].length; const text = document.querySelector('main').textContent; const m = text.match(/(\\d+) 张照片/); if (!m) throw new Error('照片计数文本缺失'); return 'dali-count=' + m[1]"
+  },
+  {
+    "name": "04-photo-move-menu",
+    "wait": 500,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img')); if (cards.length < 3) throw new Error('照片不足'); cards[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const item = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('移动到旅行')); if (!item) throw new Error('移动菜单项缺失'); item.click(); await new Promise(r => setTimeout(r, 300)); if (!document.querySelector('[data-testid=move-dialog]')) throw new Error('移动对话框未打开'); 'dialog-open'"
+  },
+  {
+    "name": "05-move-dialog",
+    "wait": 500
+  },
+  {
+    "name": "06-pick-kyoto-and-move",
+    "wait": 1600,
+    "script": "const dlg = document.querySelector('[data-testid=move-dialog]'); const row = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('京都') && !b.disabled); if (!row) throw new Error('京都目标行缺失'); row.click(); await new Promise(r => setTimeout(r, 200)); const go = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('移动 1')); if (!go) throw new Error('移动按钮缺失'); go.click(); await new Promise(r => setTimeout(r, 1200)); if (document.querySelector('[data-testid=move-dialog]')) throw new Error('对话框未关闭'); if (!document.body.textContent.includes('已移动 1 项到')) throw new Error('成功 toast 缺失'); 'moved'"
+  },
+  {
+    "name": "07-count-decreased",
+    "wait": 700,
+    "script": "const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (!m) throw new Error('计数缺失'); if (Number(m[1]) !== 7) throw new Error('移动后计数应为 7（6图+2视频-1），实际 ' + m[1]); 'count-ok'"
+  },
+  {
+    "name": "08-video-move-menu",
+    "wait": 500,
+    "script": "const videoCard = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.textContent.includes('视频海报生成中') || el.querySelector('.border-l-primary')); if (!videoCard) throw new Error('视频卡片缺失'); videoCard.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel.textContent.includes('删除视频')) throw new Error('视频菜单文案不对'); const item = [...panel.querySelectorAll('[role=menuitem]')].find(el => el.textContent.includes('移动到旅行')); item.click(); await new Promise(r => setTimeout(r, 300)); const dlg = document.querySelector('[data-testid=move-dialog]'); if (!dlg) throw new Error('对话框未打开'); const row = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('冰岛') && !b.disabled); if (!row) throw new Error('冰岛目标行缺失'); row.click(); await new Promise(r => setTimeout(r, 200)); const go = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('移动 1')); if (!go) throw new Error('移动按钮缺失'); go.click(); await new Promise(r => setTimeout(r, 1200)); 'video-moved'"
+  },
+  {
+    "name": "09-count-6",
+    "wait": 700,
+    "script": "const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (Number(m[1]) !== 6) throw new Error('视频移动后计数应为 6，实际 ' + m[1]); 'count-ok'"
+  },
+  {
+    "name": "10-multiselect-two",
+    "wait": 600,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img')); if (cards.length < 3) throw new Error('照片不足'); cards[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const sel = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('选择多张')); sel.click(); await new Promise(r => setTimeout(r, 200)); cards[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); await new Promise(r => setTimeout(r, 250)); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar || !bar.textContent.includes('已选 2 张')) throw new Error('多选失败'); 'selected'"
+  },
+  {
+    "name": "11-selection-bar-shot",
+    "wait": 400
+  },
+  {
+    "name": "12-bar-move",
+    "wait": 500,
+    "script": "const bar = document.querySelector('[data-testid=selection-bar]'); const mv = [...bar.querySelectorAll('button')].find(b => b.textContent.trim() === '移动'); if (!mv) throw new Error('工具条移动按钮缺失'); mv.click(); await new Promise(r => setTimeout(r, 300)); if (!document.querySelector('[data-testid=move-dialog]')) throw new Error('移动对话框未打开'); 'bar-move-open'"
+  },
+  {
+    "name": "13-create-new-trip",
+    "wait": 500,
+    "script": "const dlg = document.querySelector('[data-testid=move-dialog]'); const create = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('新建旅行')); if (!create) throw new Error('新建旅行按钮缺失'); create.click(); await new Promise(r => setTimeout(r, 300)); 'creating'"
+  },
+  {
+    "name": "14-new-trip-form",
+    "wait": 400
+  },
+  {
+    "name": "15-submit-new-trip",
+    "wait": 1800,
+    "script": "const dlg = document.querySelector('[data-testid=move-dialog]'); const inp = dlg.querySelector('input[placeholder^=\"给新旅行起个名字\"]'); if (!inp) throw new Error('标题输入缺失'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(inp, '移动测试之旅'); inp.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 200)); const go = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('创建并移入 2')); if (!go) throw new Error('创建并移入按钮缺失'); go.click(); await new Promise(r => setTimeout(r, 1500)); if (document.querySelector('[data-testid=move-dialog]')) throw new Error('对话框未关闭'); if (!document.body.textContent.includes('已移动 2 项到「移动测试之旅」')) throw new Error('新建+移动 toast 缺失'); 'created-moved'"
+  },
+  {
+    "name": "16-count-4",
+    "wait": 600,
+    "script": "const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (Number(m[1]) !== 4) throw new Error('批量移动后计数应为 4，实际 ' + m[1]); 'count-ok'"
+  },
+  {
+    "name": "17-back-home",
+    "wait": 900,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '返回'); b.click(); await new Promise(r => setTimeout(r, 800)); if (!document.body.textContent.includes('移动测试之旅')) throw new Error('时间线未见新旅行'); 'home-has-new-trip'"
+  },
+  {
+    "name": "18-open-new-trip",
+    "wait": 1400,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('移动测试之旅')); if (!h) throw new Error('新旅行卡片缺失'); h.click(); await new Promise(r => setTimeout(r, 600)); const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (Number(m[1]) !== 2) throw new Error('新旅行应有 2 张，实际 ' + m[1]); 'new-trip-ok'"
+  },
+  {
+    "name": "19-new-trip-photos",
+    "wait": 600
+  }
+]

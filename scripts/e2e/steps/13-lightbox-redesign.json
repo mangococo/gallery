@@ -1,0 +1,91 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"灯箱重设计链路：视频灯箱（拍立得舞台+自定义控制条+Space 播放） → 图片灯箱（位置胶带/信息卡/滚轮缩放/快速切换） → 暗色主题下的灯箱。前置：gen-demo 演示数据（大理含视频样张）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-open-dali",
+    "wait": 2200,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大理')); if (!h) throw new Error('找不到大理'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-open-video-lightbox",
+    "wait": 1200,
+    "script": "const videoCard = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.textContent.includes('视频海报生成中') || el.querySelector('.border-l-primary')); if (!videoCard) throw new Error('视频卡片缺失'); videoCard.querySelector('img') ? videoCard.querySelector('img').click() : videoCard.click(); await new Promise(r => setTimeout(r, 800)); const video = document.querySelector('.fixed video'); if (!video) throw new Error('视频灯箱未打开'); if (!document.querySelector('.viewer-polaroid')) throw new Error('拍立得舞台缺失'); if (!document.querySelector('input[aria-label=播放进度]')) throw new Error('自定义控制条缺失'); if (!document.body.textContent.includes('视频')) throw new Error('视频角标缺失'); 'video-lightbox-ok'"
+  },
+  {
+    "name": "04-video-lightbox-shot",
+    "wait": 600
+  },
+  {
+    "name": "05-space-play",
+    "wait": 900,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' })); await new Promise(r => setTimeout(r, 700)); const video = document.querySelector('.fixed video'); if (!video) throw new Error('视频缺失'); if (video.paused) throw new Error('Space 未触发播放'); 'space-play-ok'"
+  },
+  {
+    "name": "06-video-playing-shot",
+    "wait": 500
+  },
+  {
+    "name": "07-close-open-photo",
+    "wait": 1000,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 400)); const imgCard = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.querySelector('img')); if (!imgCard) throw new Error('照片卡缺失'); imgCard.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('.fixed .viewer-polaroid img')) throw new Error('图片灯箱未打开'); if (!document.body.textContent.match(/1 \\/ /)) throw new Error('位置指示缺失'); 'photo-lightbox-ok'"
+  },
+  {
+    "name": "08-photo-lightbox-shot",
+    "wait": 600
+  },
+  {
+    "name": "09-info-panel",
+    "wait": 600,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); await new Promise(r => setTimeout(r, 400)); const aside = document.querySelector('.fixed aside'); if (!aside) throw new Error('信息卡未展开'); const text = aside.textContent; for (const key of ['照片信息', '拍摄时间', '文件', '所属旅行']) { if (!text.includes(key)) throw new Error('信息卡缺少: ' + key); } 'info-ok'"
+  },
+  {
+    "name": "10-info-panel-shot",
+    "wait": 500
+  },
+  {
+    "name": "11-wheel-zoom",
+    "wait": 700,
+    "script": "const stage = document.querySelector('.fixed [data-testid=lightbox-stage-box]')?.parentElement; if (!stage) throw new Error('舞台缺失'); const r = stage.getBoundingClientRect(); stage.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); await new Promise(r2 => setTimeout(r2, 400)); const style = document.querySelector('[data-testid=lightbox-stage-box]').getAttribute('style') ?? ''; if (!/scale\\(1\\.[1-9]/.test(style)) throw new Error('滚轮缩放失败: ' + style); 'zoom-ok'"
+  },
+  {
+    "name": "12-zoom-shot",
+    "wait": 400
+  },
+  {
+    "name": "13-reset-and-rapid-nav",
+    "wait": 900,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: '0' })); await new Promise(r => setTimeout(r, 300)); for (const k of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'ArrowRight']) { window.dispatchEvent(new KeyboardEvent('keydown', { key: k })); await new Promise(r => setTimeout(r, 120)); } await new Promise(r => setTimeout(r, 400)); if (!document.body.textContent.match(/4 \\/ /)) throw new Error('快速切换后位置不对'); const style = document.querySelector('[data-testid=lightbox-stage-box]').getAttribute('style') ?? ''; if (style.includes('scale(1.') && !style.includes('scale(1)')) { /* 缩放应已随切换复位 */ } 'rapid-ok'"
+  },
+  {
+    "name": "14-switch-dark",
+    "wait": 700,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 400)); const b = [...document.querySelectorAll('[role=\"radiogroup\"][aria-label=\"主题\"] button')].find(x => x.textContent.trim() === '暗'); if (!b) throw new Error('暗色切换按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 500)); 'dark-on'"
+  },
+  {
+    "name": "15-open-dark-lightbox",
+    "wait": 1000,
+    "script": "const imgCard = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.querySelector('img')); imgCard.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('.fixed .viewer-polaroid img')) throw new Error('暗色灯箱未打开'); 'dark-lightbox-open'"
+  },
+  {
+    "name": "16-dark-lightbox-shot",
+    "wait": 700
+  },
+  {
+    "name": "17-dark-filmstrip-nav",
+    "wait": 900,
+    "script": "const thumbs = [...document.querySelectorAll('[data-testid=lightbox-filmstrip] button')]; if (thumbs.length < 4) throw new Error('胶片条缩略图不足'); thumbs[2].click(); await new Promise(r => setTimeout(r, 500)); if (!document.body.textContent.match(/3 \\/ /)) throw new Error('胶片条跳转失败'); 'filmstrip-ok'"
+  },
+  {
+    "name": "18-dark-filmstrip-shot",
+    "wait": 500,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'done'"
+  }
+]

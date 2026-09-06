@@ -10,7 +10,7 @@
  */
 import sharp from 'sharp'
 import piexif from 'piexifjs'
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
 import Database from 'better-sqlite3'
@@ -468,6 +468,11 @@ const LARGE_COUNT = Number.parseInt(process.env.GALLERY_DEMO_LARGE || '', 10) ||
 
 // ————————————————— 执行 —————————————————
 
+// 幂等：清掉上次运行残留（含 e2e 手工实验创建的旅行目录与旧库文件）
+rmSync(ALBUM, { recursive: true, force: true })
+rmSync(join(USERDATA, 'gallery.db'), { force: true })
+rmSync(join(USERDATA, 'gallery.db-wal'), { force: true })
+rmSync(join(USERDATA, 'gallery.db-shm'), { force: true })
 mkdirSync(ALBUM, { recursive: true })
 mkdirSync(USERDATA, { recursive: true })
 
@@ -612,6 +617,49 @@ if (process.platform === 'darwin' && existsSync('/usr/bin/sips')) {
     }
   }
   writeFileSync(join(dir, '.settings.json'), JSON.stringify(settings, null, 2))
+}
+
+// 2.7 视频样张（右键「移动到旅行」与灯箱视频链路验收用）：ffmpeg lavfi 生成 2 个 3s 测试视频
+// （应用内视频海报由隐藏窗口截帧生成，不依赖 ffmpeg；这里只在造数阶段用它）
+{
+  const FFMPEG = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find((p) =>
+    existsSync(p),
+  )
+  if (FFMPEG) {
+    const dir = join(ALBUM, 'dali-erhai-2026')
+    const settings = JSON.parse(readFileSync(join(dir, '.settings.json'), 'utf8'))
+    const vids = [
+      { name: 'VID_0001.mp4', label: '环海西路骑行片段' },
+      { name: 'VID_0002.mp4', label: '洱海边的三秒钟' },
+    ]
+    for (const v of vids) {
+      const res = spawnSync(
+        FFMPEG,
+        [
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'testsrc2=size=1280x720:rate=24:duration=3',
+          '-pix_fmt',
+          'yuv420p',
+          '-movflags',
+          '+faststart',
+          join(dir, v.name),
+        ],
+        { stdio: 'ignore' },
+      )
+      if (res.status === 0 && existsSync(join(dir, v.name))) {
+        settings.photoCaptions[v.name] = v.label
+        console.log(`${v.name} ✓ (ffmpeg lavfi)`)
+      } else {
+        console.log(`${v.name} ✗ ffmpeg 生成失败`)
+      }
+    }
+    writeFileSync(join(dir, '.settings.json'), JSON.stringify(settings, null, 2))
+  } else {
+    console.log('视频样张跳过（未找到 ffmpeg）')
+  }
 }
 
 // 3. 预置演示 userData：schema 与 src/main/db.ts migrate() 保持一致 + 浅色主题/窗口尺寸

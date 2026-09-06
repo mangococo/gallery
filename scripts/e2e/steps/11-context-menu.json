@@ -1,0 +1,93 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"右键上下文菜单链路（亮色）：照片单张菜单 → 选择多张 → ⌘点多选 → 批量菜单 → ESC → 空白区菜单 → 首页旅行卡片菜单。前置：gen-demo 演示数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-open-kyoto",
+    "wait": 2000,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-wall",
+    "wait": 1000
+  },
+  {
+    "name": "04-photo-menu",
+    "wait": 500,
+    "script": "const card = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.querySelector('img')); if (!card) throw new Error('照片卡缺失'); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('右键菜单未出现'); const text = panel.textContent; for (const key of ['打开查看', '编辑图注', '加入收藏', '移动到旅行…', '在 Finder 中显示', '复制文件路径', '选择多张', '删除照片']) { if (!text.includes(key)) throw new Error('菜单缺少: ' + key); } if (!/设为旅行封面|已设为封面/.test(text)) throw new Error('封面项缺失'); 'menu-ok'"
+  },
+  {
+    "name": "05-photo-menu-shot",
+    "wait": 400
+  },
+  {
+    "name": "06-menu-esc-close",
+    "wait": 400,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 200)); if (document.querySelector('.ctx-menu-panel')) throw new Error('ESC 未关闭菜单'); 'esc-ok'"
+  },
+  {
+    "name": "07-enter-select",
+    "wait": 500,
+    "script": "const card = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.querySelector('img')); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const item = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('选择多张')); if (!item) throw new Error('选择多张缺失'); item.click(); await new Promise(r => setTimeout(r, 250)); 'select-entered'"
+  },
+  {
+    "name": "08-selection-bar",
+    "wait": 400,
+    "script": "const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('多选工具条缺失'); if (!bar.textContent.includes('已选 1 张')) throw new Error('计数不对: ' + bar.textContent); 'bar-ok'"
+  },
+  {
+    "name": "09-cmd-click-second",
+    "wait": 500,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img')); if (cards.length < 2) throw new Error('照片不足'); cards[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); await new Promise(r => setTimeout(r, 250)); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar || !bar.textContent.includes('已选 2 张')) throw new Error('⌘点多选失败: ' + (bar?.textContent ?? '无工具条')); 'multi-ok'"
+  },
+  {
+    "name": "10-batch-menu",
+    "wait": 500,
+    "script": "const card = [...document.querySelectorAll('[data-testid=photo-wall] > div')].find(el => el.querySelector('img')); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('批量菜单未出现'); const text = panel.textContent; if (!text.includes('已选择 2 项')) throw new Error('批量计数头缺失: ' + text); if (!text.includes('移动到旅行…')) throw new Error('批量移动缺失'); if (!text.includes('删除 2 项')) throw new Error('批量删除缺失'); if (text.includes('设为旅行封面')) throw new Error('批量菜单不应包含单张专属项'); 'batch-ok'"
+  },
+  {
+    "name": "11-batch-menu-shot",
+    "wait": 400
+  },
+  {
+    "name": "12-exit-select",
+    "wait": 400,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 250)); if (document.querySelector('[data-testid=selection-bar]')) throw new Error('ESC 未退出多选'); 'exit-ok'"
+  },
+  {
+    "name": "13-empty-area-menu",
+    "wait": 500,
+    "script": "const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('照片墙容器缺失'); wall.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 500, clientY: 560 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('空白区菜单未出现'); const text = panel.textContent; for (const key of ['添加照片', '重新扫描相册', '刷新']) { if (!text.includes(key)) throw new Error('空白区菜单缺少: ' + key); } 'empty-ok'"
+  },
+  {
+    "name": "14-empty-menu-shot",
+    "wait": 400,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'closed'"
+  },
+  {
+    "name": "15-back-home",
+    "wait": 700,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '返回'); if (!b) throw new Error('返回按钮缺失'); b.click(); 'ok'"
+  },
+  {
+    "name": "16-trip-menu",
+    "wait": 700,
+    "script": "const item = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); const card = item?.closest('.relative.flex'); if (!card) throw new Error('旅行卡片缺失'); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 500, clientY: 320 })); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('旅行菜单未出现'); const text = panel.textContent; for (const key of ['打开旅行', '编辑旅行信息', '导入照片到这次旅行', '重新扫描相册', '删除旅行']) { if (!text.includes(key)) throw new Error('旅行菜单缺少: ' + key); } if (!/收藏旅行|取消收藏/.test(text)) throw new Error('收藏项缺失'); 'trip-menu-ok'"
+  },
+  {
+    "name": "17-trip-menu-shot",
+    "wait": 400
+  },
+  {
+    "name": "18-close",
+    "wait": 300,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'done'"
+  }
+]
