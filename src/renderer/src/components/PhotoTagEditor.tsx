@@ -5,6 +5,7 @@ import { api, displaySrc } from '../lib/api'
 import { Photo } from '../types'
 import { toast } from './feedback'
 import TagInput from './TagInput'
+import { useEscClaim, isEscTop } from '../lib/esc'
 
 interface PhotoTagEditorProps {
   photo: Photo
@@ -16,6 +17,20 @@ interface PhotoTagEditorProps {
 const PhotoTagEditor: React.FC<PhotoTagEditorProps> = ({ photo, onClose, onSaved }) => {
   const [tags, setTags] = React.useState<string[]>(photo.tags ?? [])
   const [saving, setSaving] = React.useState(false)
+  // 叠在灯箱上时认领更高的 Esc 处理权：取消编辑不连带关灯箱。
+  // TagInput 下拉开着时会在输入框层消费 Esc（只关下拉），此处只处理其余情况
+  const escRef = useEscClaim()
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(escRef.current)) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escRef])
 
   const save = async () => {
     if (saving) return

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
+import { useEscClaim } from '../lib/esc'
 import type { SearchHit, SearchMatchIn } from '../types'
 import { CameraIcon, SearchIcon } from './icons'
 
@@ -48,6 +49,8 @@ const CommandPalette: React.FC = () => {
   const [active, setActive] = React.useState(0)
   const listRef = React.useRef<HTMLDivElement>(null)
   const searchSeq = React.useRef(0)
+  // 面板打开期间认领 Esc 处理权：底层（灯箱/多选态）的 Esc 处理器不穿透
+  const escRef = useEscClaim(searchOpen)
 
   // ⌘K / Ctrl+K 全局开关
   React.useEffect(() => {

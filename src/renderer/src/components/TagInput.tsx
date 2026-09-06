@@ -95,8 +95,9 @@ const TagInput: React.FC<TagInputProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
-      e.stopPropagation()
+      // 只在下拉真正打开时消费 Esc（关下拉）；关着时放行给外层弹层（编辑弹窗整体关闭）
       if (open) {
+        e.stopPropagation()
         e.preventDefault()
         setOpen(false)
       }

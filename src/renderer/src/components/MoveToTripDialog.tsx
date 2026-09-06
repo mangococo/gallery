@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { toast } from './feedback'
 import { displaySrc } from '../lib/api'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import type { MovePhotosResult, Trip } from '../types'
 import type { Photo, TripDTO } from '../types'
 import { MoveToFolderIcon, PlusIcon, SearchIcon, XIcon } from './icons'
@@ -55,12 +56,20 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
 
   const picked = trips.find((t) => t.id === pickedId) ?? null
 
-  const escClose = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+  // Esc：先退新建子表单，再关对话框。叠在灯箱/多选态上时已认领更高的 Esc 处理权
+  const escRef = useEscClaim()
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(escRef.current)) return
+      e.preventDefault()
       if (creating) setCreating(false)
       else onClose()
     }
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creating, escRef])
 
   const doMove = async (target: { tripId?: string; createTrip?: { title: string; description: string; startDate: string; endDate: string; tags: string[] } }) => {
     if (moving) return
@@ -108,7 +117,6 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] no-drag bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
-      onKeyDown={escClose}
       onClick={onClose}
     >
       <motion.div

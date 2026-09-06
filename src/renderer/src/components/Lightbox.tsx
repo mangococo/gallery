@@ -5,6 +5,7 @@ import { Photo } from '../types'
 import { confirmDialog } from './feedback'
 import { showContextMenuAt } from './ContextMenu'
 import { buildPhotoMenu, revealInLabel, type PhotoMenuHandlers } from '../lib/context-menus'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import {
   clampView,
   cursorForView,
@@ -246,12 +247,15 @@ const Lightbox: React.FC<LightboxProps> = ({
     )
   }
 
-  // 键盘：←→ 切换 / Esc 关闭 / Space 播放暂停 / +-0 缩放 / F 全屏 / I 信息 / ⌫ 删除
+  // 键盘：←→ 切换 / Esc 关闭 / Space 播放暂停 / +-0 缩放 / F 全屏 / I 信息 / ⌫ 删除。
+  // 图注/标签编辑、确认框、右键菜单叠在灯箱上时已认领更高位的 Esc 处理权，此处让位
+  const escRef = useEscClaim()
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       if (e.key === 'Escape') {
+        if (!isEscTop(escRef.current)) return
         onClose()
       } else if (e.key === 'ArrowLeft') {
         onNavigate((index - 1 + photos.length) % photos.length)
@@ -280,7 +284,7 @@ const Lightbox: React.FC<LightboxProps> = ({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, photos.length, isVideo, onClose, onNavigate, photo.id])
+  }, [index, photos.length, isVideo, onClose, onNavigate, photo.id, escRef])
 
   // —— 缩放切换（单击图片：fit ↔ zoom） ——
 

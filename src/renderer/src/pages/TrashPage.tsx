@@ -10,6 +10,7 @@ import {
   type TrashMenuIcons,
 } from '../lib/context-menus'
 import { confirmDialog, toast } from '../components/feedback'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import {
   ArrowLeftIcon,
   CheckCircleIcon,
@@ -87,13 +88,14 @@ const TrashPage: React.FC = () => {
   const exitSelection = () => setSelectedIds(new Set())
 
   // ESC 分层退出：有多选先退多选；否则退出回收站、回到进入前的路由。
-  // 右键菜单/确认弹窗打开时不抢（它们有自己的 ESC 处理）
+  // 右键菜单/确认弹窗打开时已认领更高的 Esc 处理权，此处不抢
+  const escRef = useEscClaim()
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      if (document.querySelector('.ctx-menu-panel') || document.querySelector('[data-testid=confirm-backdrop]')) return
+      if (!isEscTop(escRef.current)) return
       if (selectedIds.size > 0) {
         setSelectedIds(new Set())
         return
@@ -103,7 +105,7 @@ const TrashPage: React.FC = () => {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds.size, location.state, location.key])
+  }, [selectedIds.size, location.state, location.key, escRef])
 
   /** 恢复（单选/批量共用）：成功后重拉列表 + 全局刷新（侧栏角标/时间线） */
   const handleRestore = async (targets: TrashItem[]) => {

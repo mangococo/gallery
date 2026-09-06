@@ -2,6 +2,7 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckIcon } from './icons'
+import { useEscClaim, isEscTop } from '../lib/esc'
 
 /**
  * 应用内反馈组件：toast 轻提示 + 确认弹窗，替代原生 confirm()/alert()。
@@ -93,6 +94,8 @@ interface PendingConfirm extends ConfirmOptions {
 
 function ConfirmHost() {
   const [pending, setPending] = React.useState<PendingConfirm | null>(null)
+  // 弹窗打开期间认领 Esc 处理权：灯箱/多选等底层的 Esc 处理器不得穿透
+  const escRef = useEscClaim(!!pending)
 
   React.useEffect(() => {
     askConfirmFn = (o) =>
@@ -108,13 +111,15 @@ function ConfirmHost() {
     if (!pending) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (!isEscTop(escRef.current)) return
+        e.preventDefault()
         pending.resolve(false)
         setPending(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pending])
+  }, [pending, escRef])
 
   if (!pending) return null
 

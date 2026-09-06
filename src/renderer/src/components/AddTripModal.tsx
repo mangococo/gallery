@@ -15,6 +15,7 @@ import {
   XIcon,
 } from './icons';
 import TagInput from './TagInput';
+import { useEscClaim, isEscTop } from '../lib/esc';
 
 interface AddTripModalProps {
   onClose: () => void;
@@ -34,6 +35,19 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
   const itemIdRef = React.useRef(0);
   const [submitting, setSubmitting] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Esc 关闭（提交中不关）；标签下拉开着时由 TagInput 先消费
+  const escRef = useEscClaim();
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(escRef.current)) return
+      if (submitting) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitting, escRef]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const added = Array.from(e.target.files || []).map((file) => {

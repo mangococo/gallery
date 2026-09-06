@@ -2,6 +2,7 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRightIcon } from './icons'
+import { useEscClaim, isEscTop } from '../lib/esc'
 
 /**
  * 应用级右键上下文菜单：与 toast/confirmDialog 同一套「模块级函数 + Host 挂载」模式。
@@ -233,7 +234,9 @@ function ContextMenuHost() {
     [close],
   )
 
-  // 键盘：↑↓ 移动、→ 展开、← 收起、Enter 触发、Esc 逐级关闭
+  // 键盘：↑↓ 移动、→ 展开、← 收起、Enter 触发、Esc 逐级关闭。
+  // 菜单打开期间认领 Esc 处理权：多选态/灯箱等底层的 Esc 处理器不得穿透
+  const escRef = useEscClaim(!!state)
   React.useEffect(() => {
     if (!state) return
     const onKey = (e: KeyboardEvent) => {
@@ -254,6 +257,7 @@ function ContextMenuHost() {
         })
 
       if (e.key === 'Escape') {
+        if (!isEscTop(escRef.current)) return
         e.preventDefault()
         if (level > 0) {
           setPath((p) => p.slice(0, -1))
@@ -310,7 +314,7 @@ function ContextMenuHost() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [state, path, highlights, close, triggerEntry])
+  }, [state, path, highlights, close, triggerEntry, escRef])
 
   // 每级共用的悬停/触发行为
   const handlersFor = (level: number) => ({

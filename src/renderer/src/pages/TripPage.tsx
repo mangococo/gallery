@@ -24,6 +24,7 @@ import {
   type PhotoMenuIcons,
 } from '../lib/context-menus'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import { dateToLocalStr, formatDotDate, parseLocalDate } from '@shared/dates'
 import {
   ArrowLeftIcon,
@@ -291,18 +292,21 @@ const TripPage: React.FC = () => {
     setSelectionMode(true)
   }
 
-  // ESC 退出多选（灯箱/弹窗打开时不抢）
+  // ESC 退出多选（灯箱/弹窗打开时不抢——它们已认领更高的 Esc 处理权）
+  const selectionEscRef = useEscClaim(selectionMode)
   React.useEffect(() => {
     if (!selectionMode) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (!isEscTop(selectionEscRef.current)) return
       exitSelection()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectionMode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionMode, selectionEscRef])
 
   // 过滤条件变化后勾选集合只保留仍可见的照片（必须挂在早退之前，保证 hook 顺序稳定）
   const photoCount = (editedTrip?.photos || trip?.photos || []).length

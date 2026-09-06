@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { confirmDialog, toast } from './feedback'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import { WarningIcon, XIcon } from './icons'
 import type { LegacyImportResult } from '../types'
 
@@ -17,6 +18,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
   const { albums, reloadAlbums } = useApp()
   const [busy, setBusy] = React.useState<string | null>(null)
   const [importResult, setImportResult] = React.useState<LegacyImportResult | null>(null)
+  // Esc 关闭（有操作进行中不关）
+  const escRef = useEscClaim()
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(escRef.current)) return
+      if (busy) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, escRef])
 
   const handleImportLegacy = async () => {
     setBusy('import')

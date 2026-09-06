@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { api, displaySrc } from '../lib/api'
 import { Photo } from '../types'
 import { toast } from './feedback'
+import { useEscClaim, isEscTop } from '../lib/esc'
 
 interface CaptionEditorProps {
   photo: Photo
@@ -15,6 +16,22 @@ interface CaptionEditorProps {
 const CaptionEditor: React.FC<CaptionEditorProps> = ({ photo, onClose, onSaved }) => {
   const [text, setText] = React.useState(photo.caption)
   const [saving, setSaving] = React.useState(false)
+  // 叠在灯箱上时认领更高的 Esc 处理权：取消编辑不连带关灯箱
+  const escRef = useEscClaim()
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!isEscTop(escRef.current)) return
+      // 输入框聚焦时由 textarea 自己的 onKeyDown 处理（会 stopPropagation），此处兜底其余焦点
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escRef])
 
   const save = async () => {
     if (saving) return

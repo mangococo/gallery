@@ -13,6 +13,7 @@ import CaptionEditor from '../components/CaptionEditor'
 import PhotoTagEditor from '../components/PhotoTagEditor'
 import MoveToTripDialog from '../components/MoveToTripDialog'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
+import { useEscClaim, isEscTop } from '../lib/esc'
 import { showContextMenuAt } from '../components/ContextMenu'
 import {
   buildEmptyAreaMenu,
@@ -169,19 +170,22 @@ const HomePage: React.FC = () => {
     })
   }, [wallPhotos])
 
-  // ESC 退出照片墙多选（灯箱/弹窗打开时不抢）
+  // ESC 退出照片墙多选（灯箱/弹窗打开时不抢——它们已认领更高的 Esc 处理权）
+  const selectionEscRef = useEscClaim(wallSelectionMode)
   React.useEffect(() => {
     if (!wallSelectionMode) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (!isEscTop(selectionEscRef.current)) return
       setWallSelectionMode(false)
       setSelectedIds(new Set())
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [wallSelectionMode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallSelectionMode, selectionEscRef])
 
   const activeFilterChips: { label: string; icon?: 'heart'; clear: () => void }[] = [
     ...(filters.favoritesOnly
