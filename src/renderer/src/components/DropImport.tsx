@@ -131,7 +131,7 @@ const ImportPickerModal: React.FC<ImportPickerModalProps> = ({ paths, onClose })
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[60] no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
         onClick={busy ? undefined : onClose}
       >
         <motion.div

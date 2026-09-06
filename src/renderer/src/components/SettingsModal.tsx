@@ -80,7 +80,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
   // portal 到 body：侧栏是 sticky 层叠上下文，弹窗留在内部会被照片堆叠盖住
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <motion.div

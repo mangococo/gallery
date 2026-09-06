@@ -9,6 +9,13 @@ import { ChevronRightIcon } from './icons'
  * 视觉与 Sidebar 相册菜单/导出下拉同源（surface 卡片 + primary-soft 悬停）。
  * 支持：disabled / 危险项 / 分隔线 / 快捷键提示 / 子菜单 / 键盘操作 / ESC / 点击外部关闭 /
  * 窗口边界翻转。全部渲染层实现：三平台行为一致，且不破坏暖褐主题的视觉统一。
+ *
+ * 层级约定（踩坑记录）：elevation 的 z-index 必须写在 fixed 定位包装层上——
+ * position:fixed 自身就是层叠上下文，内部面板的 z-[70] 出不了这个上下文；
+ * 写在包装层才能在根上下文里压过 hover 中 z-10 的照片卡与 z-50 的灯箱
+ * （hover 照片右键菜单被卡片盖住、灯箱内 ... 菜单不显示，均为该陷阱）。
+ * 面板同时挂 no-drag：菜单可能出现在页面顶栏 drag-region 的 48px 带内，
+ * 不豁免的话真实点击会被窗口拖拽吞掉。
  */
 
 export type MenuEntry =
@@ -83,7 +90,7 @@ const MenuPanel: React.FC<{
   return (
     <div
       role="menu"
-      className={`${PANEL_MARK} fixed z-[70] min-w-[200px] max-w-[300px] max-h-[calc(100vh-24px)] overflow-y-auto scroll-slim bg-surface border border-line rounded-xl shadow-xl py-1.5 px-1 select-none`}
+      className={`${PANEL_MARK} fixed z-[70] no-drag min-w-[200px] max-w-[300px] max-h-[calc(100vh-24px)] overflow-y-auto scroll-slim bg-surface border border-line rounded-xl shadow-xl py-1.5 px-1 select-none`}
       style={style}
     >
       {entries.map((entry, i) => {
@@ -368,6 +375,8 @@ function ContextMenuHost() {
             position: 'fixed',
             left: rootPos?.left ?? -9999,
             top: rootPos?.top ?? -9999,
+            // elevation 写在包装层（根上下文 z-70）：内部面板的 z-index 出不了 fixed 上下文
+            zIndex: 70,
             transformOrigin: 'top left',
           }}
           onContextMenu={(e) => e.preventDefault()}
@@ -414,7 +423,7 @@ const SubmenuPanel: React.FC<{
   return createPortal(
     <div
       ref={ref}
-      style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
+      style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? -9999, zIndex: 70 }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <MenuPanel
