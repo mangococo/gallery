@@ -226,3 +226,155 @@ export function BookIcon(props: IconProps) {
     </Svg>
   )
 }
+
+export function InfoIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </Svg>
+  )
+}
+
+export function CopyIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </Svg>
+  )
+}
+
+/** 移动到旅行：文件夹 + 落入箭头 */
+export function MoveToFolderIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 8V6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z" />
+      <path d="M9 14h7" />
+      <path d="m13.5 11.5 3 2.5-3 2.5" />
+    </Svg>
+  )
+}
+
+/** 在 Finder / 资源管理器中显示（external-link 形） */
+export function RevealIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </Svg>
+  )
+}
+
+export function CheckCircleIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m8.5 12.2 2.4 2.4 4.6-5" />
+    </Svg>
+  )
+}
+
+/** 进入多选模式（方框勾选） */
+export function SelectIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="m8.5 12.2 2.4 2.4 4.6-5" />
+    </Svg>
+  )
+}
+
+export function PlayIcon({ filled = true, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <Svg {...props} fill={filled ? 'currentColor' : 'none'}>
+      <polygon points="7 4 20 12 7 20 7 4" />
+    </Svg>
+  )
+}
+
+export function PauseIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+export function VolumeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 5.5a9.5 9.5 0 0 1 0 13" />
+    </Svg>
+  )
+}
+
+export function VolumeMuteIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+      <path d="m16 9 6 6" />
+      <path d="m22 9-6 6" />
+    </Svg>
+  )
+}
+
+export function MaximizeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </Svg>
+  )
+}
+
+/** 视频媒体标记（胶片） */
+export function FilmIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M7 4v16" />
+      <path d="M17 4v16" />
+      <path d="M2 9h5" />
+      <path d="M2 15h5" />
+      <path d="M17 9h5" />
+      <path d="M17 15h5" />
+    </Svg>
+  )
+}
+
+/** 照片媒体标记（山与日） */
+export function ImageIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-4.6-4.6a2 2 0 0 0-2.8 0L3 21" />
+    </Svg>
+  )
+}
+
+export function ClockIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </Svg>
+  )
+}
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </Svg>
+  )
+}

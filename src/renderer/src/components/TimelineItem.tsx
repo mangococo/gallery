@@ -9,9 +9,11 @@ interface TimelineItemProps {
   onEdit: (id: string) => void
   onToggleFavorite?: (id: string) => void
   onDelete?: (id: string) => void
+  /** 旅行卡片右键（菜单内容由页面用 buildTripMenu 组装） */
+  onContextMenu?: (e: React.MouseEvent, trip: Trip) => void
 }
 
-const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavorite, onDelete }) => {
+const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavorite, onDelete, onContextMenu }) => {
   const missing = trip.status === 'missing'
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '——'
@@ -34,6 +36,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       className="relative flex mb-14"
+      onContextMenu={(e) => onContextMenu?.(e, trip)}
     >
       {/* 书脊 + 和纸胶带日期贴 */}
       <div className="flex flex-col items-center w-36 shrink-0 relative">

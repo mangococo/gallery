@@ -7,6 +7,8 @@ export type {
   CreateTripInput,
   JournalFormat,
   LegacyImportResult,
+  MovePhotosResult,
+  MoveTarget,
   PhotoDTO,
   PhotoType,
   ScanProgress,
