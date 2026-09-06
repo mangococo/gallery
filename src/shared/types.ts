@@ -109,6 +109,22 @@ export interface LegacyImportResult {
 
 export type Unsubscribe = () => void
 
+/** 移动照片的目标：已有旅行，或在流程内直接新建（主进程保证「建旅行+搬文件」一气呵成） */
+export interface MoveTarget {
+  tripId?: string
+  createTrip?: CreateTripInput
+}
+
+/** photos:move 的结果 */
+export interface MovePhotosResult {
+  /** 成功移动的 photoId（含源文件已丢失、仅移动记录的） */
+  movedIds: string[]
+  /** 源文件在磁盘上已不存在、只移动了记录的数量 */
+  fileMissingCount: number
+  /** 移动后目标旅行（新建场景下即新旅行） */
+  targetTrip: TripDTO
+}
+
 /** 手账导出格式：PDF（矢量可打印）或长图 PNG */
 export type JournalFormat = 'pdf' | 'png'
 
@@ -168,6 +184,12 @@ export interface GalleryApi {
   setPhotoFavorite(photoId: string, favorite: boolean): Promise<void>
   /** 照片级标签（覆盖式） */
   setPhotoTags(photoId: string, tags: string[]): Promise<void>
+  /** 把照片/视频移动到其他旅行（支持目标为新建旅行；文件与库记录一起搬） */
+  movePhotos(photoIds: string[], target: MoveTarget): Promise<MovePhotosResult>
+  /** 在 Finder/资源管理器中显示照片所在文件 */
+  revealPhotoInFolder(photoId: string): Promise<void>
+  /** 把照片的磁盘绝对路径写入系统剪贴板，返回该路径 */
+  copyPhotoPath(photoId: string): Promise<string>
 
   getTheme(): Promise<ThemeMode>
   setTheme(mode: ThemeMode): Promise<void>
@@ -216,6 +238,9 @@ export const IPC = {
   photosSetCover: 'photos:set-cover',
   photosSetFavorite: 'photos:set-favorite',
   photosSetTags: 'photos:set-tags',
+  photosMove: 'photos:move',
+  photosReveal: 'photos:reveal',
+  photosCopyPath: 'photos:copy-path',
 
   themeGet: 'theme:get',
   themeSet: 'theme:set',

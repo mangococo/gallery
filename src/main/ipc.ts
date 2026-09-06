@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, nativeTheme, BrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, nativeTheme, BrowserWindow, clipboard } from 'electron'
 import { promises as fs, mkdirSync, existsSync } from 'fs'
 import { join, basename } from 'path'
 import { nanoid } from 'nanoid'
@@ -7,8 +7,11 @@ import type {
   Album,
   CreateTripInput,
   LegacyImportResult,
+  MovePhotosResult,
+  MoveTarget,
   ScanProgress,
   ThemeMode,
+  TripDTO,
   TripPatch,
 } from '../shared/types'
 import {
@@ -35,6 +38,7 @@ import {
   getPhotoRow,
   insertPhotoRow,
   deletePhotoRow,
+  updatePhotoLocations,
   setPhotoCaption,
   setPhotoFavorite,
   setTagsOfPhoto,
@@ -45,6 +49,7 @@ import {
 import { scanAlbum } from './services/scanner'
 import { mediaTypeOf } from './services/scanner'
 import { planTripRemoval } from './services/reconcile'
+import { collisionSafeDestName, planCoverReassignment, validateMovePhotos } from './services/move-plan'
 import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
@@ -228,23 +233,7 @@ export function registerIpcHandlers(): void {
     const albumId = getSetting('active_album_id')
     const album = albumId ? getAlbumRow(albumId) : null
     if (!album) throw new Error('请先注册并激活一个相册目录')
-
-    const safeName = sanitizeFileName(input.title)
-    const folderName = dedupeFolderName(album.path, safeName)
-    const t = {
-      id: nanoid(12),
-      albumId: album.id,
-      folderName,
-      title: input.title.trim() || folderName,
-      description: input.description ?? '',
-      startDate: input.startDate ?? '',
-      endDate: input.endDate ?? '',
-      isFavorite: false,
-    }
-    // 建目录（同步，量小）
-    mkdirSync(join(album.path, folderName), { recursive: true })
-    insertTripRow(t)
-    if (input.tags?.length) setTagsOfTrip(t.id, input.tags)
+    const t = createTripInAlbum(album, input)
     const row = getTripRow(t.id)!
     return { ...row, tags: getTagsOfTrip(t.id), photos: [] }
   })
@@ -368,6 +357,135 @@ export function registerIpcHandlers(): void {
     updateTripRow(tripId, { coverPhotoId: photoId })
   })
 
+  // —— 移动照片到其他旅行（目标可为已有旅行或流程内新建） ——
+  ipcMain.handle(
+    IPC.photosMove,
+    async (_e, photoIds: string[], target: MoveTarget): Promise<MovePhotosResult> => {
+      const facts = photoIds
+        .map((id) => getPhotoRow(id))
+        .filter((p): p is NonNullable<typeof p> => p !== null)
+      if (facts.length === 0) throw new Error('没有可移动的照片')
+
+      const albumIds = new Set(facts.map((p) => p.albumId))
+      if (albumIds.size > 1) throw new Error('所选照片分属不同相册，无法一起移动')
+      const album = getAlbumRow([...albumIds][0])
+      if (!album) throw new Error('相册不存在')
+
+      // 目标旅行：已有 or 新建（新建与搬文件一气呵成，避免「空旅行残留」的中间态）
+      let targetTrip
+      if (target.tripId) {
+        targetTrip = getTripRow(target.tripId)
+        if (!targetTrip) throw new Error('目标旅行不存在')
+        if (targetTrip.albumId !== album.id) throw new Error('不能把照片移动到其他相册的旅行')
+      } else if (target.createTrip) {
+        targetTrip = getTripRow(createTripInAlbum(album, target.createTrip).id)
+      } else {
+        throw new Error('未指定目标旅行')
+      }
+      if (!targetTrip) throw new Error('目标旅行创建失败')
+
+      const validated = validateMovePhotos(
+        facts.map((p) => ({
+          id: p.id,
+          albumId: p.albumId,
+          tripId: p.tripId,
+          fileName: p.fileName,
+          relPath: p.relPath,
+        })),
+        album.id,
+        targetTrip.id,
+      )
+      if (validated.photos.length === 0) {
+        return {
+          movedIds: [],
+          fileMissingCount: 0,
+          targetTrip: tripToDto(targetTrip),
+        }
+      }
+
+      // 目标目录就绪（记录在、文件夹被外部移走的旅行借此自愈）
+      const destDir = join(album.path, targetTrip.folderName)
+      await fs.mkdir(destDir, { recursive: true })
+
+      // 先搬文件、后写库；中途失败回滚已搬文件，库不留中间态
+      const renames: { from: string; to: string }[] = []
+      const updates: { id: string; tripId: string; fileName: string; relPath: string }[] = []
+      let fileMissingCount = 0
+      try {
+        for (const p of validated.photos) {
+          const srcAbs = join(album.path, p.relPath)
+          const srcExists = await fs
+            .access(srcAbs)
+            .then(() => true)
+            .catch(() => false)
+          if (!srcExists) fileMissingCount++
+          // 重名加时间戳前缀（与导入同一约定）；大小写不敏感探测
+          const destName = collisionSafeDestName(p.fileName, (n) => existsSync(join(destDir, n)))
+          if (srcExists) {
+            await fs.rename(srcAbs, join(destDir, destName))
+            renames.push({ from: srcAbs, to: join(destDir, destName) })
+          }
+          updates.push({
+            id: p.id,
+            tripId: targetTrip.id,
+            fileName: destName,
+            relPath: `${targetTrip.folderName}/${destName}`,
+          })
+        }
+        updatePhotoLocations(updates)
+      } catch (err) {
+        for (const r of renames.reverse()) {
+          await fs.rename(r.to, r.from).catch(() => {})
+        }
+        throw new Error('移动照片失败：' + ((err as Error)?.message ?? err) + '，已还原未完成的部分')
+      }
+
+      // 封面随照片移走的源旅行补封面（剩下第一张，移空则清空）
+      const movedSet = new Set(updates.map((u) => u.id))
+      for (const plan of planCoverReassignment(
+        [...validated.sourceTripIds].map((tripId) => {
+          const t = getTripRow(tripId)!
+          return {
+            tripId,
+            coverPhotoId: t.coverPhotoId,
+            remainingPhotoIds: listPhotosOfTrip(tripId, album.id, t.coverPhotoId)
+              .map((p) => p.id)
+              .filter((id) => !movedSet.has(id)),
+          }
+        }),
+        movedSet,
+      )) {
+        updateTripRow(plan.tripId, { coverPhotoId: plan.coverPhotoId })
+      }
+
+      pushChanged(album.id)
+      const fresh = getTripRow(targetTrip.id)!
+      return {
+        movedIds: updates.map((u) => u.id),
+        fileMissingCount,
+        targetTrip: tripToDto(fresh),
+      }
+    },
+  )
+
+  ipcMain.handle(IPC.photosReveal, async (_e, photoId: string) => {
+    const photo = getPhotoRow(photoId)
+    if (!photo) throw new Error('照片不存在')
+    const root = getAlbumRow(photo.albumId)
+    if (!root) throw new Error('相册不存在')
+    shell.showItemInFolder(join(root.path, photo.relPath))
+  })
+
+  ipcMain.handle(IPC.photosCopyPath, async (_e, photoId: string): Promise<string> => {
+    const photo = getPhotoRow(photoId)
+    if (!photo) throw new Error('照片不存在')
+    const root = getAlbumRow(photo.albumId)
+    if (!root) throw new Error('相册不存在')
+    const abs = join(root.path, photo.relPath)
+    clipboard.writeText(abs)
+    return abs
+  })
+
   // —— 主题 ——
   ipcMain.handle(IPC.themeGet, () => (getSetting('theme_mode') as ThemeMode) ?? 'system')
   ipcMain.handle(IPC.themeSet, (_e, mode: ThemeMode) => {
@@ -418,6 +536,32 @@ export function registerIpcHandlers(): void {
 
 function photosOfTrip(t: { id: string; albumId: string; coverPhotoId: string | null }) {
   return listPhotosOfTrip(t.id, t.albumId, t.coverPhotoId)
+}
+
+/** TripRow → TripDTO（补标签与照片列表；走位状态由调用方按需附加） */
+function tripToDto(t: Omit<TripDTO, 'tags' | 'photos'>) {
+  return { ...t, tags: getTagsOfTrip(t.id), photos: photosOfTrip(t) }
+}
+
+/** 在指定相册内创建旅行（目录+记录+标签）；tripsCreate 与「移动到新建旅行」共用 */
+function createTripInAlbum(album: Album, input: CreateTripInput) {
+  const safeName = sanitizeFileName(input.title)
+  const folderName = dedupeFolderName(album.path, safeName)
+  const t = {
+    id: nanoid(12),
+    albumId: album.id,
+    folderName,
+    title: input.title.trim() || folderName,
+    description: input.description ?? '',
+    startDate: input.startDate ?? '',
+    endDate: input.endDate ?? '',
+    isFavorite: false,
+  }
+  // 建目录（同步，量小）
+  mkdirSync(join(album.path, folderName), { recursive: true })
+  insertTripRow(t)
+  if (input.tags?.length) setTagsOfTrip(t.id, input.tags)
+  return t
 }
 
 async function closeWatcherIfInactive(id: string): Promise<void> {

@@ -575,6 +575,24 @@ export function deletePhotoRow(id: string): void {
   db.prepare('DELETE FROM photos WHERE id = ?').run(id)
 }
 
+export interface PhotoLocationUpdate {
+  id: string
+  tripId: string
+  fileName: string
+  relPath: string
+}
+
+/** 批量移动照片归属：单事务更新 trip_id/file_name/rel_path（缩略图按 id 存放，无需动） */
+export function updatePhotoLocations(records: PhotoLocationUpdate[]): void {
+  const tx = db.transaction((rows: PhotoLocationUpdate[]) => {
+    const stmt = db.prepare(
+      'UPDATE photos SET trip_id = ?, file_name = ?, rel_path = ? WHERE id = ?',
+    )
+    for (const r of rows) stmt.run(r.tripId, r.fileName, r.relPath, r.id)
+  })
+  tx(records)
+}
+
 export function setPhotoCaption(id: string, caption: string): void {
   db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption, id)
 }

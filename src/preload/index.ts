@@ -42,6 +42,9 @@ const api: GalleryApi = {
   setCover: (tripId, photoId) => ipcRenderer.invoke(IPC.photosSetCover, tripId, photoId),
   setPhotoFavorite: (photoId, favorite) => ipcRenderer.invoke(IPC.photosSetFavorite, photoId, favorite),
   setPhotoTags: (photoId, tags) => ipcRenderer.invoke(IPC.photosSetTags, photoId, tags),
+  movePhotos: (photoIds, target) => ipcRenderer.invoke(IPC.photosMove, photoIds, target),
+  revealPhotoInFolder: (photoId) => ipcRenderer.invoke(IPC.photosReveal, photoId),
+  copyPhotoPath: (photoId) => ipcRenderer.invoke(IPC.photosCopyPath, photoId),
 
   getTheme: () => ipcRenderer.invoke(IPC.themeGet),
   setTheme: (mode: ThemeMode) => ipcRenderer.invoke(IPC.themeSet, mode),
