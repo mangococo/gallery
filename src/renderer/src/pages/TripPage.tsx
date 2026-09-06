@@ -1,5 +1,5 @@
 import React from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -12,24 +12,60 @@ import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
 import PhotoTagEditor from '../components/PhotoTagEditor'
 import MapView from '../components/MapView'
-import { toast } from '../components/feedback'
+import MoveToTripDialog from '../components/MoveToTripDialog'
+import { toast, confirmDialog } from '../components/feedback'
+import { showContextMenuAt } from '../components/ContextMenu'
+import {
+  buildEmptyAreaMenu,
+  buildPhotoBatchMenu,
+  buildPhotoMenu,
+  revealInLabel,
+  type PhotoMenuHandlers,
+  type PhotoMenuIcons,
+} from '../lib/context-menus'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import {
   ArrowLeftIcon,
-  PlusIcon,
   HeartIcon,
+  MoveToFolderIcon,
+  PenIcon,
+  PlusIcon,
+  RevealIcon,
+  SelectIcon,
+  StarIcon,
+  TagIcon,
   TrashIcon,
   XIcon,
   BookIcon,
   WarningIcon,
+  CameraIcon,
+  RefreshIcon,
+  CopyIcon,
 } from '../components/icons'
-import type { JournalFormat } from '../types'
+import type { JournalFormat, MovePhotosResult } from '../types'
 import { Photo, Trip } from '../types'
+
+const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+
+/** 右键菜单图标集（模块级常量，避免每次渲染重建） */
+const photoMenuIcons: PhotoMenuIcons = {
+  open: <CameraIcon size={14} />,
+  caption: <PenIcon size={14} />,
+  tag: <TagIcon size={14} />,
+  favorite: <HeartIcon size={14} />,
+  cover: <StarIcon size={14} />,
+  move: <MoveToFolderIcon size={14} />,
+  reveal: <RevealIcon size={14} />,
+  copy: <CopyIcon size={14} />,
+  select: <SelectIcon size={14} />,
+  trash: <TrashIcon size={14} />,
+}
 
 const TripPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { refreshAll } = useApp()
+  const location = useLocation()
+  const { refreshAll, trips: albumTrips, activeAlbumId } = useApp()
   const [trip, setTrip] = React.useState<Trip | null>(null)
   const [isEditing, setIsEditing] = React.useState(false)
   const [editedTrip, setEditedTrip] = React.useState<Trip | null>(null)
@@ -46,6 +82,12 @@ const TripPage: React.FC = () => {
   const [isUploading, setIsUploading] = React.useState(false)
   const [dragOver, setDragOver] = React.useState(false)
   const [isDeletingTrip, setIsDeletingTrip] = React.useState(false)
+  /** 多选体系：模式开关 + 勾选集合 */
+  const [selectionMode, setSelectionMode] = React.useState(false)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  /** 移动到旅行对话框的待移动清单（null 关闭） */
+  const [moveTarget, setMoveTarget] = React.useState<Photo[] | null>(null)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     const loadTrip = async () => {
@@ -54,6 +96,8 @@ const TripPage: React.FC = () => {
       setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
     }
     loadTrip()
+    // 时间线右键「编辑旅行信息」直达编辑态
+    if ((location.state as { edit?: boolean } | null)?.edit) setIsEditing(true)
   }, [id])
 
   const applyUpdate = async (updated: Trip) => {
@@ -194,6 +238,221 @@ const TripPage: React.FC = () => {
     }
     setEditedTrip(updated)
     if (!isEditing) setTrip(updated)
+  }
+
+  // —— 多选体系 ——
+
+  const exitSelection = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleToggleSelect = (photo: Photo) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(photo.id)) next.delete(photo.id)
+      else next.add(photo.id)
+      return next
+    })
+    setSelectionMode(true)
+  }
+
+  /** 右键菜单「选择多张…」：以当前照片为首张进入多选 */
+  const handleEnterSelect = (photo: Photo) => {
+    setSelectedIds(new Set([photo.id]))
+    setSelectionMode(true)
+  }
+
+  // ESC 退出多选（灯箱/弹窗打开时不抢）
+  React.useEffect(() => {
+    if (!selectionMode) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      exitSelection()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectionMode])
+
+  // 过滤条件变化后勾选集合只保留仍可见的照片（必须挂在早退之前，保证 hook 顺序稳定）
+  const photoCount = (editedTrip?.photos || trip?.photos || []).length
+  React.useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev
+      const visible = new Set(
+        (editedTrip?.photos || trip?.photos || []).map((p: Photo) => p.id),
+      )
+      const next = new Set([...prev].filter((id) => visible.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favOnly, tagFilter, photoCount])
+
+  /** 批量删除：确认后逐张进废纸篓，本地同步收缩（含灯箱与多选状态） */
+  const handleDeletePhotos = async (photos: Photo[]) => {
+    if (!editedTrip || photos.length === 0) return
+    const ok = await confirmDialog({
+      title: photos.length === 1 ? '把这张照片移入废纸篓？' : `把 ${photos.length} 项移入废纸篓？`,
+      body: photos.length === 1 ? photos[0].fileName : '所选照片与视频将移入废纸篓，不会直接删除。',
+      confirmText: '移入废纸篓',
+      danger: true,
+    })
+    if (!ok) return
+    const ids = new Set(photos.map((p) => p.id))
+    try {
+      await Promise.all([...ids].map((photoId) => api.deletePhoto(photoId)))
+    } catch (error: any) {
+      toast('删除失败: ' + error.message, 'error')
+    }
+    const remaining = editedTrip.photos.filter((p: Photo) => !ids.has(p.id))
+    // 封面被删时与主进程 FK SET NULL 行为对齐：本地切到剩余第一张
+    const nextCover = ids.has(editedTrip.coverPhotoId ?? '')
+      ? remaining[0]?.id ?? null
+      : editedTrip.coverPhotoId
+    await applyUpdate({ ...editedTrip, photos: remaining, coverPhotoId: nextCover })
+    setLightboxIndex((cur) => {
+      if (cur === null) return null
+      if (remaining.length === 0) return null
+      return Math.min(cur, remaining.length - 1)
+    })
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((x) => !ids.has(x)))
+      if (next.size === 0) setSelectionMode(false)
+      return next
+    })
+    toast(`已移入废纸篓（${ids.size} 项）`, 'success')
+    await refreshAll()
+  }
+
+  /** 批量收藏/取消收藏 */
+  const handleBatchFavorite = async (photos: Photo[], favorite: boolean) => {
+    if (!editedTrip || photos.length === 0) return
+    try {
+      await Promise.all(photos.map((p) => api.setPhotoFavorite(p.id, favorite)))
+    } catch (error: any) {
+      toast('操作失败: ' + error.message, 'error')
+      return
+    }
+    const ids = new Set(photos.map((p) => p.id))
+    const updated = {
+      ...editedTrip,
+      photos: editedTrip.photos.map((p: Photo) => (ids.has(p.id) ? { ...p, favorite } : p)),
+    }
+    setEditedTrip(updated)
+    if (!isEditing) setTrip(updated)
+  }
+
+  // —— 移动到旅行 ——
+
+  const handleMovePhotos = (photos: Photo[]) => {
+    if (photos.length === 0) return
+    setMoveTarget(photos)
+  }
+
+  const handleMoved = async (result: MovePhotosResult) => {
+    if (!editedTrip) return
+    const movedSet = new Set(result.movedIds)
+    const remaining = editedTrip.photos.filter((p: Photo) => !movedSet.has(p.id))
+    // 封面随照片移走时，主进程已把封面交给剩余第一张；本地状态同步跟随
+    const nextCover = movedSet.has(editedTrip.coverPhotoId ?? '')
+      ? remaining[0]?.id ?? null
+      : editedTrip.coverPhotoId
+    await applyUpdate({ ...editedTrip, photos: remaining, coverPhotoId: nextCover })
+    setLightboxIndex((cur) => {
+      if (cur === null) return null
+      if (remaining.length === 0) return null
+      return Math.min(cur, remaining.length - 1)
+    })
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((x) => !movedSet.has(x)))
+      if (next.size === 0) setSelectionMode(false)
+      return next
+    })
+    toast(
+      `已移动 ${result.movedIds.length} 项到「${result.targetTrip.title}」${
+        result.fileMissingCount > 0 ? `（${result.fileMissingCount} 项源文件已丢失，仅移动记录）` : ''
+      }`,
+      'success',
+    )
+    await refreshAll()
+  }
+
+  // —— Finder / 复制路径 ——
+
+  const handleReveal = async (photo: Photo) => {
+    try {
+      await api.revealPhotoInFolder(photo.id)
+    } catch (error: any) {
+      toast('定位文件失败: ' + error.message, 'error')
+    }
+  }
+
+  const handleCopyPath = async (photo: Photo) => {
+    try {
+      const p = await api.copyPhotoPath(photo.id)
+      toast(`已复制路径：${p.split('/').pop() ?? p}`, 'success')
+    } catch (error: any) {
+      toast('复制路径失败: ' + error.message, 'error')
+    }
+  }
+
+  /** 右键菜单动作集（照片墙与灯箱共用） */
+  const photoMenuHandlers: PhotoMenuHandlers = {
+    onOpen: (photo) => handlePhotoClick(photo),
+    onEditCaption: (photo) => setCaptionTarget(photo),
+    onEditTags: (photo) => setTagTarget(photo),
+    onToggleFavorite: (p, favorite) => handleTogglePhotoFavorite(p.id, favorite),
+    onBatchFavorite: (photos, favorite) => void handleBatchFavorite(photos, favorite),
+    onSetCover: (photo) => void handleSetCover(photo.id),
+    onMove: (photos) => handleMovePhotos(photos),
+    onReveal: (photo) => void handleReveal(photo),
+    onCopyPath: (photo) => void handleCopyPath(photo),
+    onDelete: (photos) => void handleDeletePhotos(photos),
+    onEnterSelect: (photo) => handleEnterSelect(photo),
+  }
+
+  /** 照片卡片右键：选择态下命中集合 → 批量菜单；否则单张菜单并把选择切到该项 */
+  const handlePhotoContextMenu = (e: React.MouseEvent, photo: Photo) => {
+    if (selectionMode) {
+      if (selectedIds.has(photo.id) && selectedIds.size > 1) {
+        const selected = (editedTrip?.photos || []).filter((p) => selectedIds.has(p.id))
+        showContextMenuAt(e, buildPhotoBatchMenu(selected, photoMenuHandlers, photoMenuIcons))
+        return
+      }
+      setSelectedIds(new Set([photo.id]))
+    }
+    showContextMenuAt(
+      e,
+      buildPhotoMenu(photo, photoMenuHandlers, photoMenuIcons, {
+        isCover: editedTrip?.coverPhotoId === photo.id,
+        canSelect: true,
+        isMac,
+      }),
+    )
+  }
+
+  /** 照片墙空白区右键 */
+  const handleWallContextMenu = (e: React.MouseEvent) => {
+    showContextMenuAt(
+      e,
+      buildEmptyAreaMenu(
+        'trip-page',
+        {
+          onAddPhotos: () => fileInputRef.current?.click(),
+          onRescan: () => void rescanActiveAlbum(),
+          onRefresh: () => void refreshAll(),
+        },
+        { add: <PlusIcon size={14} />, rescan: <RefreshIcon size={14} />, refresh: <RefreshIcon size={14} /> },
+      ),
+    )
+  }
+
+  const rescanActiveAlbum = async () => {
+    if (!activeAlbumId) return
+    await api.rescanAlbum(activeAlbumId)
+    await refreshAll()
   }
 
   const handleSave = async () => {
@@ -505,6 +764,7 @@ const TripPage: React.FC = () => {
                 <PlusIcon size={13} />
                 <span>{isUploading ? '导入中…' : '添加照片'}</span>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   multiple
                   accept="image/*,video/*"
@@ -565,12 +825,103 @@ const TripPage: React.FC = () => {
               coverPhotoId={editedTrip?.coverPhotoId ?? null}
               onSetCover={handleSetCover}
               onToggleFavorite={handleTogglePhotoFavorite}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onPhotoContextMenu={handlePhotoContextMenu}
+              onWallContextMenu={handleWallContextMenu}
             />
           </>
         ) : (
           <MapView photos={photos} onOpenPhoto={handlePhotoClick} />
         )}
       </main>
+
+      {/* 多选工具条 */}
+      <AnimatePresence>
+        {selectionMode && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-surface border border-line shadow-xl rounded-full pl-5 pr-2 py-1.5 no-drag"
+            data-testid="selection-bar"
+          >
+            <span className="text-sm text-ink font-display whitespace-nowrap">
+              已选 {selectedIds.size} 张
+            </span>
+            <span className="w-px h-5 bg-line mx-1.5" />
+            <button
+              onClick={() => {
+                const selected = photos.filter((p: Photo) => selectedIds.has(p.id))
+                handleMovePhotos(selected)
+              }}
+              className="px-3 py-1.5 rounded-full text-sm text-ink-2 hover:text-primary hover:bg-primary-soft transition-colors flex items-center gap-1.5"
+            >
+              <MoveToFolderIcon size={14} />
+              <span>移动</span>
+            </button>
+            <button
+              onClick={() => {
+                const selected = photos.filter((p: Photo) => selectedIds.has(p.id))
+                void handleBatchFavorite(selected, !selected.every((p) => p.favorite))
+              }}
+              className="px-3 py-1.5 rounded-full text-sm text-ink-2 hover:text-primary hover:bg-primary-soft transition-colors flex items-center gap-1.5"
+            >
+              <HeartIcon size={14} />
+              <span>收藏</span>
+            </button>
+            <button
+              onClick={() => {
+                const selected = photos.filter((p: Photo) => selectedIds.has(p.id))
+                void handleDeletePhotos(selected)
+              }}
+              className="px-3 py-1.5 rounded-full text-sm text-danger hover:bg-danger/10 transition-colors flex items-center gap-1.5"
+            >
+              <TrashIcon size={14} />
+              <span>删除</span>
+            </button>
+            <span className="w-px h-5 bg-line mx-1.5" />
+            {selectedIds.size < visiblePhotos.length ? (
+              <button
+                onClick={() => setSelectedIds(new Set(visiblePhotos.map((p: Photo) => p.id)))}
+                className="px-3 py-1.5 rounded-full text-sm text-ink-2 hover:text-primary hover:bg-primary-soft transition-colors"
+              >
+                全选
+              </button>
+            ) : (
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="px-3 py-1.5 rounded-full text-sm text-ink-2 hover:text-primary hover:bg-primary-soft transition-colors"
+              >
+                全不选
+              </button>
+            )}
+            <button
+              onClick={exitSelection}
+              title="退出多选（Esc）"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-ink-3 hover:text-ink hover:bg-surface-2 transition-colors"
+            >
+              <XIcon size={15} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 移动到旅行对话框 */}
+      <AnimatePresence>
+        {moveTarget && trip && (
+          <MoveToTripDialog
+            key="move-dialog"
+            photos={moveTarget}
+            sourceTripId={trip.id}
+            trips={albumTrips}
+            onClose={() => setMoveTarget(null)}
+            onMoved={(r) => void handleMoved(r)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 灯箱 */}
       <AnimatePresence>
@@ -587,6 +938,10 @@ const TripPage: React.FC = () => {
             onSetCover={handleSetCover}
             onToggleFavorite={handleTogglePhotoFavorite}
             onEditTags={setTagTarget}
+            onMove={handleMovePhotos}
+            onReveal={handleReveal}
+            onCopyPath={handleCopyPath}
+            tripTitle={trip.title}
           />
         )}
       </AnimatePresence>

@@ -1,12 +1,30 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/store'
+import { api } from '../lib/api'
 import { Trip } from '../types'
 import TimelineItem from '../components/TimelineItem'
 import TimelineAddButton from '../components/TimelineAddButton'
 import AddTripModal from '../components/AddTripModal'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
-import { HeartIcon, PlusIcon, XIcon } from '../components/icons'
+import { showContextMenuAt } from '../components/ContextMenu'
+import {
+  buildEmptyAreaMenu,
+  buildTripMenu,
+  type TripMenuHandlers,
+} from '../lib/context-menus'
+import { toast } from '../components/feedback'
+import { hasMediaExt } from '../lib/media'
+import {
+  ArrowLeftIcon,
+  HeartIcon,
+  PenIcon,
+  PlusIcon,
+  RefreshIcon,
+  TrashIcon,
+  XIcon,
+  CameraIcon,
+} from '../components/icons'
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate()
@@ -14,6 +32,9 @@ const HomePage: React.FC = () => {
   const [showAddModal, setShowAddModal] = React.useState(false)
   /** 删除确认弹窗打开期间锁住，防重复点击 */
   const [deletingTripId, setDeletingTripId] = React.useState<string | null>(null)
+  /** 「导入照片到这次旅行」的隐藏文件选择器 */
+  const importTripRef = React.useRef<Trip | null>(null)
+  const importInputRef = React.useRef<HTMLInputElement>(null)
 
   const activeAlbum = albums.find((a) => a.id === activeAlbumId) ?? null
 
@@ -104,6 +125,77 @@ const HomePage: React.FC = () => {
     setDeletingTripId(null)
   }
 
+  const rescanActiveAlbum = async () => {
+    if (!activeAlbumId) return
+    await api.rescanAlbum(activeAlbumId)
+    await refreshAll()
+  }
+
+  /** 时间线旅行卡片右键 */
+  const tripMenuHandlers: TripMenuHandlers = {
+    onOpen: (trip) => void handleOpenTrip(trip.id),
+    onEdit: (trip) => navigate(`/trip/${trip.id}`, { state: { edit: true } }),
+    onImport: (trip) => {
+      importTripRef.current = trip
+      importInputRef.current?.click()
+    },
+    onToggleFavorite: (trip) => void handleToggleFavorite(trip.id),
+    onRescan: () => void rescanActiveAlbum(),
+    onDelete: (trip) => void handleDeleteTrip(trip.id),
+  }
+
+  const handleTripContextMenu = (e: React.MouseEvent, trip: Trip) => {
+    showContextMenuAt(
+      e,
+      buildTripMenu(trip, tripMenuHandlers, {
+        open: <ArrowLeftIcon size={14} />,
+        edit: <PenIcon size={14} />,
+        import: <CameraIcon size={14} />,
+        favorite: <HeartIcon size={14} />,
+        rescan: <RefreshIcon size={14} />,
+        trash: <TrashIcon size={14} />,
+      }),
+    )
+  }
+
+  /** 时间线空白区右键 */
+  const handleTimelineContextMenu = (e: React.MouseEvent) => {
+    // 目标是容器本身才触发（点在卡片上由卡片自己的菜单接管）
+    if (e.target !== e.currentTarget) return
+    showContextMenuAt(
+      e,
+      buildEmptyAreaMenu(
+        'home',
+        {
+          onNewTrip: () => setShowAddModal(true),
+          onRescan: activeAlbumId ? () => void rescanActiveAlbum() : undefined,
+          onRefresh: () => void refreshAll(),
+        },
+        { newTrip: <PlusIcon size={14} />, rescan: <RefreshIcon size={14} />, refresh: <RefreshIcon size={14} /> },
+      ),
+    )
+  }
+
+  /** 右键「导入照片到这次旅行」的文件选择回调 */
+  const handleImportToTrip = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const target = importTripRef.current
+    const files = event.target.files
+    event.target.value = ''
+    if (!target || !files || files.length === 0) return
+    const paths = Array.from(files)
+      .filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || hasMediaExt(f.name))
+      .map((f) => api.getPathForFile(f))
+      .filter((p) => !!p)
+    if (paths.length === 0) return
+    try {
+      const imported = await api.importPhotos(target.id, paths)
+      toast(`已导入 ${imported.length} 张到「${target.title}」`, 'success')
+      await refreshAll()
+    } catch (error: any) {
+      toast('导入照片失败: ' + error.message, 'error')
+    }
+  }
+
   return (
     <div className="min-h-screen">
       {/* 内容区顶栏（可拖拽） */}
@@ -141,7 +233,7 @@ const HomePage: React.FC = () => {
       </header>
 
       {/* 时间线 */}
-      <div className="max-w-[880px] mx-auto px-10 py-12">
+      <div className="max-w-[880px] mx-auto px-10 py-12" onContextMenu={handleTimelineContextMenu}>
         <div className="relative">
           {filteredTrips.length > 0 && (
             <div className="stitch-line absolute left-[70px] top-3 bottom-0 w-[2px]" />
@@ -156,6 +248,7 @@ const HomePage: React.FC = () => {
                   onEdit={handleOpenTrip}
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteTrip}
+                  onContextMenu={handleTripContextMenu}
                 />
               </React.Fragment>
             ))}
@@ -201,6 +294,16 @@ const HomePage: React.FC = () => {
       {showAddModal && (
         <AddTripModal onClose={() => setShowAddModal(false)} onSuccess={handleTripAdded} />
       )}
+
+      {/* 右键「导入照片到这次旅行」用的隐藏文件选择器 */}
+      <input
+        ref={importInputRef}
+        type="file"
+        multiple
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={handleImportToTrip}
+      />
     </div>
   )
 }

@@ -19,6 +19,11 @@
   --g-ink-2: #7c7065;
   --g-ink-3: #a89b8d;
   --g-danger: #c2543e;
+  /* 灯箱「翻阅室」：暖褐深色房间（非纯黑），照片在其上如烛光下翻阅手账 */
+  --g-viewer: #2b241d;
+  --g-viewer-2: #3a3128;
+  --g-viewer-ink: #f0e9e1;
+  --g-viewer-ink-2: #b3a495;
 }
 
 [data-theme='dark'] {
@@ -32,6 +37,11 @@
   --g-ink-2: #b3a495;
   --g-ink-3: #7e7062;
   --g-danger: #e06b52;
+  /* 暗色翻阅室：比主界面更暗一档但同暖（烛光暗房），不是冷黑 */
+  --g-viewer: #1b1510;
+  --g-viewer-2: #2a221a;
+  --g-viewer-ink: #f0e9e1;
+  --g-viewer-ink-2: #b3a495;
 }
 
 @theme inline {
@@ -45,6 +55,10 @@
   --color-ink-2: var(--g-ink-2);
   --color-ink-3: var(--g-ink-3);
   --color-danger: var(--g-danger);
+  --color-viewer: var(--g-viewer);
+  --color-viewer-2: var(--g-viewer-2);
+  --color-viewer-ink: var(--g-viewer-ink);
+  --color-viewer-ink-2: var(--g-viewer-ink-2);
 
   /* 手账气质的展示字体：macOS 自带楷体 */
   --font-display: 'Kaiti SC', 'STKaiti', 'Kai', 'Songti SC', serif;
@@ -228,6 +242,58 @@ mark {
 .wall-item-large:hover {
   transform: scale(1.03);
   z-index: 10;
+}
+
+/* —— 灯箱（翻阅室） —— */
+
+/* 拍立得主舞台：在暖褐房间里的实物卡片投影 */
+.viewer-polaroid {
+  background: var(--g-surface);
+  padding: 10px 10px 0;
+  border-radius: 4px;
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.35),
+    0 18px 48px rgb(0 0 0 / 0.5);
+}
+
+/* 灯箱顶栏/底部的柔和过渡带（从房间色渐入透明，保证文字可读不压照片） */
+.viewer-fade-top {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--g-viewer) 88%, transparent), transparent);
+}
+.viewer-fade-bottom {
+  background: linear-gradient(to top, color-mix(in srgb, var(--g-viewer) 88%, transparent), transparent);
+}
+
+/* 视频进度/音量轨道（input[type=range] 手账化） */
+.viewer-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--g-primary) var(--fill, 0%),
+    color-mix(in srgb, var(--g-ink-3) 40%, transparent) var(--fill, 0%)
+  );
+  outline: none;
+  cursor: pointer;
+}
+.viewer-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--g-primary);
+  border: 2px solid var(--g-surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+.viewer-range::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--g-primary);
+  border: 2px solid var(--g-surface);
 }
 
 /* —— 地图（Leaflet）—— */

@@ -7,6 +7,7 @@ import TripPage from './pages/TripPage'
 import CommandPalette from './components/CommandPalette'
 import DropImportLayer from './components/DropImport'
 import { FeedbackHost } from './components/feedback'
+import ContextMenuHost from './components/ContextMenu'
 
 /** 应用外壳：左侧常驻侧栏 + 右侧内容区（方案 §5.1） */
 function Shell() {
@@ -35,6 +36,8 @@ function Shell() {
       <CommandPalette />
       {/* toast / 确认弹窗宿主 */}
       <FeedbackHost />
+      {/* 右键上下文菜单宿主（在反馈层之下、页面内容之上） */}
+      <ContextMenuHost />
     </div>
   )
 }
