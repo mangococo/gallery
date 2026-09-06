@@ -12,6 +12,8 @@ interface MoveToTripDialogProps {
   photos: Photo[]
   /** 当前旅行 id（列表中标记「当前」，不可作为目标） */
   sourceTripId: string
+  /** 跨旅行多选时的全部来源旅行（首页照片墙场景，一并禁选） */
+  sourceTripIds?: string[]
   /** 当前相册的旅行列表（用于目标选择；新建旅行也建在该相册内） */
   trips: TripDTO[]
   onClose: () => void
@@ -26,10 +28,15 @@ interface MoveToTripDialogProps {
 const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
   photos,
   sourceTripId,
+  sourceTripIds,
   trips,
   onClose,
   onMoved,
 }) => {
+  const sourceSet = React.useMemo(
+    () => new Set([sourceTripId, ...(sourceTripIds ?? [])]),
+    [sourceTripId, sourceTripIds],
+  )
   const [query, setQuery] = React.useState('')
   const [pickedId, setPickedId] = React.useState<string | null>(null)
   const [creating, setCreating] = React.useState(false)
@@ -100,7 +107,7 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[60] no-drag bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
       onKeyDown={escClose}
       onClick={onClose}
     >
@@ -219,7 +226,7 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
                 </p>
               )}
               {candidates.map((t) => {
-                const isSource = t.id === sourceTripId
+                const isSource = sourceSet.has(t.id)
                 const missing = t.status === 'missing'
                 const active = pickedId === t.id
                 const disabled = isSource || missing
