@@ -68,8 +68,6 @@ function pushProgress(p: ScanProgress): void {
 }
 
 function pushChanged(albumId: string): void {
-  const wins = BrowserWindow.getAllWindows()
-  console.log('[debug-push] fs-changed →', albumId, 'windows:', wins.length, 'first:', wins[0]?.id, wins[0]?.isDestroyed())
   senderWindow()?.webContents.send(IPC.pushFsChanged, { albumId })
 }
 
@@ -189,7 +187,7 @@ export function registerIpcHandlers(): void {
     const occupied = getAlbumRowByPath(newPath)
     if (occupied && occupied.id !== id) throw new Error('该目录已被其他相册注册')
     updateAlbumPath(id, newPath)
-    void fullRescan(id)
+    fullRescanInBackground(id)
     return getAlbumRow(id)
   })
 
@@ -323,11 +321,13 @@ export function registerIpcHandlers(): void {
       }
     }
 
-    // 后台补缩略图并通知
+    // 后台补缩略图并通知（导入链路的收尾任务，失败只记日志）
     void (async () => {
       await generateThumbsForAlbum(album.id, album.name, { progress: pushProgress })
       pushChanged(album.id)
-    })()
+    })().catch((err) => {
+      console.error('[thumb] 导入后补缩略图失败:', (err as Error)?.message ?? err)
+    })
 
     if (importedIds.length === 0 && failed.length > 0) {
       throw new Error(`全部 ${failed.length} 个文件导入失败：${failed[0].name}（${failed[0].reason}）`)
@@ -584,11 +584,18 @@ async function closeWatcherIfInactive(id: string): Promise<void> {
   await closeWatcher()
 }
 
+/** 后台扫描的 fire-and-forget 调用统一走这里：失败记日志，不升级成未捕获拒绝（Node ≥15 默认会崩进程） */
+export function fullRescanInBackground(albumId: string): void {
+  void fullRescan(albumId).catch((err) => {
+    console.error('[scan] 后台扫描失败:', (err as Error)?.message ?? err)
+  })
+}
+
 /** 注册目录为相册并启动后台扫描（E2E 钩子复用） */
 export async function registerAlbumAt(rootPath: string, quiet = false): Promise<Album | null> {
   const existing = getAlbumRowByPath(rootPath)
   if (existing) {
-    if (!quiet) void fullRescan(existing.id)
+    if (!quiet) fullRescanInBackground(existing.id)
     return existing
   }
   const album: Album = {
@@ -600,7 +607,7 @@ export async function registerAlbumAt(rootPath: string, quiet = false): Promise<
   }
   insertAlbumRow(album)
   // 后台扫描：进度经 pushProgress 推送
-  void fullRescan(album.id)
+  fullRescanInBackground(album.id)
   return album
 }
 

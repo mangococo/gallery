@@ -351,7 +351,11 @@ const TrashCard: React.FC<{
             <img src={item.thumbUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <span className="font-display text-ink-3 text-xs text-center px-4 leading-relaxed">
-              {item.fileMissing ? '文件已不在磁盘\n仅可恢复记录' : isTrip ? '暂无缩略图' : isVideo ? '视频海报生成中…' : ''}
+              {item.fileMissing
+                ? '文件已不在磁盘\n仅可恢复记录'
+                : isVideo
+                  ? '暂无视频预览'
+                  : '暂无缩略图'}
             </span>
           )}
           {/* 媒体类型角标 */}

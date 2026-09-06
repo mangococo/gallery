@@ -655,7 +655,16 @@ const HomePage: React.FC = () => {
                 回到时间线
               </button>
             </div>
-          ) : null}
+          ) : (
+            <div className="text-center py-24">
+              <p className="text-ink-3 mb-2 font-display text-2xl">还没有照片</p>
+              <p className="text-ink-3 text-sm mb-8">
+                {activeAlbum
+                  ? '点右上角「新旅行」，或把照片拖进窗口'
+                  : '先在左侧「相册」点击加号注册照片目录'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

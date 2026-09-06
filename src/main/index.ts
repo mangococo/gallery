@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, nativeTheme, screen, type MenuItemConstructor
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { registerMediaScheme, attachMediaProtocol, ensureThumbsDir } from './protocol'
-import { registerIpcHandlers, registerAlbumAt, fullRescan } from './ipc'
+import { registerIpcHandlers, registerAlbumAt, fullRescanInBackground } from './ipc'
 import { runE2EIfEnabled } from './e2e'
 import { closeWatcher } from './services/watcher'
 import { disposeThumbResources } from './services/thumbnails'
@@ -34,6 +34,15 @@ if (!gotLock) {
   console.warn(`[画廊] 已有使用数据目录「${userDataDir}」的实例在运行，本次启动退出`)
   app.quit()
 } else {
+  // 主进程兜底：后台任务里的意外 rejection 不允许升级成崩溃（Node ≥15 默认行为）。
+  // 只记录不吞——错误日志是排查现场的唯一线索
+  process.on('unhandledRejection', (reason) => {
+    console.error('[画廊] 未处理的 Promise 拒绝:', (reason as Error)?.stack ?? reason)
+  })
+  process.on('uncaughtException', (err) => {
+    console.error('[画廊] 未捕获异常:', err?.stack ?? err)
+  })
+
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
@@ -63,13 +72,17 @@ if (!gotLock) {
     installChineseMenu()
 
     // 一次性回填存量照片的 EXIF 拍摄时间与 GPS（后台执行，不阻塞启动）
-    void backfillExifTakenAt()
-    void backfillPhotoGps()
+    void backfillExifTakenAt().catch((err) => {
+      console.error('[backfill] EXIF 回填失败:', (err as Error)?.message ?? err)
+    })
+    void backfillPhotoGps().catch((err) => {
+      console.error('[backfill] GPS 回填失败:', (err as Error)?.message ?? err)
+    })
 
     // 启动时对激活相册做增量校对并附加 watcher（覆盖关机期间的外部变更）
     const activeId = getSetting('active_album_id')
     if (activeId && getAlbumRow(activeId)) {
-      void fullRescan(activeId)
+      fullRescanInBackground(activeId)
     }
 
     // E2E 钩子：跳过目录选择对话框直接注册指定路径（多个用 | 分隔，第一个设为激活）

@@ -219,7 +219,10 @@ async function captureVideoFrame(mediaUrl: string): Promise<Buffer | null> {
       true,
     )) as { val: string | null; logs: string[] } | null
 
-    console.log(`[thumb] 视频截帧 ${mediaUrl.slice(-40)} →`, result?.logs?.join(',') ?? 'executeJavaScript 返回空')
+    // 成功路径不刷日志；失败（含超时）保留诊断信息，视频海报问题只能靠它排查
+    if (!result?.val) {
+      console.warn(`[thumb] 视频截帧失败 ${mediaUrl.slice(-40)}:`, result?.logs?.join(',') ?? 'executeJavaScript 返回空')
+    }
     const dataUrl = result?.val
     if (!dataUrl || !dataUrl.startsWith('data:image/jpeg;base64,')) return null
     return Buffer.from(dataUrl.slice('data:image/jpeg;base64,'.length), 'base64')

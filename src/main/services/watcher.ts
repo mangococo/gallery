@@ -45,7 +45,6 @@ export async function watchAlbum(albumId: string, hooks: WatchHooks): Promise<vo
 
   watcher.on('all', (event, path) => {
     if (isHiddenPath(album.path, path)) return
-    console.log(`[watcher] ${event}: ${path.split(/[\\/]/).pop()}`)
     scheduleRescan(albumId, hooks)
   })
   // 外置卷拔出等场景 chokidar 会 emit error；不监听会以未捕获异常打断主进程
@@ -82,6 +81,10 @@ async function rescanNow(albumId: string, hooks: WatchHooks): Promise<void> {
         hooks.changed(albumId)
       }
     } while (rescanQueued)
+  } catch (err) {
+    // 增量校对失败不能打断主进程（setTimeout 里的 rejection 会以未捕获异常升级成崩溃），
+    // 记录后等下一次文件事件再试
+    console.error('[watcher] 增量校对失败:', (err as Error)?.message ?? err)
   } finally {
     scanning = false
   }

@@ -10,6 +10,7 @@ import {
   getTagsOfTrip,
   getTripIdByFolder,
   getTripRow,
+  getTripRowIncludingTrashed,
   insertPhotoRow,
   insertTripRow,
   listPhotoFilesOfTrip,
@@ -161,9 +162,10 @@ async function reconcileTrip(
   let isNew = false
 
   if (!tripId) {
-    // 新旅行：旧数据保留时间戳字符串 id；旧 id 与已有旅行冲突时换新 id
+    // 新旅行：旧数据保留时间戳字符串 id；旧 id 与已有旅行（含回收站中的行）冲突时换新 id，
+    // 否则 insertTripRow 会主键冲突、整轮扫描中断
     let id = settings?.id != null && String(settings.id).trim() !== '' ? String(settings.id) : nanoid(12)
-    if (getTripRow(id)) id = nanoid(12)
+    if (getTripRowIncludingTrashed(id)) id = nanoid(12)
     insertTripRow({
       id,
       albumId,
