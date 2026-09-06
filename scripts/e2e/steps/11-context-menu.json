@@ -57,7 +57,12 @@
     "wait": 400
   },
   {
-    "name": "12-exit-select",
+    "name": "12-esc-close-batch-menu",
+    "wait": 400,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 250)); if (document.querySelector('.ctx-menu-panel')) throw new Error('ESC 未关闭批量菜单'); if (!document.querySelector('[data-testid=selection-bar]')) throw new Error('菜单层的 ESC 不应连带退出多选'); 'menu-esc-ok'"
+  },
+  {
+    "name": "12b-exit-select",
     "wait": 400,
     "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 250)); if (document.querySelector('[data-testid=selection-bar]')) throw new Error('ESC 未退出多选'); 'exit-ok'"
   },
