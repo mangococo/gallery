@@ -114,3 +114,33 @@ export function formatTakenStamp(ms: number | null | undefined): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} · ${p(d.getHours())}:${p(d.getMinutes())}`
 }
+
+/**
+ * 批量删除/移动后灯箱应停留的位置：
+ * 当前照片还在 → 跟随它落到新列表里的下标（前面被删 N 张时要左移 N，单纯 min 会跳错）；
+ * 当前照片被删/被移走 → 按旧顺序翻到其后第一张还在的（无可再翻则退回最后一张还能看的），
+ * 与主流相册「删除当前张后前进到下一张」的行为一致；
+ * 列表删空 / 越界 → null（调用方关灯箱）。
+ */
+export function indexAfterRemoval(
+  ids: string[],
+  removedIds: Set<string>,
+  current: number,
+): number | null {
+  if (current < 0 || current >= ids.length) return null
+  const remaining = ids.filter((id) => !removedIds.has(id))
+  if (remaining.length === 0) return null
+
+  const currentId = ids[current]
+  if (!removedIds.has(currentId)) {
+    const next = remaining.indexOf(currentId)
+    return next >= 0 ? next : null
+  }
+  for (let i = current + 1; i < ids.length; i++) {
+    if (!removedIds.has(ids[i])) return remaining.indexOf(ids[i])
+  }
+  for (let i = current - 1; i >= 0; i--) {
+    if (!removedIds.has(ids[i])) return remaining.indexOf(ids[i])
+  }
+  return remaining.length - 1
+}

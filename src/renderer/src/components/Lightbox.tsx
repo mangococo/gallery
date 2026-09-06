@@ -689,7 +689,16 @@ const Lightbox: React.FC<LightboxProps> = ({
                     }`}
                   >
                     {src ? (
-                      <img src={src} alt="" className="h-full w-auto rounded-[1px]" draggable={false} />
+                      <img
+                        src={src}
+                        alt=""
+                        className="h-full w-auto rounded-[1px]"
+                        draggable={false}
+                        // 大相册（上万张）全量渲染胶片条时，视口外的缩略图必须惰性加载，
+                        // 否则打开灯箱瞬间会发起上万次 gallery-media 请求
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <span className="flex h-full w-16 items-center justify-center text-[10px] text-ink-3">
                         <FilmIcon size={12} />

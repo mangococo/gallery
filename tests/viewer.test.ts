@@ -5,6 +5,7 @@ import {
   cursorForView,
   formatTakenStamp,
   formatVideoClock,
+  indexAfterRemoval,
   MIN_ZOOM,
   TOGGLE_ZOOM_FACTOR,
   toggleZoomAtPoint,
@@ -106,4 +107,39 @@ test('cursorForView：滚轮缩回 fit 后恢复 zoom-in（与点击行为一致
   const back = zoomAtPoint(zoomed, 0, 0, 1 / 1.18)
   assert.equal(back.zoom, MIN_ZOOM)
   assert.equal(cursorForView(back.zoom, false), 'zoom-in')
+})
+
+// —— indexAfterRemoval：批量删除/移动后灯箱的停留位置 ——
+
+test('indexAfterRemoval：当前张未被删 → 跟随它落位（前面删 N 张要左移 N）', () => {
+  // [A,B,C,D,E] 看着 D(3)，删 B、C → D 落到 1
+  const ids = ['A', 'B', 'C', 'D', 'E']
+  assert.equal(indexAfterRemoval(ids, new Set(['B', 'C']), 3), 1)
+  // 删的是当前张后面的 → 位置不变
+  assert.equal(indexAfterRemoval(ids, new Set(['E']), 1), 1)
+})
+
+test('indexAfterRemoval：当前张被删 → 按旧顺序前进到下一张还在的（主流相册行为）', () => {
+  const ids = ['A', 'B', 'C', 'D']
+  // 删 C(2)，D 是旧顺序里的下一张
+  assert.equal(indexAfterRemoval(ids, new Set(['C']), 2), 2)
+  // 看着 B(1)，连 A、B 一起删 → 前进到 C（不能跳过未看过的 C）
+  assert.equal(indexAfterRemoval(ids, new Set(['A', 'B']), 1), 0)
+  // 删最后一张(3)，后面没有了 → 退回还能看的最后一张 C(2)
+  assert.equal(indexAfterRemoval(ids, new Set(['D']), 3), 2)
+  // 看着 D(3)，删 B、C、D → 前面只剩 A
+  assert.equal(indexAfterRemoval(ids, new Set(['B', 'C', 'D']), 3), 0)
+})
+
+test('indexAfterRemoval：删空或越界 → null（调用方关灯箱）', () => {
+  const ids = ['A', 'B']
+  assert.equal(indexAfterRemoval(ids, new Set(['A', 'B']), 0), null)
+  assert.equal(indexAfterRemoval(ids, new Set(['A', 'B']), 1), null)
+  assert.equal(indexAfterRemoval(ids, new Set(['A']), 5), null)
+  assert.equal(indexAfterRemoval([], new Set(), 0), null)
+})
+
+test('indexAfterRemoval：全部保留 → 位置不变', () => {
+  const ids = ['A', 'B', 'C']
+  assert.equal(indexAfterRemoval(ids, new Set(), 2), 2)
 })

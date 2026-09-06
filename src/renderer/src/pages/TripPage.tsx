@@ -25,6 +25,7 @@ import {
 } from '../lib/context-menus'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import { useEscClaim, isEscTop } from '../lib/esc'
+import { indexAfterRemoval } from '../lib/viewer'
 import { dateToLocalStr, formatDotDate, parseLocalDate } from '@shared/dates'
 import {
   ArrowLeftIcon,
@@ -169,7 +170,6 @@ const TripPage: React.FC = () => {
 
   const handleDeletePhoto = async (photoId: string) => {
     if (!editedTrip) return
-    const idx = editedTrip.photos.findIndex((p: Photo) => p.id === photoId)
     try {
       await api.deletePhoto(photoId)
     } catch (error: any) {
@@ -179,11 +179,11 @@ const TripPage: React.FC = () => {
     const remaining = editedTrip.photos.filter((p: Photo) => p.id !== photoId)
     await applyUpdate({ ...editedTrip, photos: remaining })
     // 灯箱开着时跟随收缩；删空则关闭
-    setLightboxIndex((cur) => {
-      if (cur === null) return null
-      if (remaining.length === 0) return null
-      return Math.min(cur > idx ? cur - 1 : cur, remaining.length - 1)
-    })
+    setLightboxIndex((cur) =>
+      cur === null
+        ? null
+        : indexAfterRemoval(editedTrip.photos.map((p: Photo) => p.id), new Set([photoId]), cur),
+    )
     toast('已移入回收站', 'success')
     await refreshAll()
   }
@@ -238,7 +238,8 @@ const TripPage: React.FC = () => {
       photos: editedTrip.photos.map((p: Photo) => (p.id === photoId ? { ...p, caption } : p)),
     }
     setEditedTrip(updated)
-    if (!isEditing) setTrip(updated)
+    // 照片数组与编辑草稿无关：两份状态同步更新，取消编辑时墙面上已改的图注不回退
+    setTrip((t) => (t ? { ...t, photos: updated.photos } : t))
   }
 
   /** 照片级收藏：本地即时更新（不动统计与时间线，无需 refreshAll） */
@@ -255,7 +256,7 @@ const TripPage: React.FC = () => {
       photos: editedTrip.photos.map((p: Photo) => (p.id === photoId ? { ...p, favorite } : p)),
     }
     setEditedTrip(updated)
-    if (!isEditing) setTrip(updated)
+    setTrip((t) => (t ? { ...t, photos: updated.photos } : t))
   }
 
   /** 照片级标签保存（覆盖式） */
@@ -266,7 +267,7 @@ const TripPage: React.FC = () => {
       photos: editedTrip.photos.map((p: Photo) => (p.id === photoId ? { ...p, tags } : p)),
     }
     setEditedTrip(updated)
-    if (!isEditing) setTrip(updated)
+    setTrip((t) => (t ? { ...t, photos: updated.photos } : t))
   }
 
   // —— 多选体系 ——
@@ -344,11 +345,9 @@ const TripPage: React.FC = () => {
       ? remaining[0]?.id ?? null
       : editedTrip.coverPhotoId
     await applyUpdate({ ...editedTrip, photos: remaining, coverPhotoId: nextCover })
-    setLightboxIndex((cur) => {
-      if (cur === null) return null
-      if (remaining.length === 0) return null
-      return Math.min(cur, remaining.length - 1)
-    })
+    setLightboxIndex((cur) =>
+      cur === null ? null : indexAfterRemoval(editedTrip.photos.map((p: Photo) => p.id), ids, cur),
+    )
     setSelectedIds((prev) => {
       const next = new Set([...prev].filter((x) => !ids.has(x)))
       if (next.size === 0) setSelectionMode(false)
@@ -392,11 +391,11 @@ const TripPage: React.FC = () => {
       ? remaining[0]?.id ?? null
       : editedTrip.coverPhotoId
     await applyUpdate({ ...editedTrip, photos: remaining, coverPhotoId: nextCover })
-    setLightboxIndex((cur) => {
-      if (cur === null) return null
-      if (remaining.length === 0) return null
-      return Math.min(cur, remaining.length - 1)
-    })
+    setLightboxIndex((cur) =>
+      cur === null
+        ? null
+        : indexAfterRemoval(editedTrip.photos.map((p: Photo) => p.id), movedSet, cur),
+    )
     setSelectedIds((prev) => {
       const next = new Set([...prev].filter((x) => !movedSet.has(x)))
       if (next.size === 0) setSelectionMode(false)

@@ -14,6 +14,7 @@ import PhotoTagEditor from '../components/PhotoTagEditor'
 import MoveToTripDialog from '../components/MoveToTripDialog'
 import { confirmAndDeleteTrip } from '../lib/trip-actions'
 import { useEscClaim, isEscTop } from '../lib/esc'
+import { indexAfterRemoval } from '../lib/viewer'
 import { showContextMenuAt } from '../components/ContextMenu'
 import {
   buildEmptyAreaMenu,
@@ -371,13 +372,12 @@ const HomePage: React.FC = () => {
       toast('删除失败: ' + error.message, 'error')
       return
     }
-    // 灯箱开着时跟随收缩；删空则关闭
-    setWallLightboxIndex((cur) => {
-      if (cur === null) return null
-      const remaining = wallPhotos.filter((p: Photo) => !ids.has(p.id))
-      if (remaining.length === 0) return null
-      return Math.min(cur, remaining.length - 1)
-    })
+    // 灯箱开着时跟随收缩（当前张还在则跟随，被删则原地接管）；删空则关闭
+    setWallLightboxIndex((cur) =>
+      cur === null
+        ? null
+        : indexAfterRemoval(wallPhotos.map((p: Photo) => p.id), ids, cur),
+    )
     setSelectedIds((prev) => {
       const next = new Set([...prev].filter((x) => !ids.has(x)))
       if (next.size === 0) setWallSelectionMode(false)
