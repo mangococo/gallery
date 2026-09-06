@@ -94,7 +94,7 @@ test('buildPhotoMenu：视频文案与已收藏/已封面态', () => {
   assert.ok(ls.includes('播放视频'))
   assert.ok(ls.includes('取消收藏'))
   assert.ok(ls.includes('已设为封面'))
-  assert.ok(ls.includes('删除视频（移入废纸篓）'))
+  assert.ok(ls.includes('删除视频（移入回收站）'))
   assert.ok(!ls.includes('选择多张…'))
   // 已是封面 → 设为封面应禁用
   const coverItem = entries.find((e) => 'label' in e && e.label === '已设为封面')
@@ -125,7 +125,7 @@ test('buildPhotoBatchMenu：多选菜单以数量开头、收藏随整体态切�
     H,
   )
   assert.ok(labels(allFav).includes('取消全部收藏'))
-  assert.ok(labels(allFav).includes('删除 2 项（移入废纸篓）'))
+  assert.ok(labels(allFav).includes('删除 2 项（移入回收站）'))
 })
 
 test('buildPhotoBatchMenu：含视频的多选在 header 标注', () => {
@@ -186,4 +186,71 @@ test('buildEmptyAreaMenu：旅行页与首页的场景差异', () => {
   const lsHome = labels(home)
   assert.ok(lsHome.includes('新建旅行…'))
   assert.ok(!lsHome.includes('添加照片…'))
+})
+
+// —— 回收站菜单 ——
+
+import {
+  buildTrashItemMenu,
+  buildTrashBatchMenu,
+} from '../src/renderer/src/lib/context-menus.ts'
+import type { TrashItem } from '../src/renderer/src/types.ts'
+
+function trashItem(partial: Partial<TrashItem> & { kind: 'trip' | 'photo'; id: string }): TrashItem {
+  return {
+    name: partial.kind === 'trip' ? '京都' : 'a.jpg',
+    albumId: 'a1',
+    albumName: '演示相册',
+    tripId: 't1',
+    tripTitle: '京都',
+    deletedAt: 1700000000000,
+    thumbUrl: '',
+    fileMissing: false,
+    ...partial,
+  }
+}
+
+const trashHandlers = {
+  onRestore: () => {},
+  onPurge: () => {},
+}
+
+test('回收站单条菜单：恢复 / 彻底删除，缺一不可', () => {
+  const entries = buildTrashItemMenu(trashItem({ kind: 'photo', id: 'p1' }), trashHandlers)
+  const labels = entries.map((e) => ('label' in e ? e.label : ''))
+  assert.ok(labels.includes('恢复'))
+  assert.ok(labels.includes('彻底删除…'))
+  // 危险项标记在彻底删除上
+  const purge = entries.find((e) => 'label' in e && e.label === '彻底删除…') as { danger?: boolean }
+  assert.equal(purge.danger, true)
+})
+
+test('回收站照片菜单：原旅行在回收站时不提供「查看原旅行」（避免跳进缺失旅行页）', () => {
+  const withTrip = buildTrashItemMenu(
+    trashItem({ kind: 'photo', id: 'p1', tripTrashed: true }),
+    { ...trashHandlers, onViewTrip: () => {} },
+  )
+  assert.ok(!withTrip.some((e) => 'label' in e && String(e.label).includes('查看原旅行')))
+
+  const liveTrip = buildTrashItemMenu(
+    trashItem({ kind: 'photo', id: 'p1', tripTrashed: false }),
+    { ...trashHandlers, onViewTrip: () => {} },
+  )
+  assert.ok(liveTrip.some((e) => 'label' in e && String(e.label).includes('查看原旅行')))
+})
+
+test('回收站批量菜单：头部计数 + 批量恢复 + 批量彻底删除', () => {
+  const items = [
+    trashItem({ kind: 'photo', id: 'p1', type: 'image' }),
+    trashItem({ kind: 'photo', id: 'p2', type: 'video' }),
+    trashItem({ kind: 'trip', id: 't9' }),
+  ]
+  const entries = buildTrashBatchMenu(items, trashHandlers)
+  const header = entries.find((e) => e.kind === 'header') as { label: string }
+  assert.ok(header.label.includes('已选择 3 项'))
+  assert.ok(header.label.includes('1 个旅行'))
+  assert.ok(header.label.includes('1 个视频'))
+  const labels = entries.map((e) => ('label' in e ? e.label : ''))
+  assert.ok(labels.includes('恢复全部'))
+  assert.ok(labels.includes('彻底删除 3 项…'))
 })

@@ -2,9 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   clampView,
+  cursorForView,
   formatTakenStamp,
   formatVideoClock,
   MIN_ZOOM,
+  TOGGLE_ZOOM_FACTOR,
+  toggleZoomAtPoint,
   zoomAtPoint,
 } from '../src/renderer/src/lib/viewer.ts'
 
@@ -59,4 +62,48 @@ test('formatTakenStamp：时间戳 → 手账日期', () => {
   assert.equal(formatTakenStamp(d.getTime()), '2026.05.12 · 14:32')
   assert.equal(formatTakenStamp(null), '')
   assert.equal(formatTakenStamp(NaN), '')
+})
+
+// —— 单击缩放切换（灯箱重设计） ——
+
+test('toggleZoomAtPoint：fit 单击 → 以指针为锚点放大', () => {
+  const v = toggleZoomAtPoint({ zoom: MIN_ZOOM, x: 0, y: 0 }, 100, -50)
+  assert.equal(v.zoom, TOGGLE_ZOOM_FACTOR)
+  // 锚点保持在指针位置：x = -px·(k-1)
+  assert.equal(v.x, -100 * (TOGGLE_ZOOM_FACTOR - 1))
+  assert.equal(v.y, 50 * (TOGGLE_ZOOM_FACTOR - 1))
+})
+
+test('toggleZoomAtPoint：非 fit 单击 → 复位 fit（平移一并归零）', () => {
+  const v = toggleZoomAtPoint({ zoom: 2.5, x: 120, y: -80 }, 100, -50)
+  assert.deepEqual(v, { zoom: MIN_ZOOM, x: 0, y: 0 })
+})
+
+test('toggleZoomAtPoint：连续两次切换回到原状态', () => {
+  const fit = { zoom: MIN_ZOOM, x: 0, y: 0 }
+  const zoomed = toggleZoomAtPoint(fit, 0, 0)
+  const back = toggleZoomAtPoint(zoomed, 0, 0)
+  assert.deepEqual(back, fit)
+})
+
+test('toggleZoomAtPoint：放大受 MAX_ZOOM 钳制', () => {
+  // 自定义超大 factor → zoom 不超过 MAX_ZOOM
+  const v = toggleZoomAtPoint({ zoom: MIN_ZOOM, x: 0, y: 0 }, 0, 0, Infinity, Infinity, Infinity, Infinity, 100)
+  assert.equal(v.zoom, 8)
+})
+
+test('cursorForView：fit→zoom-in，zoom→zoom-out，拖拽中→grabbing', () => {
+  assert.equal(cursorForView(MIN_ZOOM, false), 'zoom-in')
+  assert.equal(cursorForView(2.5, false), 'zoom-out')
+  assert.equal(cursorForView(2.5, true), 'grabbing')
+  assert.equal(cursorForView(MIN_ZOOM, true), 'grabbing')
+})
+
+test('cursorForView：滚轮缩回 fit 后恢复 zoom-in（与点击行为一致）', () => {
+  // 滚轮放大（zoomAtPoint）到非 fit → zoom-out；滚轮缩回 → zoom-in
+  const zoomed = zoomAtPoint({ zoom: MIN_ZOOM, x: 0, y: 0 }, 0, 0, 1.18)
+  assert.equal(cursorForView(zoomed.zoom, false), 'zoom-out')
+  const back = zoomAtPoint(zoomed, 0, 0, 1 / 1.18)
+  assert.equal(back.zoom, MIN_ZOOM)
+  assert.equal(cursorForView(back.zoom, false), 'zoom-in')
 })

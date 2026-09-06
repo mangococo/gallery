@@ -40,7 +40,7 @@
   {
     "name": "08-confirm-delete",
     "wait": 1500,
-    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '移入废纸篓'); if (!b) throw new Error('找不到确认删除按钮'); b.click(); 'confirmed'"
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '移入回收站'); if (!b) throw new Error('找不到确认删除按钮'); b.click(); 'confirmed'"
   },
   {
     "name": "09-home-after",
@@ -68,6 +68,6 @@
   {
     "name": "14-trip-cancel",
     "wait": 700,
-    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '取消'); if (!b) throw new Error('找不到取消按钮'); b.click(); await new Promise(r => setTimeout(r, 200)); const still = [...document.querySelectorAll('button')].some(x => x.textContent.trim() === '移入废纸篓'); if (still) throw new Error('取消后弹窗未关闭'); 'cancel-ok'"
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '取消'); if (!b) throw new Error('找不到取消按钮'); b.click(); await new Promise(r => setTimeout(r, 200)); const still = [...document.querySelectorAll('button')].some(x => x.textContent.trim() === '移入回收站'); if (still) throw new Error('取消后弹窗未关闭'); 'cancel-ok'"
   }
 ]

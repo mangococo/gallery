@@ -1,0 +1,81 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"回收站链路：删除照片 → 扫描不复活 → 删除旅行 → 回收站页展示 → UI 恢复旅行 → API 恢复照片 → 再次删除+彻底删除 → 扫描稳定。前置：gen-demo 演示数据（每链路重置，可放心删真实文件）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-stash-kyoto",
+    "wait": 400,
+    "log": true,
+    "script": "const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const kyoto = trips.find(t => t.title.includes('京都')); if (!kyoto) throw new Error('找不到京都'); if (kyoto.photos.length < 2) throw new Error('京都照片不足'); window.__e2e = { albumId, tripId: kyoto.id, count: kyoto.photos.length, p1: kyoto.photos[0].id }; return { count: kyoto.photos.length }"
+  },
+  {
+    "name": "03-delete-photo",
+    "wait": 700,
+    "script": "const st = window.__e2e; await window.api.deletePhoto(st.p1); const trash = await window.api.listTrash(); const item = trash.find(i => i.kind === 'photo' && i.id === st.p1); if (!item) throw new Error('删除后回收站没有该照片'); if (item.fileMissing) throw new Error('文件应在回收站槽位中'); if (!item.tripTitle.includes('京都')) throw new Error('原旅行信息缺失: ' + JSON.stringify(item)); if (item.tripTrashed) throw new Error('旅行未删除时不应标记 tripTrashed'); 'photo-trashed-ok'"
+  },
+  {
+    "name": "04-rescan-no-reappear",
+    "wait": 800,
+    "script": "const st = window.__e2e; await window.api.rescanAlbum(st.albumId); await new Promise(r => setTimeout(r, 1200)); const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.id === st.tripId); if (!kyoto) throw new Error('重扫后京都消失'); if (kyoto.photos.some(p => p.id === st.p1)) throw new Error('删除的照片被扫描重新入库！扫描兼容性破坏'); if (trips.length !== (await window.api.listTrips(st.albumId)).length) {} return 'scan-compat-ok'"
+  },
+  {
+    "name": "05-delete-trip",
+    "wait": 700,
+    "script": "const st = window.__e2e; await window.api.deleteTrip(st.tripId); const trips = await window.api.listTrips(st.albumId); if (trips.some(t => t.id === st.tripId)) throw new Error('删除后旅行仍在业务视图'); const trash = await window.api.listTrash(); const tripItem = trash.find(i => i.kind === 'trip' && i.id === st.tripId); if (!tripItem) throw new Error('回收站没有该旅行'); if (tripItem.photoCount !== st.count - 1) throw new Error('旅行照片数不对: ' + tripItem.photoCount + ' 期望 ' + (st.count - 1)); if (tripItem.fileMissing) throw new Error('旅行文件夹应在回收站槽位'); const photoItem = trash.find(i => i.kind === 'photo' && i.id === st.p1); if (!photoItem) throw new Error('旅行删除不应影响先前单独删除的照片'); 'trip-trashed-ok'"
+  },
+  {
+    "name": "06-open-trash-ui",
+    "wait": 500,
+    "script": "const btn = document.querySelector('[data-testid=sidebar-trash]'); if (!btn) throw new Error('侧栏没有回收站入口'); btn.click(); await new Promise(r => setTimeout(r, 600)); const grid = document.querySelector('[data-testid=trash-grid]'); if (!grid) throw new Error('回收站页未渲染'); const cards = grid.children.length; if (cards !== 2) throw new Error('回收站应有 2 项（1 旅行 + 1 照片），实际 ' + cards); const badge = document.querySelector('[data-testid=sidebar-trash]'); if (!badge.textContent.includes('2')) throw new Error('侧栏角标未显示 2: ' + badge.textContent); 'trash-ui-ok'"
+  },
+  {
+    "name": "07-trash-page-shot",
+    "wait": 500
+  },
+  {
+    "name": "08-restore-trip-ui",
+    "wait": 600,
+    "script": "const st = window.__e2e; const tripCard = document.querySelector('[data-testid=trash-card-trip]'); if (!tripCard) throw new Error('找不到旅行卡'); const restoreBtn = tripCard.querySelector('button[title=恢复]'); if (!restoreBtn) throw new Error('旅行卡没有恢复按钮'); restoreBtn.click(); await new Promise(r => setTimeout(r, 1200)); const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.id === st.tripId); if (!kyoto) throw new Error('UI 恢复旅行失败'); if (kyoto.photos.length !== st.count - 1) throw new Error('恢复后照片数不对: ' + kyoto.photos.length); if (kyoto.status !== 'ok') throw new Error('恢复后旅行文件夹应在位'); const trash = await window.api.listTrash(); if (trash.length !== 1 || trash[0].id !== st.p1) throw new Error('旅行恢复后回收站应只剩照片'); 'trip-restored-ok'"
+  },
+  {
+    "name": "09-after-restore-shot",
+    "wait": 500
+  },
+  {
+    "name": "10-restore-photo",
+    "wait": 600,
+    "script": "const st = window.__e2e; const result = await window.api.trashRestore({ photoIds: [st.p1], tripIds: [] }); if (result.photosCount !== 1 || result.failed.length > 0) throw new Error('恢复结果不对: ' + JSON.stringify(result)); const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.id === st.tripId); if (kyoto.photos.length !== st.count) throw new Error('照片恢复后数量不对: ' + kyoto.photos.length + ' 期望 ' + st.count); if (!kyoto.photos.some(p => p.id === st.p1)) throw new Error('恢复的照片不在原旅行'); const trash = await window.api.listTrash(); if (trash.length !== 0) throw new Error('全部恢复后回收站应为空: ' + JSON.stringify(trash.map(i => i.name))); 'photo-restored-ok'"
+  },
+  {
+    "name": "10b-conflict-delete-photo-and-trip",
+    "wait": 500,
+    "script": "const st = window.__e2e; const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.id === st.tripId); const p2 = kyoto.photos[0].id; await window.api.deletePhoto(p2); await window.api.deleteTrip(st.tripId); await new Promise(r => setTimeout(r, 600)); const trash = await window.api.listTrash(); const photoItem = trash.find(i => i.kind === 'photo' && i.id === p2); if (!photoItem) throw new Error('回收站缺照片项'); if (!photoItem.tripTrashed) throw new Error('应标记原旅行也在回收站'); if (!trash.some(i => i.kind === 'trip' && i.id === st.tripId)) throw new Error('回收站缺旅行项'); window.__e2e.p2 = p2; 'conflict-state-ok'"
+  },
+  {
+    "name": "10c-conflict-restore-photo-brings-trip",
+    "wait": 500,
+    "script": "const st = window.__e2e; const result = await window.api.trashRestore({ photoIds: [st.p2], tripIds: [] }); if (result.failed.length > 0) throw new Error('恢复失败: ' + JSON.stringify(result.failed)); if (result.tripsCount !== 1) throw new Error('恢复照片应连带恢复旅行: ' + JSON.stringify(result)); const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.id === st.tripId); if (!kyoto) throw new Error('恢复照片未带出原旅行'); if (kyoto.photos.length !== st.count) throw new Error('旅行与照片关系应完整恢复: ' + kyoto.photos.length); if (!kyoto.photos.some(p => p.id === st.p2)) throw new Error('目标照片不在旅行中'); const trash = await window.api.listTrash(); if (trash.length !== 0) throw new Error('层级恢复后回收站应为空'); 'conflict-restore-ok'"
+  },
+  {
+    "name": "11-redelete-and-purge",
+    "wait": 700,
+    "script": "const st = window.__e2e; await window.api.deletePhoto(st.p1); let trash = await window.api.listTrash(); if (!trash.some(i => i.id === st.p1)) throw new Error('二次删除未入回收站'); const result = await window.api.trashPurge({ photoIds: [st.p1], tripIds: [] }); if (result.photosCount !== 1 || result.failed.length > 0) throw new Error('彻底删除结果不对: ' + JSON.stringify(result)); trash = await window.api.listTrash(); if (trash.some(i => i.id === st.p1)) throw new Error('彻底删除后仍在回收站'); const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.id === st.tripId); if (kyoto.photos.some(p => p.id === st.p1)) throw new Error('彻底删除后照片仍在旅行中'); 'purge-ok'"
+  },
+  {
+    "name": "12-final-rescan-stability",
+    "wait": 800,
+    "script": "const st = window.__e2e; await window.api.rescanAlbum(st.albumId); await new Promise(r => setTimeout(r, 1200)); const trips = await window.api.listTrips(st.albumId); const kyotos = trips.filter(t => t.title.includes('京都')); if (kyotos.length !== 1) throw new Error('扫描产生了重复旅行: ' + kyotos.length); if (kyotos[0].photos.length !== st.count - 1) throw new Error('扫描后照片数漂移: ' + kyotos[0].photos.length); const trash = await window.api.listTrash(); if (trash.length !== 0) throw new Error('扫描后回收站不应有新条目'); return 'final-stable'"
+  },
+  {
+    "name": "13-empty-trash-shot",
+    "wait": 600,
+    "script": "const refresh = [...document.querySelectorAll('button')].find(b => b.title === '刷新'); if (refresh) { refresh.click(); await new Promise(r => setTimeout(r, 900)); } const grid = document.querySelector('[data-testid=trash-grid]'); if (grid) throw new Error('回收站应为空态'); if (!document.body.textContent.includes('回收站是空的')) throw new Error('空态文案缺失'); 'empty-ok'"
+  }
+]
