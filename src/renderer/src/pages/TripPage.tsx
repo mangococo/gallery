@@ -531,7 +531,7 @@ const TripPage: React.FC = () => {
             <p className="text-ink-3 font-display text-lg">旅行不存在或已被删除</p>
             <button
               onClick={() => navigate('/')}
-              className="px-5 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
+              className="px-5 py-2 bg-primary text-primary-ink rounded-lg text-sm hover:opacity-90 transition-opacity"
             >
               回到首页
             </button>
@@ -599,7 +599,7 @@ const TripPage: React.FC = () => {
               </button>
               <button
                 onClick={handleSave}
-                className="px-5 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
+                className="px-5 py-1.5 bg-primary text-primary-ink rounded-lg text-sm hover:opacity-90 transition-opacity"
               >
                 保存
               </button>
@@ -648,7 +648,7 @@ const TripPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-5 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity"
+                className="px-5 py-1.5 bg-primary text-primary-ink rounded-lg text-sm hover:opacity-90 transition-opacity"
               >
                 编辑
               </button>
@@ -785,7 +785,7 @@ const TripPage: React.FC = () => {
                   {trip.tags.map((tag: string, index: number) => (
                     <span
                       key={index}
-                      className="px-3 py-1 bg-primary-soft text-primary text-sm rounded-full"
+                      className="px-3 py-1 bg-primary-soft text-primary-soft-ink text-sm rounded-full"
                     >
                       #{tag}
                     </span>
@@ -821,7 +821,7 @@ const TripPage: React.FC = () => {
                   ? `${photos.length} 张`
                   : `${visiblePhotos.length} / ${photos.length} 张`}
               </span>
-              <label className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
+              <label className="px-4 py-2 bg-primary text-primary-ink rounded-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 text-sm">
                 <PlusIcon size={13} />
                 <span>{isUploading ? '导入中…' : '添加照片'}</span>
                 <input
@@ -846,7 +846,7 @@ const TripPage: React.FC = () => {
                 <button
                   onClick={() => setFavOnly((v) => !v)}
                   className={`px-3 py-1 rounded-full text-xs flex items-center gap-1 transition-colors ${
-                    favOnly ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                    favOnly ? 'bg-primary text-primary-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'
                   }`}
                 >
                   <HeartIcon size={11} filled={favOnly} />
@@ -857,7 +857,7 @@ const TripPage: React.FC = () => {
                     key={tag}
                     onClick={() => setTagFilter((cur) => (cur === tag ? null : tag))}
                     className={`px-3 py-1 rounded-full text-xs transition-colors ${
-                      tagFilter === tag ? 'bg-primary text-white' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                      tagFilter === tag ? 'bg-primary text-primary-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'
                     }`}
                   >
                     #{tag}

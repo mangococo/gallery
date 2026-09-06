@@ -1,0 +1,75 @@
+/*
+ * Runtime Theme Inputs —— 品牌驱动输入层（§theme.md）
+ *
+ * 极小的一层「旋钮」：语义层的品牌色从这里取值。组件永远不直接消费 --gt-*。
+ * 两个用途：
+ *   1. Theme（palette）通过覆盖这层获得不同的品牌气质（default / candle）；
+ *   2. 未来「自定义主题色」只需要在 <html> 上内联写这几个变量，语义层自动跟随。
+ * 每个输入必须有合法 fallback（:root），且只允许被语义层引用。
+ */
+:root {
+  /* 品牌强调色（琥珀）与其上的墨色（对比度达标 5.1:1） */
+  --gt-accent: var(--p-amber-300);
+  --gt-accent-ink: var(--p-night-900);
+  /* 强调色的柔和洗染（胶带/软底） */
+  --gt-accent-soft: var(--p-cream);
+}
+
+/* 暗色模式下品牌琥珀提亮一档、墨色翻转为暖纸色，柔和洗染由强调色混入夜色表面 */
+[data-mode='dark'] {
+  --gt-accent: var(--p-amber-200);
+  --gt-accent-ink: var(--p-night-850);
+  --gt-accent-soft: color-mix(in srgb, var(--gt-accent) 14%, var(--p-night-800));
+}
+
+/* Candle：烛光调 —— 更金、更蜜色的琥珀，配同源墨色 */
+[data-palette='candle'] {
+  --gt-accent: #b07a28;
+  --gt-accent-ink: #1c1409;
+  --gt-accent-soft: #f6ead0;
+}
+
+[data-palette='candle'][data-mode='dark'] {
+  --gt-accent: #d9a55e;
+  --gt-accent-ink: #241a0e;
+  --gt-accent-soft: #382c18;
+}
+
+/* —— 月白：素白青灰，低饱和冷白 —— */
+[data-palette='yuebai'] {
+  --gt-accent: #577487;
+  --gt-accent-ink: #ffffff;
+  --gt-accent-soft: #e2ebec;
+}
+
+[data-palette='yuebai'][data-mode='dark'] {
+  --gt-accent: #8fb3c4;
+  --gt-accent-ink: #141d21;
+  --gt-accent-soft: #2a383e;
+}
+
+/* —— 黛蓝：黛蓝靛青 —— */
+[data-palette='dailan'] {
+  --gt-accent: #4a6fa5;
+  --gt-accent-ink: #ffffff;
+  --gt-accent-soft: #e1e9f5;
+}
+
+[data-palette='dailan'][data-mode='dark'] {
+  --gt-accent: #82a8d8;
+  --gt-accent-ink: #10161f;
+  --gt-accent-soft: #243146;
+}
+
+/* —— 青瓷：青瓷釉色 —— */
+[data-palette='qingci'] {
+  --gt-accent: #3e7d6c;
+  --gt-accent-ink: #ffffff;
+  --gt-accent-soft: #ddece5;
+}
+
+[data-palette='qingci'][data-mode='dark'] {
+  --gt-accent: #7fb5a3;
+  --gt-accent-ink: #0e1714;
+  --gt-accent-soft: #1f312a;
+}

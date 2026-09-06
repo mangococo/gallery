@@ -557,7 +557,7 @@ const Lightbox: React.FC<LightboxProps> = ({
                 )}
                 {/* 视频角标 */}
                 {isVideo && (
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/45 text-white/90 text-[10px] flex items-center gap-1">
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-scrim/45 text-scrim-ink/90 text-[10px] flex items-center gap-1">
                     <FilmIcon size={10} />
                     视频
                   </span>
@@ -634,7 +634,7 @@ const Lightbox: React.FC<LightboxProps> = ({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {photo.tags.map((tag) => (
-                    <span key={tag} className="px-2 py-0.5 bg-primary-soft text-primary text-xs rounded-full">
+                    <span key={tag} className="px-2 py-0.5 bg-primary-soft text-primary-soft-ink text-xs rounded-full">
                       #{tag}
                     </span>
                   ))}
@@ -705,7 +705,7 @@ const Lightbox: React.FC<LightboxProps> = ({
                       </span>
                     )}
                     {p.type === 'video' && (
-                      <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-black/55 text-white flex items-center justify-center">
+                      <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-scrim/55 text-scrim-ink flex items-center justify-center">
                         <PlayIcon size={7} />
                       </span>
                     )}
@@ -759,7 +759,7 @@ const VideoStage: React.FC<{
         preload="metadata"
         playsInline
         onPlay={() => setStarted(true)}
-        className="max-h-[min(62vh,820px)] max-w-[min(84vw,1100px)] w-auto h-auto rounded-[2px] bg-black"
+        className="bg-scrim"
         onClick={(e) => {
           e.stopPropagation()
           const v = videoRef.current
@@ -780,7 +780,7 @@ const VideoStage: React.FC<{
             e.stopPropagation()
             void videoRef.current?.play()
           }}
-          className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors hover:bg-black/20"
+          className="absolute inset-0 flex items-center justify-center bg-scrim/10 transition-colors hover:bg-scrim/20"
           title="播放（Space）"
         >
           <span className="w-16 h-16 rounded-full bg-surface/95 shadow-xl flex items-center justify-center text-primary">

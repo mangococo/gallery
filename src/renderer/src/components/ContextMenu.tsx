@@ -114,7 +114,7 @@ const MenuPanel: React.FC<{
             ? 'opacity-40 cursor-default'
             : danger
               ? `text-danger cursor-pointer ${active ? 'bg-danger/10' : 'hover:bg-danger/10'}`
-              : `text-ink-2 cursor-pointer ${active ? 'bg-primary-soft text-primary' : 'hover:bg-primary-soft hover:text-primary'}`
+              : `text-ink-2 cursor-pointer ${active ? 'bg-primary-soft text-primary-soft-ink' : 'hover:bg-primary-soft hover:text-primary'}`
         }`
         return (
           <div key={`${entry.label}-${i}`} className="relative">

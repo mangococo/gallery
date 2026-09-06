@@ -148,6 +148,16 @@ function restoreWindowBounds(): { width: number; height: number; x?: number; y?:
 function createMainWindow(): void {
   const savedTheme = (getSetting('theme_mode') as ThemeMode | null) ?? 'system'
   const dark = savedTheme === 'dark' || (savedTheme === 'system' && nativeTheme.shouldUseDarkColors)
+  // 窗口底色镜像当前主题的 --background（语义值见 tokens/semantic.css；改 CSS 记得同步这里）
+  const palette = getSetting('theme_palette') ?? 'default'
+  const PAPER: Record<string, [light: string, dark: string]> = {
+    default: ['#FAF8F5', '#1C1916'],
+    candle: ['#FBF5E9', '#191410'],
+    yuebai: ['#F5F7F7', '#1A2023'],
+    dailan: ['#F2F5F9', '#171C26'],
+    qingci: ['#F1F6F3', '#131C18'],
+  }
+  const bg = (PAPER[palette] ?? PAPER.default)[dark ? 1 : 0]
   const bounds = restoreWindowBounds()
 
   mainWindow = new BrowserWindow({
@@ -160,7 +170,7 @@ function createMainWindow(): void {
     show: false,
     title: '画廊',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: dark ? '#1C1916' : '#FAF8F5',
+    backgroundColor: bg,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

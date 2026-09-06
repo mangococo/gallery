@@ -493,7 +493,7 @@ const HomePage: React.FC = () => {
                 <button
                   key={chip.label}
                   onClick={chip.clear}
-                  className="px-2 py-0.5 bg-primary-soft text-primary text-xs rounded-full hover:opacity-80 transition-opacity flex items-center gap-1"
+                  className="px-2 py-0.5 bg-primary-soft text-primary-soft-ink text-xs rounded-full hover:opacity-80 transition-opacity flex items-center gap-1"
                 >
                   {chip.icon === 'heart' && <HeartIcon size={11} filled />}
                   <span>{chip.label}</span>
@@ -524,7 +524,7 @@ const HomePage: React.FC = () => {
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-1.5 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1"
+            className="px-4 py-1.5 bg-primary text-primary-ink rounded-lg text-sm hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1"
           >
             <PlusIcon size={13} />
             <span>新旅行</span>
@@ -567,7 +567,7 @@ const HomePage: React.FC = () => {
               <p className="text-ink-3 mb-4 font-display text-lg">这一页还没有符合条件的旅行</p>
               <button
                 onClick={() => setFilters({ favoritesOnly: false, tags: [], year: null })}
-                className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
+                className="px-6 py-2.5 bg-primary text-primary-ink rounded-xl hover:opacity-90 transition-opacity text-sm"
               >
                 清除筛选
               </button>
@@ -594,7 +594,7 @@ const HomePage: React.FC = () => {
                   {activeAlbum && (
                     <button
                       onClick={() => setShowAddModal(true)}
-                      className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
+                      className="px-6 py-2.5 bg-primary text-primary-ink rounded-xl hover:opacity-90 transition-opacity text-sm"
                     >
                       创建第一次旅行
                     </button>
@@ -616,7 +616,7 @@ const HomePage: React.FC = () => {
                   {photoTotal} 张照片与视频 · 按拍摄时间从新到旧
                 </p>
                 {selectedIds.size > 0 && (
-                  <span className="text-sm text-primary font-display">已选 {selectedIds.size} 项</span>
+                  <span className="text-sm text-ink-2 font-display">已选 {selectedIds.size} 项</span>
                 )}
               </div>
               <PhotoWall
@@ -650,7 +650,7 @@ const HomePage: React.FC = () => {
               <p className="text-ink-3 text-sm mb-8">进入一次旅行添加照片，或把照片拖进窗口导入。</p>
               <button
                 onClick={() => switchView('timeline')}
-                className="px-6 py-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-opacity text-sm"
+                className="px-6 py-2.5 bg-primary text-primary-ink rounded-xl hover:opacity-90 transition-opacity text-sm"
               >
                 回到时间线
               </button>

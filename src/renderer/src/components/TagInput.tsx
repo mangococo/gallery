@@ -29,7 +29,7 @@ const TagInput: React.FC<TagInputProps> = ({
   onChange,
   placeholder = '输入或选择标签，用逗号分隔',
   inputClassName = 'w-full px-5 py-3 bg-background border-2 border-line rounded-xl text-ink placeholder-ink-3 focus:outline-none focus:border-primary transition-all',
-  pillClassName = 'px-3 py-1 bg-primary-soft text-primary text-sm rounded-full',
+  pillClassName = 'px-3 py-1 bg-primary-soft text-primary-soft-ink text-sm rounded-full',
   maxSuggestions = 8,
 }) => {
   const [text, setText] = React.useState(value.join(', '))
@@ -146,7 +146,7 @@ const TagInput: React.FC<TagInputProps> = ({
                 onClick={() => choose(tag)}
                 onMouseEnter={() => setHighlight(i)}
                 className={`w-full flex items-center gap-2 text-left px-4 py-2 text-sm transition-colors ${
-                  i === highlight ? 'bg-primary-soft text-primary' : 'text-ink-2'
+                  i === highlight ? 'bg-primary-soft text-primary-soft-ink' : 'text-ink-2'
                 }`}
               >
                 <TagIcon size={12} className="shrink-0 opacity-60" />

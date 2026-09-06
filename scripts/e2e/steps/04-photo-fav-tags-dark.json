@@ -12,7 +12,7 @@
   {
     "name": "02-click-dark",
     "wait": 900,
-    "script": "const b = [...document.querySelectorAll('[role=\"radiogroup\"][aria-label=\"主题\"] button')].find(x => x.textContent.trim() === '暗'); if (!b) throw new Error('暗色切换按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 300)); if (document.documentElement.dataset.theme !== 'dark') throw new Error('暗色未生效'); 'dark-ok'"
+    "script": "const b = [...document.querySelectorAll('[role=\"radiogroup\"][aria-label=\"主题\"] button')].find(x => x.textContent.trim() === '暗'); if (!b) throw new Error('暗色切换按钮缺失'); b.click(); await new Promise(r => setTimeout(r, 300)); if (document.documentElement.dataset.mode !== 'dark') throw new Error('暗色未生效'); 'dark-ok'"
   },
   {
     "name": "03-home-dark",

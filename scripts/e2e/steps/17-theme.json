@@ -1,0 +1,103 @@
+[
+ {
+  "name": "_meta",
+  "wait": 1,
+  "log": true,
+  "script": "return \"主题系统链路：默认亮色启动 → 设置弹窗切暗色（data-mode）→ 切烛光 palette（data-palette）→ 语义变量/遮罩 token 断言 → 烛光暗房下的灯箱与右键菜单 → 侧栏切亮色（palette 保持）→ 收尾留在 烛光+暗色 供持久化验证。前置：gen-demo 演示数据。本链路退出后可用 17-theme-verify.json 配合同一 GALLERY_USER_DATA 验证重启持久化。\""
+ },
+ {
+  "name": "01-home",
+  "wait": 4000
+ },
+ {
+  "name": "02-boot-default-light",
+  "wait": 300,
+  "log": true,
+  "script": "const el = document.documentElement; if (el.dataset.mode !== 'light') throw new Error('默认模式应为 light，实际 ' + el.dataset.mode); if (el.dataset.palette !== 'default') throw new Error('默认 palette 应为 default，实际 ' + el.dataset.palette); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('250, 248, 245')) throw new Error('亮色画布应为暖纸 #FAF8F5，实际 ' + bg); return 'boot-ok ' + bg"
+ },
+ {
+  "name": "03-open-settings",
+  "wait": 800,
+  "script": "const btn = document.querySelector('[title=\"设置\"]'); if (!btn) throw new Error('设置按钮缺失'); btn.click(); 'settings-open'"
+ },
+ {
+  "name": "04-mode-dark",
+  "wait": 600,
+  "log": true,
+  "script": "const seg = [...document.querySelectorAll('[data-testid=theme-mode-dark]')]; if (!seg.length) throw new Error('主题模式分段控件缺失'); seg[0].click(); await new Promise(r => setTimeout(r, 400)); const el = document.documentElement; if (el.dataset.mode !== 'dark') throw new Error('切暗色未生效'); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('28, 25, 22')) throw new Error('暗色画布应为暖褐 #1C1916，实际 ' + bg); return 'dark-ok ' + bg"
+ },
+ {
+  "name": "05-palette-candle",
+  "wait": 600,
+  "log": true,
+  "script": "const card = document.querySelector('[data-testid=theme-card-candle]'); if (!card) throw new Error('烛光主题卡缺失'); card.click(); await new Promise(r => setTimeout(r, 400)); const el = document.documentElement; if (el.dataset.palette !== 'candle') throw new Error('切烛光 palette 未生效'); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('25, 20, 16')) throw new Error('烛光暗色画布应为棕黑 #191410，实际 ' + bg); return 'candle-ok ' + bg"
+ },
+ {
+  "name": "05b-palette-dailan-sanity",
+  "wait": 600,
+  "log": true,
+  "script": "const card = document.querySelector('[data-testid=theme-card-dailan]'); if (!card) throw new Error('黛蓝主题卡缺失'); card.click(); await new Promise(r => setTimeout(r, 400)); const el = document.documentElement; if (el.dataset.palette !== 'dailan') throw new Error('切黛蓝未生效'); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('23, 28, 38')) throw new Error('黛蓝暗色画布应为 #171C26，实际 ' + bg); const candle = document.querySelector('[data-testid=theme-card-candle]'); candle.click(); await new Promise(r => setTimeout(r, 400)); if (el.dataset.palette !== 'candle') throw new Error('切回烛光失败'); return 'dailan-ok'"
+ },
+ {
+  "name": "06-overlay-token",
+  "wait": 300,
+  "log": true,
+  "script": "const backdrop = document.querySelector('.bg-overlay'); if (!backdrop) throw new Error('语义遮罩层缺失'); const c = getComputedStyle(backdrop).backgroundColor; if (!c.includes('8, 5, 2')) throw new Error('烛光暗色遮罩应随 token 变化 rgba(8,5,2,.62)，实际 ' + c); return 'overlay-ok ' + c"
+ },
+ {
+  "name": "07-close-settings",
+  "wait": 700,
+  "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 500)); if (document.querySelector('.bg-overlay')) throw new Error('Esc 未关闭设置弹窗'); 'settings-closed'"
+ },
+ {
+  "name": "08-open-kyoto-wall",
+  "wait": 200,
+  "script": "for (let i = 0; i < 20; i++) { const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (h) { h.click(); break } await new Promise(r => setTimeout(r, 500)) }"
+ },
+ {
+  "name": "09-wall-loaded",
+  "wait": 1600,
+  "script": "if (!document.querySelector('[data-testid=photo-wall] img')) throw new Error('照片墙未加载'); 'wall-ok'"
+ },
+ {
+  "name": "10-lightbox-candle-dark",
+  "wait": 1500,
+  "click": { "selector": "[data-testid=photo-wall] > div img" },
+  "log": true,
+  "script": "await new Promise(r => setTimeout(r, 1000)); const root = document.querySelector('[data-testid=lightbox-root]'); if (!root) throw new Error('灯箱未打开'); const polaroid = getComputedStyle(document.querySelector('.viewer-polaroid')).backgroundColor; if (!polaroid.includes('36, 30, 21')) throw new Error('烛光暗房相纸应为 #241E15，实际 ' + polaroid); return 'lightbox-candle-ok ' + polaroid"
+ },
+ {
+  "name": "11-close-lightbox-open-menu",
+  "wait": 900,
+  "click": { "selector": "[title='关闭（Esc）']" },
+  "script": "for (let i = 0; i < 16; i++) { if (!document.querySelector('[data-testid=lightbox-root]')) break; await new Promise(r => setTimeout(r, 250)) } document.querySelector('[data-testid=photo-wall] > div img').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 }))",
+  "wait": 700
+ },
+ {
+  "name": "12-context-menu-surface",
+  "wait": 300,
+  "log": true,
+  "script": "const panel = document.querySelector('.ctx-menu-panel'); if (!panel) throw new Error('右键菜单未出现'); const bg = getComputedStyle(panel).backgroundColor; if (!bg.includes('36, 30, 21')) throw new Error('烛光暗色菜单面应为 #241E15，实际 ' + bg); document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return 'menu-ok ' + bg"
+ },
+ {
+  "name": "13-sidebar-back-to-light",
+  "wait": 200,
+  "script": "for (let i = 0; i < 20; i++) { const home = [...document.querySelectorAll('button, a')].find(b => b.textContent.trim() === '全部照片' || b.getAttribute('aria-label') === '返回首页'); if (home) { home.click(); break } await new Promise(r => setTimeout(r, 400)) }"
+ },
+ {
+  "name": "14-sidebar-switch-light-keeps-palette",
+  "wait": 1000,
+  "log": true,
+  "script": "const light = [...document.querySelectorAll('[role=radiogroup][aria-label=主题] button')].find(x => x.textContent.trim() === '亮'); if (!light) throw new Error('侧栏主题切换器缺失'); light.click(); await new Promise(r => setTimeout(r, 400)); const el = document.documentElement; if (el.dataset.mode !== 'light') throw new Error('侧栏切亮色未生效'); if (el.dataset.palette !== 'candle') throw new Error('模式切换不应重置 palette'); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('251, 245, 233')) throw new Error('烛光亮色画布应为蜜色 #FBF5E9，实际 ' + bg); return 'sidebar-ok ' + bg"
+ },
+ {
+  "name": "15-leave-candle-dark-for-persistence",
+  "wait": 800,
+  "log": true,
+  "script": "const openBtn = document.querySelector('[title=\"设置\"]'); openBtn.click(); await new Promise(r => setTimeout(r, 500)); const dark = document.querySelector('[data-testid=theme-mode-dark]'); dark.click(); await new Promise(r => setTimeout(r, 400)); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 400)); const el = document.documentElement; if (el.dataset.mode !== 'dark' || el.dataset.palette !== 'candle') throw new Error('收尾状态应为 candle+dark，实际 ' + el.dataset.palette + '/' + el.dataset.mode); return 'leave-candle-dark-ok'"
+ },
+ {
+  "name": "16-final-shot",
+  "wait": 500
+ }
+]

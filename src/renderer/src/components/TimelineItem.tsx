@@ -103,7 +103,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
             {(trip.tags || []).map((tag, index) => (
               <span
                 key={index}
-                className="px-2 py-0.5 bg-primary-soft text-primary text-xs rounded-full"
+                className="px-2 py-0.5 bg-primary-soft text-primary-soft-ink text-xs rounded-full"
               >
                 #{tag}
               </span>

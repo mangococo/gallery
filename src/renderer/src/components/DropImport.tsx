@@ -144,7 +144,7 @@ const ImportPickerModal: React.FC<ImportPickerModalProps> = ({ paths, onClose })
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[60] no-drag bg-overlay backdrop-blur-[2px] flex items-center justify-center p-4"
         onClick={busy ? undefined : onClose}
       >
         <motion.div
@@ -225,7 +225,7 @@ const ImportPickerModal: React.FC<ImportPickerModalProps> = ({ paths, onClose })
                 <button
                   onClick={() => void handleCreate()}
                   disabled={busy}
-                  className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-60 shrink-0"
+                  className="px-4 py-2 bg-primary text-primary-ink rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-60 shrink-0"
                 >
                   {busy ? '导入中…' : '创建并导入'}
                 </button>

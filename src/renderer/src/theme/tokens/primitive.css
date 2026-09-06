@@ -1,0 +1,56 @@
+/*
+ * Primitive Tokens —— 基础材料层（§theme.md）
+ *
+ * 只描述「原材料」：纸张、琥珀、陶土、暖灰墨、夜色。不含任何页面语义，
+ * 业务组件禁止直接消费 --p-*（工具类也不会生成它们）。
+ * 语义层（semantic.css / gallery.css）与 Runtime 输入层（runtime-inputs.css）
+ * 是 --p-* 仅有的合法消费者。
+ */
+:root {
+  /* 纸 —— 米白/米黄纸张系列（亮色画布与衬纸） */
+  --p-paper-50: #faf8f5;
+  --p-paper-100: #f5f0e9;
+  --p-paper-200: #ece5dc;
+  --p-milk: #ffffff;
+  --p-cream: #f3e7d8;
+
+  /* 琥珀 —— 品牌暖色（primary 系） */
+  --p-amber-200: #d4a574;
+  --p-amber-300: #ba844b;
+  --p-amber-500: #8a5a26;
+
+  /* 陶土 —— 赭红（danger 系） */
+  --p-clay-200: #e06b52;
+  --p-clay-400: #c2543e;
+
+  /* 苔 —— (success) */
+  --p-moss-300: #9ab87f;
+  --p-moss-500: #4d6e3a;
+
+  /* 麦 —— (warning) */
+  --p-wheat-200: #d9a95c;
+  --p-wheat-500: #8f631c;
+
+  /* 暖灰墨 —— ink 文字系列（按对比度定档，非灰阶审美） */
+  --p-umber-100: #f0e9e1;
+  --p-umber-300: #b3a495;
+  --p-umber-400: #a09283;
+  --p-umber-500: #786a5c;
+  --p-umber-600: #6f6357;
+  --p-umber-700: #3b342e;
+
+  /* 夜 —— 暖褐暗色表面（非冷黑） */
+  --p-night-700: #3a332c;
+  --p-night-750: #332c28;
+  --p-night-800: #26211d;
+  --p-night-850: #1c1916;
+  --p-night-900: #2b241d;
+  --p-night-950: #1b1510;
+
+  /* 橡木 —— 暗色房间的家具木色（翻阅室二阶表面） */
+  --p-oak: #3a3128;
+  --p-oak-dark: #2a221a;
+
+  /* 烟黑 —— 照片上的遮罩基底（中性，保证照片色彩不失真） */
+  --p-soot: #000000;
+}

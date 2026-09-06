@@ -49,6 +49,17 @@ for f in "$STEPS_DIR"/*.json; do
     echo "---- $name: SKIP（非 macOS）"
     continue
   fi
+  # 17-theme-verify 是持久化验证的第二阶段，依赖 17-theme 留下的 userData，
+  # 由 scripts/e2e/theme-persistence.sh 两阶段专跑；此处全新 userData 必假阴性
+  if [ "$name" = "17-theme-verify" ]; then
+    echo "---- $name: SKIP（持久化第二阶段，跑 scripts/e2e/theme-persistence.sh）"
+    continue
+  fi
+  # 19-custom-css 由 scripts/e2e/custom-css.sh 驱动（需预置/运行中改写 theme.css）
+  if [ "$name" = "19-custom-css" ]; then
+    echo "---- $name: SKIP（跑 scripts/e2e/custom-css.sh）"
+    continue
+  fi
   echo "---- $name"
   # 08 用大相册（性能验收），其余用小相册（启动扫描 <1s，链路时序稳定）
   if [ "$name" = "08-large-album" ] && [ -d "$DEMO_ROOT/album-large" ]; then
@@ -70,6 +81,10 @@ for f in "$STEPS_DIR"/*.json; do
     rm -rf "$WORK/exports"
     mkdir -p "$WORK/exports"
     ENV_ARGS+=("GALLERY_E2E_EXPORT_DIR=$WORK/exports")
+  fi
+  # 18 在 12s 后翻转 themeSource 模拟 OS 切暗（链路自包含，无 userData 依赖）
+  if [ "$name" = "18-theme-system" ]; then
+    ENV_ARGS+=("GALLERY_E2E_FLIP_THEME=dark")
   fi
 
   OUT="$WORK/$name.log"

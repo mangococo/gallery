@@ -360,19 +360,19 @@ const TrashCard: React.FC<{
           )}
           {/* 媒体类型角标 */}
           {isTrip ? (
-            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-[10px] font-display shadow-sm flex items-center gap-1">
+            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-primary-ink text-[10px] font-display shadow-sm flex items-center gap-1">
               <MoveToFolderIcon size={10} />
               旅行{item.photoCount ? ` · ${item.photoCount} 张` : ''}
             </span>
           ) : isVideo ? (
-            <span className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center">
+            <span className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-scrim/55 text-scrim-ink flex items-center justify-center">
               <PlayIcon size={10} />
             </span>
           ) : null}
           {selectionMode && (
             <div
               className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-colors ${
-                selected ? 'bg-primary text-white' : 'bg-black/40 text-white/70'
+                selected ? 'bg-primary text-primary-ink' : 'bg-scrim/40 text-scrim-ink/70'
               }`}
             >
               <CheckCircleIcon size={16} />
@@ -387,7 +387,7 @@ const TrashCard: React.FC<{
                   e.stopPropagation()
                   onRestore()
                 }}
-                className="w-7 h-7 rounded-full bg-black/45 text-white hover:bg-primary transition-colors flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-scrim/45 text-scrim-ink hover:bg-primary transition-colors flex items-center justify-center"
               >
                 <RestoreIcon size={13} />
               </button>
@@ -397,7 +397,7 @@ const TrashCard: React.FC<{
                   e.stopPropagation()
                   onPurge()
                 }}
-                className="w-7 h-7 rounded-full bg-black/45 text-white hover:bg-danger transition-colors flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-scrim/45 text-scrim-ink hover:bg-danger transition-colors flex items-center justify-center"
               >
                 <TrashIcon size={13} />
               </button>

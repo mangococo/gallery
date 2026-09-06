@@ -63,8 +63,8 @@ function PlaceholderBackdrop({ failed }: { failed: boolean }) {
 
 function PlayBadge() {
   return (
-    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-      <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+    <div className="absolute inset-0 bg-scrim/20 flex items-center justify-center">
+      <div className="w-14 h-14 bg-scrim-ink/90 rounded-full flex items-center justify-center shadow-lg">
         <div className="w-0 h-0 border-l-[11px] border-l-primary border-y-[7px] border-y-transparent ml-1"></div>
       </div>
     </div>
@@ -201,7 +201,7 @@ const CardInner: React.FC<{
       {(selectionMode || selected) && (
         <div
           className={`absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-colors ${
-            selected ? 'bg-primary text-white' : 'bg-black/40 text-white/70'
+            selected ? 'bg-primary text-primary-ink' : 'bg-scrim/40 text-scrim-ink/70'
           }`}
         >
           <CheckCircleIcon size={16} />
@@ -210,14 +210,14 @@ const CardInner: React.FC<{
 
       {/* 封面/收藏徽标（多选时给勾选徽标让位） */}
       {coverPhotoId === photo.id && !selectionMode && (
-        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-white text-xs shadow-sm flex items-center gap-1">
+        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-primary-ink text-xs shadow-sm flex items-center gap-1">
           <StarIcon size={10} filled />
           <span>封面</span>
         </div>
       )}
       {photo.favorite && !selectionMode && (
         <div
-          className={`absolute top-2 ${coverPhotoId === photo.id ? 'left-[64px]' : 'left-2'} px-1.5 py-0.5 rounded-full bg-danger text-white shadow-sm flex items-center`}
+          className={`absolute top-2 ${coverPhotoId === photo.id ? 'left-[64px]' : 'left-2'} px-1.5 py-0.5 rounded-full bg-danger text-danger-ink shadow-sm flex items-center`}
           title="已收藏"
         >
           <HeartIcon size={10} filled />
@@ -235,7 +235,7 @@ const CardInner: React.FC<{
                 onToggleFavorite(photo.id, !photo.favorite)
               }}
               className={`w-7 h-7 rounded-full hover:bg-danger transition-colors flex items-center justify-center ${
-                photo.favorite ? 'bg-danger/80 text-white' : 'bg-black/45 text-white'
+                photo.favorite ? 'bg-danger/80 text-scrim-ink' : 'bg-scrim/45 text-scrim-ink'
               }`}
             >
               <HeartIcon size={13} filled={photo.favorite} />
@@ -248,7 +248,7 @@ const CardInner: React.FC<{
                 e.stopPropagation()
                 onEditCaption(photo)
               }}
-              className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
+              className="w-7 h-7 bg-scrim/45 text-scrim-ink rounded-full hover:bg-primary transition-colors flex items-center justify-center"
             >
               <PenIcon size={13} />
             </button>
@@ -260,7 +260,7 @@ const CardInner: React.FC<{
                 e.stopPropagation()
                 onSetCover(photo.id)
               }}
-              className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-primary transition-colors flex items-center justify-center"
+              className="w-7 h-7 bg-scrim/45 text-scrim-ink rounded-full hover:bg-primary transition-colors flex items-center justify-center"
             >
               <StarIcon size={13} filled />
             </button>
@@ -272,7 +272,7 @@ const CardInner: React.FC<{
                 e.stopPropagation()
                 void onDelete(photo)
               }}
-              className="w-7 h-7 bg-black/45 text-white rounded-full hover:bg-danger transition-colors flex items-center justify-center"
+              className="w-7 h-7 bg-scrim/45 text-scrim-ink rounded-full hover:bg-danger transition-colors flex items-center justify-center"
             >
               <TrashIcon size={13} />
             </button>

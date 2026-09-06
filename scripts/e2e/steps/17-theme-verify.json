@@ -1,0 +1,18 @@
+[
+ {
+  "name": "_meta",
+  "wait": 1,
+  "log": true,
+  "script": "return \"主题持久化验证（第二阶段）：必须与 17-theme.json 共用同一 GALLERY_USER_DATA，且上一链路收尾状态为 烛光+暗色。启动即断言 data-mode/data-palette 恢复（不点击任何 UI）。\""
+ },
+ {
+  "name": "01-home",
+  "wait": 4000
+ },
+ {
+  "name": "02-persistence-boot",
+  "wait": 300,
+  "log": true,
+  "script": "const el = document.documentElement; if (el.dataset.mode !== 'dark') throw new Error('重启后 mode 未恢复为 dark，实际 ' + el.dataset.mode); if (el.dataset.palette !== 'candle') throw new Error('重启后 palette 未恢复为 candle，实际 ' + el.dataset.palette); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('25, 20, 16')) throw new Error('重启后画布不是烛光棕黑 #191410，实际 ' + bg); return 'persistence-ok ' + el.dataset.palette + '/' + el.dataset.mode"
+ }
+]

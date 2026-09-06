@@ -131,7 +131,7 @@ function ConfirmHost() {
   return createPortal(
     <div
       data-testid="confirm-backdrop"
-      className="fixed inset-0 z-[80] no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[80] no-drag bg-overlay backdrop-blur-[2px] flex items-center justify-center p-4"
       onClick={() => close(false)}
     >
       <motion.div
@@ -155,7 +155,7 @@ function ConfirmHost() {
           <button
             autoFocus
             onClick={() => close(true)}
-            className={`px-4 py-1.5 text-sm text-white rounded-lg transition-opacity hover:opacity-90 ${
+            className={`px-4 py-1.5 text-sm text-scrim-ink rounded-lg transition-opacity hover:opacity-90 ${
               pending.danger ? 'bg-danger' : 'bg-primary'
             }`}
           >

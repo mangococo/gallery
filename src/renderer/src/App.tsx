@@ -1,6 +1,7 @@
 import React from 'react'
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import { AppProvider, useApp } from './lib/store'
+import { ThemeProvider } from './theme'
 import Sidebar from './components/Sidebar'
 import HomePage from './pages/HomePage'
 import TripPage from './pages/TripPage'
@@ -46,11 +47,13 @@ function Shell() {
 
 const App: React.FC = () => {
   return (
-    <AppProvider>
-      <HashRouter>
-        <Shell />
-      </HashRouter>
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        <HashRouter>
+          <Shell />
+        </HashRouter>
+      </AppProvider>
+    </ThemeProvider>
   )
 }
 

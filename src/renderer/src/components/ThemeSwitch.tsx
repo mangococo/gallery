@@ -1,6 +1,6 @@
 import React from 'react'
-import { useApp } from '../lib/store'
-import type { ThemeMode } from '../types'
+import { useTheme } from '../theme'
+import type { ThemeMode } from '../theme'
 
 const OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: '亮' },
@@ -10,7 +10,7 @@ const OPTIONS: { value: ThemeMode; label: string }[] = [
 
 /** 侧栏底部三态主题分段控件 */
 const ThemeSwitch: React.FC = () => {
-  const { theme, setTheme } = useApp()
+  const { mode, setMode } = useTheme()
 
   return (
     <div
@@ -19,17 +19,17 @@ const ThemeSwitch: React.FC = () => {
       className="flex bg-surface-2 rounded-lg p-0.5"
     >
       {OPTIONS.map((opt) => {
-        const active = theme === opt.value
+        const active = mode === opt.value
         return (
           <button
             key={opt.value}
             role="radio"
             aria-checked={active}
-            onClick={() => void setTheme(opt.value)}
+            onClick={() => void setMode(opt.value)}
             className={`px-2.5 py-1 rounded-md text-xs transition-colors ${
               active
                 ? 'bg-surface text-primary shadow-sm font-medium'
-                : 'text-ink-3 hover:text-ink-2'
+                : 'text-ink-2 hover:text-ink'
             }`}
           >
             {opt.label}

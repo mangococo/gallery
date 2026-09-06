@@ -1,6 +1,8 @@
 // 主进程与渲染进程共享的领域类型与 IPC 通道定义
 
 export type ThemeMode = 'light' | 'dark' | 'system'
+/** 主题（palette）：一套完整的语义 token 映射，注册表见 renderer theme/registry.ts */
+export type ThemePaletteId = 'default' | 'candle' | 'yuebai' | 'dailan' | 'qingci'
 export type AlbumStatus = 'ok' | 'missing'
 /** 旅行文件夹在相册目录中的在位状态（磁盘实时校对，不落库） */
 export type TripStatus = 'ok' | 'missing'
@@ -77,10 +79,8 @@ export interface ScanProgress {
   label?: string
 }
 
-/** 启动引导：一次性取齐主题/相册/激活态，避免首帧闪烁 */
+/** 启动引导：一次性取齐相册/激活态（主题由 ThemeProvider 自举并经 localStorage 镜像防首帧闪烁） */
 export interface Bootstrap {
-  theme: ThemeMode
-  systemDark: boolean
   albums: Album[]
   activeAlbumId: string | null
 }
@@ -242,6 +242,15 @@ export interface GalleryApi {
 
   getTheme(): Promise<ThemeMode>
   setTheme(mode: ThemeMode): Promise<void>
+  /** 主题（palette）读写：默认 default（暖纸） */
+  getThemePalette(): Promise<ThemePaletteId>
+  setThemePalette(id: ThemePaletteId): Promise<void>
+  /** 自定义样式（userData/theme.css）：读取全文，文件不存在返回 null */
+  getThemeCustomCss(): Promise<string | null>
+  /** 创建自定义样式模板文件（已存在则跳过），返回文件路径 */
+  ensureThemeCustomCss(): Promise<string>
+  /** 在系统编辑器中打开自定义样式文件（不存在时先创建模板） */
+  openThemeCustomCss(): Promise<void>
 
   /** 选择旧数据根目录并执行 .settings.json 迁移导入 */
   importLegacy(): Promise<LegacyImportResult | null>
@@ -262,6 +271,8 @@ export interface GalleryApi {
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
   onThemeSystemChanged(cb: (p: { systemDark: boolean }) => void): Unsubscribe
+  /** 自定义样式文件变化推送（保存即热更新；payload 为全文或 null=文件被删除） */
+  onThemeCustomCssChanged(cb: (css: string | null) => void): Unsubscribe
 
   /** 把拖拽进来的 File 换成磁盘绝对路径（仅 Electron 环境可用） */
   getPathForFile(file: File): string
@@ -300,6 +311,12 @@ export const IPC = {
 
   themeGet: 'theme:get',
   themeSet: 'theme:set',
+  themePaletteGet: 'theme:palette-get',
+  themePaletteSet: 'theme:palette-set',
+  // 自定义样式：userData/theme.css，保存即热更新（覆盖任意语义 token）
+  themeCustomCssGet: 'theme:custom-css-get',
+  themeCustomCssEnsure: 'theme:custom-css-ensure',
+  themeCustomCssOpen: 'theme:custom-css-open',
 
   importLegacy: 'import:legacy',
 
@@ -314,4 +331,5 @@ export const IPC = {
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',
   pushThemeSystemChanged: 'push:theme-system-changed',
+  pushThemeCustomCssChanged: 'push:theme-custom-css-changed',
 } as const

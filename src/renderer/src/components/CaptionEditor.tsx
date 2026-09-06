@@ -56,7 +56,7 @@ const CaptionEditor: React.FC<CaptionEditorProps> = ({ photo, onClose, onSaved }
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[70] no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[70] no-drag bg-overlay backdrop-blur-[2px] flex items-center justify-center p-4"
         onClick={onClose}
       >
         <motion.div
@@ -111,7 +111,7 @@ const CaptionEditor: React.FC<CaptionEditorProps> = ({ photo, onClose, onSaved }
               <button
                 onClick={() => void save()}
                 disabled={saving}
-                className="px-4 py-1.5 text-sm bg-primary text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
+                className="px-4 py-1.5 text-sm bg-primary text-primary-ink rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 {saving ? '保存中…' : '保存'}
               </button>

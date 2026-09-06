@@ -1,5 +1,5 @@
-import { ipcMain, dialog, shell, nativeTheme, BrowserWindow, clipboard } from 'electron'
-import { promises as fs, mkdirSync, existsSync } from 'fs'
+import { ipcMain, dialog, shell, nativeTheme, BrowserWindow, clipboard, app } from 'electron'
+import { promises as fs, mkdirSync, existsSync, watch as fsWatch } from 'fs'
 import { join, basename } from 'path'
 import { nanoid } from 'nanoid'
 import { IPC } from '../shared/types'
@@ -11,6 +11,7 @@ import type {
   MoveTarget,
   ScanProgress,
   ThemeMode,
+  ThemePaletteId,
   TrashSelection,
   TripDTO,
   TripPatch,
@@ -138,8 +139,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.bootstrap, async () => {
     const albums = await listAlbumsWithStatusCheck()
     return {
-      theme: (getSetting('theme_mode') as ThemeMode) ?? 'system',
-      systemDark: nativeTheme.shouldUseDarkColors,
       albums,
       activeAlbumId: getSetting('active_album_id'),
     }
@@ -497,6 +496,37 @@ export function registerIpcHandlers(): void {
     nativeTheme.themeSource = mode
     notifyThemeState()
   })
+  ipcMain.handle(IPC.themePaletteGet, () => (getSetting('theme_palette') as ThemePaletteId) ?? 'default')
+  ipcMain.handle(IPC.themePaletteSet, (_e, id: ThemePaletteId) => {
+    setSetting('theme_palette', id)
+  })
+
+  // —— 自定义样式（userData/theme.css，保存即热更新） ——
+  ipcMain.handle(IPC.themeCustomCssGet, async () => {
+    try {
+      return await fs.readFile(customCssPath(), 'utf8')
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle(IPC.themeCustomCssEnsure, async () => {
+    const p = customCssPath()
+    try {
+      await fs.access(p)
+    } catch {
+      await fs.writeFile(p, CUSTOM_CSS_TEMPLATE, 'utf8')
+    }
+    return p
+  })
+  ipcMain.handle(IPC.themeCustomCssOpen, async () => {
+    const p = customCssPath()
+    try {
+      await fs.access(p)
+    } catch {
+      await fs.writeFile(p, CUSTOM_CSS_TEMPLATE, 'utf8')
+    }
+    return shell.openPath(p)
+  })
 
   // —— ⌘K 搜索 ——
   ipcMain.handle(IPC.searchTrips, (_e, albumId: string, q: string) => searchTripHits(albumId, q))
@@ -545,6 +575,9 @@ export function registerIpcHandlers(): void {
 
   // 系统主题变化 → 推送渲染层
   nativeTheme.on('updated', () => notifyThemeState())
+
+  // 自定义样式文件变化 → 推送渲染层热更新
+  watchCustomCss()
 }
 
 // ---------- 内部工具 ----------
@@ -631,4 +664,55 @@ function notifyThemeState(): void {
   senderWindow()?.webContents.send(IPC.pushThemeSystemChanged, {
     systemDark: nativeTheme.shouldUseDarkColors,
   })
+}
+
+// —— 自定义样式（userData/theme.css） ——
+
+function customCssPath(): string {
+  return join(app.getPath('userData'), 'theme.css')
+}
+
+const CUSTOM_CSS_TEMPLATE = `/* 画廊自定义样式 —— 保存后立即热更新，无需重启。
+ *
+ * 用语义 token 覆盖任意颜色；可用选择器：
+ *   :root                                       所有主题
+ *   [data-palette='default' | 'candle' | 'yuebai' | 'dailan' | 'qingci']   指定主题
+ *   [data-mode='light' | 'dark']                指定明暗
+ *   [data-palette='candle'][data-mode='dark']   主题 × 明暗 组合
+ *
+ * 全部语义 token 见 docs/theme.md §4。示例（去掉注释即生效）：
+ *
+ * :root {
+ *   --primary: #5a7d9a;
+ *   --primary-soft: #e3ecf4;
+ *   --primary-ink: #ffffff;
+ * }
+ *
+ * [data-mode='dark'] {
+ *   --background: #14181c;
+ *   --viewer: #101418;
+ * }
+ */
+`
+
+/** 监听 userData 目录，theme.css 变化（创建/修改/删除）即推送全文（300ms 防抖） */
+function watchCustomCss(): void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    fsWatch(app.getPath('userData'), (_event, filename) => {
+      if (filename && filename !== 'theme.css') return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(async () => {
+        let css: string | null = null
+        try {
+          css = await fs.readFile(customCssPath(), 'utf8')
+        } catch {
+          css = null
+        }
+        senderWindow()?.webContents.send(IPC.pushThemeCustomCssChanged, css)
+      }, 300)
+    })
+  } catch {
+    // userData 不可监听时静默降级：自定义样式在下次启动生效
+  }
 }

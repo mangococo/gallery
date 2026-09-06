@@ -1,0 +1,37 @@
+[
+ {
+  "name": "_meta",
+  "wait": 1,
+  "log": true,
+  "script": "return \"System 模式链路（自包含）：选烛光 → 侧栏切「系统」（按宿主 OS 明暗解析，日志记录）→ 主进程在 12s 翻转 themeSource（模拟 OS 切暗）→ 断言渲染层免重载跟随 dark 且 palette 保持。配合 GALLERY_E2E_FLIP_THEME=dark 运行。\""
+ },
+ {
+  "name": "01-home",
+  "wait": 4000
+ },
+ {
+  "name": "02-select-candle",
+  "wait": 600,
+  "script": "document.querySelector('[title=\"设置\"]').click(); await new Promise(r => setTimeout(r, 500)); document.querySelector('[data-testid=theme-card-candle]').click(); await new Promise(r => setTimeout(r, 400)); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 400)); 'candle-ok'"
+ },
+ {
+  "name": "03-set-system",
+  "wait": 800,
+  "log": true,
+  "script": "const sys = [...document.querySelectorAll('[role=radiogroup][aria-label=主题] button')].find(x => x.textContent.trim() === '系统'); if (!sys) throw new Error('侧栏「系统」缺失'); sys.click(); await new Promise(r => setTimeout(r, 500)); const el = document.documentElement; if (el.dataset.palette !== 'candle') throw new Error('palette 应保持 candle'); if (!['light', 'dark'].includes(el.dataset.mode)) throw new Error('mode 非法'); return 'system-resolved ' + el.dataset.mode + '（宿主 OS 明暗）'"
+ },
+ {
+  "name": "04-wait-os-flip",
+  "wait": 14000
+ },
+ {
+  "name": "05-auto-follows-os",
+  "wait": 300,
+  "log": true,
+  "script": "const el = document.documentElement; if (el.dataset.mode !== 'dark') throw new Error('OS 翻转后未自动跟随 dark，实际 ' + el.dataset.mode); if (el.dataset.palette !== 'candle') throw new Error('palette 应保持 candle'); const bg = getComputedStyle(document.body).backgroundColor; if (!bg.includes('25, 20, 16')) throw new Error('烛光暗色画布应实时生效 #191410，实际 ' + bg); return 'system-flip-ok ' + bg"
+ },
+ {
+  "name": "06-final-shot",
+  "wait": 400
+ }
+]

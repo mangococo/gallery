@@ -114,7 +114,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 no-drag bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 no-drag bg-overlay backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
     >
       <motion.div
@@ -124,24 +124,24 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         className="bg-background rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, var(--g-background) 0%, var(--g-surface-2) 100%)',
-          border: '3px solid color-mix(in srgb, var(--g-primary) 25%, transparent)',
+          background: 'linear-gradient(135deg, var(--background) 0%, var(--surface-2) 100%)',
+          border: '3px solid color-mix(in srgb, var(--primary) 25%, transparent)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 装饰性顶部 */}
-        <div className="relative bg-gradient-to-r from-primary/10 to-secondary/10 px-8 py-6 border-b-2 border-dashed border-primary/20">
+        <div className="relative bg-gradient-to-r from-primary/10 to-primary/5 px-8 py-6 border-b-2 border-dashed border-primary/20">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-primary mb-1 flex items-center gap-2" style={{ fontFamily: 'cursive' }}>
+              <h2 className="text-2xl font-bold text-primary font-display mb-1 flex items-center gap-2">
                 <PlaneIcon size={22} />
                 <span>新的旅程</span>
               </h2>
-              <p className="text-xs text-text-tertiary">记录美好时光</p>
+              <p className="text-xs text-ink-3">记录美好时光</p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-surface/80 hover:bg-surface text-text-ink-2 hover:text-primary transition-all shadow-sm flex items-center justify-center"
+              className="w-8 h-8 rounded-full bg-surface/80 hover:bg-surface text-ink-2 hover:text-primary transition-all shadow-sm flex items-center justify-center"
             >
               <XIcon size={16} />
             </button>
@@ -158,13 +158,13 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 100px)' }}>
           {/* 时间范围 */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-text-ink-2 mb-3">
+            <div className="flex items-center gap-2 text-ink-2 mb-3">
               <CalendarIcon size={18} />
               <span className="font-medium">旅行时间</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="relative">
-                <label className="block text-xs text-text-tertiary mb-2 ml-2">出发</label>
+                <label className="block text-xs text-ink-3 mb-2 ml-2">出发</label>
                 <input
                   type="date"
                   required
@@ -172,11 +172,11 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   onChange={(e) =>
                     setFormData({ ...formData, startDate: e.target.value })
                   }
-                  className="w-full px-4 py-3 bg-surface rounded-2xl text-text-primary border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
+                  className="w-full px-4 py-3 bg-surface rounded-2xl text-ink border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
                 />
               </div>
               <div className="relative">
-                <label className="block text-xs text-text-tertiary mb-2 ml-2">返程</label>
+                <label className="block text-xs text-ink-3 mb-2 ml-2">返程</label>
                 <input
                   type="date"
                   required
@@ -185,7 +185,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   onChange={(e) =>
                     setFormData({ ...formData, endDate: e.target.value })
                   }
-                  className="w-full px-4 py-3 bg-surface rounded-2xl text-text-primary border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
+                  className="w-full px-4 py-3 bg-surface rounded-2xl text-ink border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
                 />
               </div>
             </div>
@@ -196,7 +196,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 标题 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-ink-2">
+            <div className="flex items-center gap-2 text-ink-2">
               <TargetIcon size={18} />
               <span className="font-medium">旅行主题</span>
             </div>
@@ -206,13 +206,13 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="给这次旅行起个名字..."
-              className="w-full px-5 py-4 bg-surface rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm text-lg"
+              className="w-full px-5 py-4 bg-surface rounded-2xl text-ink placeholder:text-ink-3/70 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm text-lg"
             />
           </div>
 
           {/* 描述 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-ink-2">
+            <div className="flex items-center gap-2 text-ink-2">
               <PenIcon size={18} />
               <span className="font-medium">旅行故事</span>
             </div>
@@ -223,14 +223,14 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
               }
               rows={5}
               placeholder="写下你的旅行感受和难忘瞬间..."
-              className="w-full px-5 py-4 bg-surface rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm resize-none leading-relaxed"
+              className="w-full px-5 py-4 bg-surface rounded-2xl text-ink placeholder:text-ink-3/70 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm resize-none leading-relaxed"
               style={{ lineHeight: '1.8' }}
             />
           </div>
 
           {/* 照片 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-ink-2">
+            <div className="flex items-center gap-2 text-ink-2">
               <CameraIcon size={18} />
               <span className="font-medium">精彩瞬间</span>
             </div>
@@ -259,7 +259,7 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
                   <button
                     type="button"
                     onClick={() => removeItem(item.id)}
-                    className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:opacity-80 flex items-center justify-center"
+                    className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-danger-ink rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-md hover:opacity-80 flex items-center justify-center"
                   >
                     <XIcon size={13} />
                   </button>
@@ -286,15 +286,15 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
 
           {/* 标签 */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-text-ink-2">
+            <div className="flex items-center gap-2 text-ink-2">
               <TagIcon size={18} />
               <span className="font-medium">旅行标签</span>
             </div>
             <TagInput
               value={formData.tags}
               onChange={(tags) => setFormData({ ...formData, tags })}
-              inputClassName="w-full px-5 py-3 bg-surface rounded-2xl text-text-primary placeholder-text-tertiary/60 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
-              pillClassName="px-3 py-1.5 bg-gradient-to-r from-primary/20 to-secondary/20 text-primary text-xs rounded-full border-2 border-primary/30 shadow-sm"
+              inputClassName="w-full px-5 py-3 bg-surface rounded-2xl text-ink placeholder:text-ink-3/70 border-2 border-primary/10 focus:outline-none focus:border-primary/40 transition-all shadow-sm"
+              pillClassName="px-3 py-1.5 bg-primary-soft text-primary-soft-ink text-xs rounded-full border-2 border-primary/30 shadow-sm"
             />
           </div>
 
@@ -303,14 +303,14 @@ const AddTripModal: React.FC<AddTripModalProps> = ({ onClose, onSuccess }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 text-text-ink-2 hover:text-text-primary transition-colors rounded-2xl hover:bg-surface/50"
+              className="px-6 py-3 text-ink-2 hover:text-ink transition-colors rounded-2xl hover:bg-surface/50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-2xl hover:shadow-lg transition-all transform hover:scale-105 font-medium disabled:opacity-60 flex items-center gap-2"
+              className="px-8 py-3 bg-primary text-primary-ink rounded-2xl hover:shadow-lg transition-all transform hover:scale-105 font-medium disabled:opacity-60 flex items-center gap-2"
             >
               <SparklesIcon size={16} />
               <span>{submitting ? '创建中…' : '创建旅行'}</span>

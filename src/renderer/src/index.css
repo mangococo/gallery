@@ -1,71 +1,56 @@
 @import "tailwindcss";
 
 /*
- * 画廊语义色板（方案 §5.3）
- * 亮色 = 延续米白暖棕手账风；暗色 = 暖褐「烛光」调（非冷灰）。
- * [data-theme] 换 --g-* 变量；@theme inline 让工具类直接引用变量，
- * 组件零 dark: 前缀，切换即时生效。
- * 命名映射：plan 的 text-1/2/3 → ink/ink-2/ink-3；border → line。
+ * 画廊主题系统（架构见 docs/theme.md）
+ *
+ *   Primitive (--p-*)            原材料色阶，组件禁用
+ *     ↓
+ *   Runtime inputs (--gt-*)      品牌驱动输入，palette 覆盖 / 未来用户自定义
+ *     ↓
+ *   Semantic (--*)               公开语义层，data-palette × data-mode 解析
+ *     ↓
+ *   @theme inline (--color-*)    Tailwind 适配器 → 语义工具类（bg-surface / text-ink …）
+ *
+ * 组件零 dark: 前缀、零原始色值；亮 = 米白暖棕手账，暗 = 暖褐「烛光」（非冷灰）。
  */
-:root,
-[data-theme='light'] {
-  --g-background: #faf8f5;
-  --g-surface: #ffffff;
-  --g-surface-2: #f5f0e9;
-  --g-line: #ece5dc;
-  --g-primary: #c08a52;
-  --g-primary-soft: #f3e7d8;
-  --g-ink: #3b342e;
-  --g-ink-2: #7c7065;
-  --g-ink-3: #a89b8d;
-  --g-danger: #c2543e;
-  /* 灯箱「翻阅室」：暖褐深色房间（非纯黑），照片在其上如烛光下翻阅手账 */
-  --g-viewer: #2b241d;
-  --g-viewer-2: #3a3128;
-  --g-viewer-ink: #f0e9e1;
-  --g-viewer-ink-2: #b3a495;
-}
-
-[data-theme='dark'] {
-  --g-background: #1c1916;
-  --g-surface: #26211d;
-  --g-surface-2: #332c28;
-  --g-line: #3a332c;
-  --g-primary: #d4a574;
-  --g-primary-soft: #3a2f24;
-  --g-ink: #f0e9e1;
-  --g-ink-2: #b3a495;
-  --g-ink-3: #7e7062;
-  --g-danger: #e06b52;
-  /* 暗色翻阅室：比主界面更暗一档但同暖（烛光暗房），不是冷黑 */
-  --g-viewer: #1b1510;
-  --g-viewer-2: #2a221a;
-  --g-viewer-ink: #f0e9e1;
-  --g-viewer-ink-2: #b3a495;
-}
+@import "./theme/tokens/primitive.css";
+@import "./theme/tokens/runtime-inputs.css";
+@import "./theme/tokens/semantic.css";
+@import "./theme/tokens/gallery.css";
 
 @theme inline {
-  --color-background: var(--g-background);
-  --color-surface: var(--g-surface);
-  --color-surface-2: var(--g-surface-2);
-  --color-line: var(--g-line);
-  --color-primary: var(--g-primary);
-  --color-primary-soft: var(--g-primary-soft);
-  --color-ink: var(--g-ink);
-  --color-ink-2: var(--g-ink-2);
-  --color-ink-3: var(--g-ink-3);
-  --color-danger: var(--g-danger);
-  --color-viewer: var(--g-viewer);
-  --color-viewer-2: var(--g-viewer-2);
-  --color-viewer-ink: var(--g-viewer-ink);
-  --color-viewer-ink-2: var(--g-viewer-ink-2);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-soft-ink: var(--primary-soft-ink);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-overlay: var(--overlay);
+  --color-scrim: var(--scrim);
+  --color-scrim-ink: var(--scrim-ink);
+  --color-viewer: var(--viewer);
+  --color-viewer-2: var(--viewer-2);
+  --color-viewer-ink: var(--viewer-ink);
+  --color-viewer-ink-2: var(--viewer-ink-2);
+  --color-tape: var(--tape);
+  --color-tape-ink: var(--tape-ink);
+  --color-polaroid: var(--polaroid);
 
   /* 手账气质的展示字体：macOS 自带楷体 */
   --font-display: 'Kaiti SC', 'STKaiti', 'Kai', 'Songti SC', serif;
 }
 
 html {
-  background-color: var(--g-background);
+  background-color: var(--background);
 }
 
 body {
@@ -74,8 +59,8 @@ body {
     'Roboto', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--g-background);
-  color: var(--g-ink);
+  background-color: var(--background);
+  color: var(--ink);
 }
 
 #root {
@@ -96,14 +81,14 @@ mark {
 
 /* ⌘K 搜索命中词高亮 */
 .hl {
-  background-color: color-mix(in srgb, var(--g-primary) 24%, transparent);
+  background-color: color-mix(in srgb, var(--primary) 24%, transparent);
   color: inherit;
   border-radius: 3px;
   padding: 0 1px;
 }
 
 ::selection {
-  background-color: color-mix(in srgb, var(--g-primary) 30%, transparent);
+  background-color: color-mix(in srgb, var(--primary) 30%, transparent);
   color: inherit;
 }
 
@@ -121,7 +106,7 @@ mark {
 .stitch-line {
   background-image: repeating-linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--g-primary) 55%, transparent) 0 7px,
+    color-mix(in srgb, var(--primary) 55%, transparent) 0 7px,
     transparent 7px 14px
   );
 }
@@ -130,11 +115,11 @@ mark {
 .washi-label {
   background: linear-gradient(
     to right,
-    color-mix(in srgb, var(--g-primary) 18%, var(--g-primary-soft)) 0 3px,
-    var(--g-primary-soft) 3px calc(100% - 3px),
-    color-mix(in srgb, var(--g-primary) 18%, var(--g-primary-soft)) calc(100% - 3px) 100%
+    color-mix(in srgb, var(--tape-ink) 16%, var(--tape)) 0 3px,
+    var(--tape) 3px calc(100% - 3px),
+    color-mix(in srgb, var(--tape-ink) 16%, var(--tape)) calc(100% - 3px) 100%
   );
-  color: var(--g-primary);
+  color: var(--tape-ink);
   font-family: var(--font-display);
   transform: rotate(-2deg);
   border-radius: 2px;
@@ -143,7 +128,7 @@ mark {
 
 /* 拍立得白边 */
 .polaroid-frame {
-  background: var(--g-surface);
+  background: var(--polaroid);
   padding: 5px 5px 10px;
   border-radius: 6px;
   box-shadow:
@@ -154,13 +139,13 @@ mark {
 /* 隐藏滚动条但保留滚动（侧栏中部） */
 .scroll-slim {
   scrollbar-width: thin;
-  scrollbar-color: var(--g-line) transparent;
+  scrollbar-color: var(--line) transparent;
 }
 .scroll-slim::-webkit-scrollbar {
   width: 5px;
 }
 .scroll-slim::-webkit-scrollbar-thumb {
-  background: var(--g-line);
+  background: var(--line);
   border-radius: 3px;
 }
 
@@ -174,42 +159,42 @@ mark {
 }
 
 .react-datepicker {
-  border: 2px solid color-mix(in srgb, var(--g-primary) 25%, transparent) !important;
+  border: 2px solid color-mix(in srgb, var(--primary) 25%, transparent) !important;
   border-radius: 12px !important;
   font-family: inherit !important;
-  background: var(--g-surface) !important;
+  background: var(--surface) !important;
   box-shadow: 0 10px 25px rgb(0 0 0 / 0.12) !important;
-  color: var(--g-ink);
+  color: var(--ink);
 }
 
 .react-datepicker__header {
-  background: color-mix(in srgb, var(--g-primary) 80%, black) !important;
+  background: color-mix(in srgb, var(--primary) 80%, black) !important;
   border-bottom: none !important;
   border-radius: 10px 10px 0 0 !important;
 }
 
 .react-datepicker__current-month,
 .react-datepicker__day-name {
-  color: white !important;
+  color: var(--primary-ink) !important;
 }
 
 .react-datepicker__day {
-  color: var(--g-ink) !important;
+  color: var(--ink) !important;
 }
 
 .react-datepicker__day:hover {
-  background-color: color-mix(in srgb, var(--g-primary) 10%, transparent) !important;
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent) !important;
   border-radius: 6px !important;
 }
 
 .react-datepicker__day--selected {
-  background-color: color-mix(in srgb, var(--g-primary) 75%, black) !important;
-  color: white !important;
+  background-color: color-mix(in srgb, var(--primary) 75%, black) !important;
+  color: var(--primary-ink) !important;
   border-radius: 6px !important;
 }
 
 .react-datepicker__day--today {
-  background-color: color-mix(in srgb, var(--g-primary) 16%, transparent) !important;
+  background-color: color-mix(in srgb, var(--primary) 16%, transparent) !important;
   border-radius: 6px !important;
 }
 
@@ -248,7 +233,7 @@ mark {
 
 /* 拍立得主舞台：在暖褐房间里的实物卡片投影 */
 .viewer-polaroid {
-  background: var(--g-surface);
+  background: var(--polaroid);
   padding: 10px 10px 0;
   border-radius: 4px;
   box-shadow:
@@ -258,10 +243,10 @@ mark {
 
 /* 灯箱顶栏/底部的柔和过渡带（从房间色渐入透明，保证文字可读不压照片） */
 .viewer-fade-top {
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--g-viewer) 88%, transparent), transparent);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--viewer) 88%, transparent), transparent);
 }
 .viewer-fade-bottom {
-  background: linear-gradient(to top, color-mix(in srgb, var(--g-viewer) 88%, transparent), transparent);
+  background: linear-gradient(to top, color-mix(in srgb, var(--viewer) 88%, transparent), transparent);
 }
 
 /* 视频进度/音量轨道（input[type=range] 手账化） */
@@ -272,8 +257,8 @@ mark {
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    var(--g-primary) var(--fill, 0%),
-    color-mix(in srgb, var(--g-ink-3) 40%, transparent) var(--fill, 0%)
+    var(--primary) var(--fill, 0%),
+    color-mix(in srgb, var(--ink-3) 40%, transparent) var(--fill, 0%)
   );
   outline: none;
   cursor: pointer;
@@ -284,16 +269,16 @@ mark {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--g-primary);
-  border: 2px solid var(--g-surface);
+  background: var(--primary);
+  border: 2px solid var(--polaroid);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
 }
 .viewer-range::-moz-range-thumb {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--g-primary);
-  border: 2px solid var(--g-surface);
+  background: var(--primary);
+  border: 2px solid var(--polaroid);
 }
 
 /* —— 地图（Leaflet）—— */
@@ -308,7 +293,7 @@ mark {
   width: 48px;
   height: 54px;
   padding: 3px 3px 8px;
-  background: var(--g-surface);
+  background: var(--polaroid);
   border-radius: 6px;
   box-shadow:
     0 1px 3px rgb(0 0 0 / 0.25),
@@ -333,19 +318,19 @@ mark {
 
 /* 瓦片加载前/失败时的底色贴合主题，避免白色闪块 */
 .leaflet-container {
-  background: var(--g-surface-2);
+  background: var(--surface-2);
   font-family: inherit;
 }
 
 /* 控件与署名随主题（瓦片本身亮色可接受，控件不能有白色断层） */
 .leaflet-bar a,
 .leaflet-control-attribution {
-  background: var(--g-surface) !important;
-  color: var(--g-ink-2) !important;
-  border-color: var(--g-line) !important;
+  background: var(--surface) !important;
+  color: var(--ink-2) !important;
+  border-color: var(--line) !important;
 }
 
 .leaflet-bar a:hover {
-  background: var(--g-surface-2) !important;
-  color: var(--g-ink) !important;
+  background: var(--surface-2) !important;
+  color: var(--ink) !important;
 }

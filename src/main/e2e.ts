@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, nativeTheme } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 
@@ -56,6 +56,15 @@ async function sendClick(win: Electron.BrowserWindow, x: number, y: number): Pro
  */
 export async function runE2EIfEnabled(win: Electron.BrowserWindow): Promise<void> {
   if (process.env.GALLERY_E2E !== '1') return
+
+  // System 模式模拟：GALLERY_E2E_FLIP_THEME=dark|light 时，启动 12s 后翻转
+  // nativeTheme.themeSource（等价 OS 明暗变化），供链路 18 断言渲染层实时跟随。
+  if (process.env.GALLERY_E2E_FLIP_THEME) {
+    setTimeout(() => {
+      nativeTheme.themeSource = process.env.GALLERY_E2E_FLIP_THEME as 'dark' | 'light'
+      console.log(`[e2e] 已翻转 themeSource → ${process.env.GALLERY_E2E_FLIP_THEME}`)
+    }, 12000)
+  }
 
   try {
     const outDir = process.env.GALLERY_E2E_DIR || '/tmp/gallery-e2e'

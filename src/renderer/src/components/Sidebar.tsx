@@ -181,7 +181,7 @@ const Sidebar: React.FC = () => {
           onClick={() => setFilters({ favoritesOnly: !filters.favoritesOnly })}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
             filters.favoritesOnly
-              ? 'bg-primary-soft text-primary font-medium'
+              ? 'bg-primary-soft text-primary-soft-ink font-medium'
               : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
           }`}
         >
@@ -226,7 +226,7 @@ const Sidebar: React.FC = () => {
                       missing
                         ? 'text-ink-3 border border-dashed border-line'
                         : active
-                          ? 'bg-primary-soft text-primary font-medium'
+                          ? 'bg-primary-soft text-primary-soft-ink font-medium'
                           : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
                     }`}
                   >
@@ -313,7 +313,7 @@ const Sidebar: React.FC = () => {
                     }
                     className={`px-2 py-0.5 rounded-full text-xs transition-colors ${
                       on
-                        ? 'bg-primary text-white'
+                        ? 'bg-primary text-primary-ink'
                         : 'bg-surface-2 text-ink-2 hover:bg-primary-soft hover:text-primary'
                     }`}
                   >
@@ -338,7 +338,7 @@ const Sidebar: React.FC = () => {
                     onClick={() => setFilters({ year: on ? null : year })}
                     className={`px-2.5 py-0.5 rounded-full text-xs font-display transition-colors ${
                       on
-                        ? 'bg-primary text-white'
+                        ? 'bg-primary text-primary-ink'
                         : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
                     }`}
                   >
@@ -366,7 +366,7 @@ const Sidebar: React.FC = () => {
           data-testid="sidebar-trash"
           className={`w-full flex items-center gap-2 px-3 py-2 -mx-1 rounded-lg text-sm transition-colors ${
             location.pathname === '/trash'
-              ? 'bg-primary-soft text-primary font-medium'
+              ? 'bg-primary-soft text-primary-soft-ink font-medium'
               : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
           }`}
         >
@@ -428,7 +428,7 @@ const Sidebar: React.FC = () => {
       {renamingAlbum &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 no-drag bg-black/30 flex items-center justify-center"
+            className="fixed inset-0 z-50 no-drag bg-overlay flex items-center justify-center"
             onClick={() => setRenamingAlbum(null)}
           >
           <div
@@ -452,7 +452,7 @@ const Sidebar: React.FC = () => {
               </button>
               <button
                 onClick={handleRenameSubmit}
-                className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:opacity-90"
+                className="px-3 py-1.5 text-sm bg-primary text-primary-ink rounded-lg hover:opacity-90"
               >
                 确定
               </button>

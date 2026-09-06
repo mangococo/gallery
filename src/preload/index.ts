@@ -4,6 +4,7 @@ import type {
   GalleryApi,
   ScanProgress,
   ThemeMode,
+  ThemePaletteId,
   Unsubscribe,
 } from '../shared/types'
 
@@ -48,6 +49,11 @@ const api: GalleryApi = {
 
   getTheme: () => ipcRenderer.invoke(IPC.themeGet),
   setTheme: (mode: ThemeMode) => ipcRenderer.invoke(IPC.themeSet, mode),
+  getThemePalette: () => ipcRenderer.invoke(IPC.themePaletteGet),
+  setThemePalette: (id: ThemePaletteId) => ipcRenderer.invoke(IPC.themePaletteSet, id),
+  getThemeCustomCss: () => ipcRenderer.invoke(IPC.themeCustomCssGet),
+  ensureThemeCustomCss: () => ipcRenderer.invoke(IPC.themeCustomCssEnsure),
+  openThemeCustomCss: () => ipcRenderer.invoke(IPC.themeCustomCssOpen),
 
   importLegacy: () => ipcRenderer.invoke(IPC.importLegacy),
 
@@ -62,6 +68,7 @@ const api: GalleryApi = {
   onScanProgress: (cb: (p: ScanProgress) => void) => subscribe(IPC.pushScanProgress, cb),
   onFsChanged: (cb) => subscribe(IPC.pushFsChanged, cb),
   onThemeSystemChanged: (cb) => subscribe(IPC.pushThemeSystemChanged, cb),
+  onThemeCustomCssChanged: (cb) => subscribe(IPC.pushThemeCustomCssChanged, cb),
 
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 }

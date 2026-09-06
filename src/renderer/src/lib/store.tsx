@@ -1,7 +1,6 @@
 import React from 'react'
 import { api } from './api'
-import { applyTheme } from './theme'
-import type { Album, ScanProgress, Stats, ThemeMode, TripDTO } from '@shared/types'
+import type { Album, ScanProgress, Stats, TripDTO } from '@shared/types'
 
 export interface TripFilters {
   favoritesOnly: boolean
@@ -18,8 +17,6 @@ interface AppState {
   progress: ScanProgress | null
   filters: TripFilters
   setFilters: (patch: Partial<TripFilters>) => void
-  theme: ThemeMode
-  setTheme: (mode: ThemeMode) => Promise<void>
   /** ⌘K 搜索面板开关 */
   searchOpen: boolean
   setSearchOpen: (v: boolean) => void
@@ -50,8 +47,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     tags: [],
     year: null,
   })
-  const [theme, setThemeState] = React.useState<ThemeMode>('system')
-  const [systemDark, setSystemDark] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
   /** 旅行数据请求序号：切相册/文件变化并发时，旧响应不再覆盖新相册的数据 */
   const tripsSeq = React.useRef(0)
@@ -84,15 +79,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     void (async () => {
       const boot = await api.bootstrap()
-      setThemeState(boot.theme)
-      setSystemDark(boot.systemDark)
-      applyTheme(boot.theme, boot.systemDark)
       await refreshAll()
       setReady(true)
     })()
   }, [refreshAll])
 
-  // 主进程推送：扫描进度 / 文件系统变化 / 系统主题
+  // 主进程推送：扫描进度 / 文件系统变化
   React.useEffect(() => {
     const offProgress = api.onScanProgress((p) => {
       setProgress(p.done >= p.total && p.phase === 'thumb' ? null : p)
@@ -100,25 +92,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const offFs = api.onFsChanged(() => {
       void refreshAll()
     })
-    const offTheme = api.onThemeSystemChanged(({ systemDark: dark }) => {
-      setSystemDark(dark)
-    })
     return () => {
       offProgress()
       offFs()
-      offTheme()
     }
   }, [refreshAll])
-
-  // 主题模式或系统明暗变化 → 重新落地 data-theme
-  React.useEffect(() => {
-    applyTheme(theme, systemDark)
-  }, [theme, systemDark])
-
-  const setTheme = React.useCallback(async (mode: ThemeMode) => {
-    setThemeState(mode)
-    await api.setTheme(mode)
-  }, [])
 
   const setActiveAlbum = React.useCallback(
     async (id: string) => {
@@ -145,8 +123,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         progress,
         filters,
         setFilters,
-        theme,
-        setTheme,
         searchOpen,
         setSearchOpen,
         reloadAlbums,

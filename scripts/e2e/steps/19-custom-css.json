@@ -1,0 +1,32 @@
+[
+ {
+  "name": "_meta",
+  "wait": 1,
+  "log": true,
+  "script": "return \"自定义 CSS 链路：需由 scripts/e2e/custom-css.sh 驱动（预置 userData/theme.css 并在 6s 时改写）。断言 --primary 覆盖注入生效，且保存后免重载热更新。\""
+ },
+ {
+  "name": "01-home",
+  "wait": 4000
+ },
+ {
+  "name": "02-custom-css-v1",
+  "wait": 300,
+  "log": true,
+  "script": "const el = document.querySelector('.bg-primary'); if (!el) throw new Error('bg-primary 元素缺失'); const c = getComputedStyle(el).backgroundColor; if (!c.includes('90, 125, 154')) throw new Error('自定义 --primary #5A7D9A 未生效，实际 ' + c); return 'css-v1-ok ' + c"
+ },
+ {
+  "name": "03-wait-rewrite",
+  "wait": 6000
+ },
+ {
+  "name": "04-custom-css-v2-hot-reload",
+  "wait": 800,
+  "log": true,
+  "script": "const el = document.querySelector('.bg-primary'); const c = getComputedStyle(el).backgroundColor; if (!c.includes('70, 105, 140')) throw new Error('自定义 CSS 热更新未生效（应 #46698C），实际 ' + c); return 'css-hot-reload-ok ' + c"
+ },
+ {
+  "name": "05-final-shot",
+  "wait": 400
+ }
+]

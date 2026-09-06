@@ -1,0 +1,216 @@
+/*
+ * Semantic Theme Tokens —— 公开语义层（§theme.md）
+ *
+ * 真正的公开 Theme API：基础界面语义（画布/表面/文字/品牌/状态）。
+ * 解析矩阵：data-palette（default | candle）× data-mode（light | dark）。
+ * `:root` 兜底 = default × light（JS 生效前的首帧）。
+ * 组件只允许通过 Tailwind 工具类（bg-surface / text-ink …）消费这层，
+ * 禁止直接引用原始色值；禁止为单个组件新增语义 token。
+ *
+ * 对比度契约（WCAG）：正文小字 ≥ 4.5:1，大字/展示标题 ≥ 3:1；
+ * 由 tests/theme.test.ts 与 scripts/contrast-report.mjs 自动校验。
+ */
+
+/* —— default × light（兜底即亮色暖纸） —— */
+:root,
+[data-mode='light'] {
+  --background: var(--p-paper-50);
+  --surface: var(--p-milk);
+  --surface-2: var(--p-paper-100);
+  --line: var(--p-paper-200);
+
+  --primary: var(--gt-accent);
+  --primary-soft: var(--gt-accent-soft);
+  --primary-ink: var(--gt-accent-ink);
+  /* primary-soft 底上的墨色（软底按钮/标签） */
+  --primary-soft-ink: var(--p-amber-500);
+
+  --ink: var(--p-umber-700);
+  --ink-2: var(--p-umber-600);
+  --ink-3: var(--p-umber-500);
+
+  --danger: var(--p-clay-400);
+  --danger-ink: var(--p-milk);
+  --success: var(--p-moss-500);
+  --warning: var(--p-wheat-500);
+
+  /* 弹层遮罩：暖黑而非纯黑，贴合手账纸感 */
+  --overlay: rgb(24 17 10 / 0.44);
+}
+
+/* —— default × dark：暖褐烛光暗色（品牌特征，非冷灰） —— */
+[data-mode='dark'] {
+  --background: var(--p-night-850);
+  --surface: var(--p-night-800);
+  --surface-2: var(--p-night-750);
+  --line: var(--p-night-700);
+
+  --primary: var(--gt-accent);
+  --primary-soft: var(--gt-accent-soft);
+  --primary-ink: var(--gt-accent-ink);
+  --primary-soft-ink: var(--gt-accent);
+
+  --ink: var(--p-umber-100);
+  --ink-2: var(--p-umber-300);
+  --ink-3: var(--p-umber-400);
+
+  --danger: var(--p-clay-200);
+  --danger-ink: #2b160f;
+  --success: var(--p-moss-300);
+  --warning: var(--p-wheat-200);
+
+  --overlay: rgb(10 7 4 / 0.6);
+}
+
+/* —— candle × light：烛光调亮色（蜜色纸面 + 金琥珀） —— */
+[data-palette='candle'][data-mode='light'] {
+  --background: #fbf5e9;
+  --surface: #fffdf7;
+  --surface-2: #f4ead5;
+  --line: #eaddc4;
+
+  --primary-soft-ink: #7d531c;
+
+  --ink: #3a3226;
+  --ink-2: #6d6149;
+  --ink-3: #74684f;
+
+  --danger: #b54a35;
+  --success: #4d6e3a;
+  --warning: #8f631c;
+
+  --overlay: rgb(30 22 10 / 0.44);
+}
+
+/* —— candle × dark：更深的棕黑烛房 —— */
+[data-palette='candle'][data-mode='dark'] {
+  --background: #191410;
+  --surface: #241e15;
+  --surface-2: #31291a;
+  --line: #3b311f;
+
+  --ink: #f2ead9;
+  --ink-2: #b5a68e;
+  --ink-3: #a39479;
+
+  --danger: #dd6a50;
+  --danger-ink: #241a0e;
+  --success: #9ab87f;
+  --warning: #d9a95c;
+
+  --overlay: rgb(8 5 2 / 0.62);
+}
+
+/* —— 月白 × light：素白冷灰纸面 —— */
+[data-palette='yuebai'][data-mode='light'] {
+  --background: #f5f7f7;
+  --surface: #ffffff;
+  --surface-2: #eef1f1;
+  --line: #e0e6e6;
+
+  --primary-soft-ink: #34505e;
+
+  --ink: #2f3538;
+  --ink-2: #565f63;
+  --ink-3: #5f6e79;
+
+  --danger: #c2543e;
+  --success: #3e6e5f;
+  --warning: #8a631f;
+
+  --overlay: rgb(18 24 27 / 0.44);
+}
+
+[data-palette='yuebai'][data-mode='dark'] {
+  --background: #1a2023;
+  --surface: #22292d;
+  --surface-2: #2b3337;
+  --line: #343d41;
+
+  --ink: #e8eeec;
+  --ink-2: #aebcbe;
+  --ink-3: #94a2a5;
+
+  --danger: #e0766a;
+  --danger-ink: #2b1410;
+  --success: #8fbc9f;
+  --warning: #d4b06a;
+
+  --overlay: rgb(5 9 11 / 0.6);
+}
+
+/* —— 黛蓝 × light：蓝调信笺 —— */
+[data-palette='dailan'][data-mode='light'] {
+  --background: #f2f5f9;
+  --surface: #ffffff;
+  --surface-2: #e8edf5;
+  --line: #d8e1ee;
+
+  --primary-soft-ink: #2f4d7a;
+
+  --ink: #2c3440;
+  --ink-2: #4d5869;
+  --ink-3: #5f6a7e;
+
+  --danger: #c2543e;
+  --success: #3d6b4f;
+  --warning: #8f631c;
+
+  --overlay: rgb(16 24 38 / 0.44);
+}
+
+[data-palette='dailan'][data-mode='dark'] {
+  --background: #171c26;
+  --surface: #1f2632;
+  --surface-2: #28303e;
+  --line: #323b4a;
+
+  --ink: #e6ecf4;
+  --ink-2: #aab6c6;
+  --ink-3: #8fa0b2;
+
+  --danger: #e0766a;
+  --danger-ink: #2b1410;
+  --success: #8fbc9f;
+  --warning: #d4b06a;
+
+  --overlay: rgb(4 8 14 / 0.62);
+}
+
+/* —— 青瓷 × light：青瓷釉面 —— */
+[data-palette='qingci'][data-mode='light'] {
+  --background: #f1f6f3;
+  --surface: #ffffff;
+  --surface-2: #e6efe9;
+  --line: #d4e2d9;
+
+  --primary-soft-ink: #27574a;
+
+  --ink: #2b3833;
+  --ink-2: #52655d;
+  --ink-3: #5a6d65;
+
+  --danger: #c2543e;
+  --success: #3d6b4f;
+  --warning: #8f631c;
+
+  --overlay: rgb(14 26 21 / 0.44);
+}
+
+[data-palette='qingci'][data-mode='dark'] {
+  --background: #131c18;
+  --surface: #1a2620;
+  --surface-2: #232f2a;
+  --line: #2d3a34;
+
+  --ink: #e5efea;
+  --ink-2: #a9bab2;
+  --ink-3: #8fa19a;
+
+  --danger: #e0766a;
+  --danger-ink: #2b1410;
+  --success: #8fbc9f;
+  --warning: #d4b06a;
+
+  --overlay: rgb(3 8 6 / 0.6);
+}

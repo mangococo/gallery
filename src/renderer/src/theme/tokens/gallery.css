@@ -1,0 +1,139 @@
+/*
+ * Gallery Product Semantics —— 产品语义层（§theme.md）
+ *
+ * 表达 Gallery 独有的稳定视觉角色（翻阅室/照片遮罩/胶带/相纸），
+ * 与 semantic.css 同矩阵解析（palette × mode）。每个 token 必须有真实消费者：
+ *   viewer*      → 灯箱「翻阅室」（Lightbox.tsx）
+ *   scrim*       → 照片之上的悬浮层（PhotoWall 悬停角标、Lightbox 控件）
+ *   tape*        → 和纸胶带（.washi-label / TimelineItem 日期贴）
+ *   polaroid     → 拍立得相纸白边（.polaroid-frame / .viewer-polaroid）
+ * 照片上的遮罩必须保持中性黑 + 白字（照片内容不可预测，不随主题翻转）。
+ */
+
+:root,
+[data-mode='light'] {
+  /* 翻阅室：亮色模式下也是暖褐深房间，照片如烛光下翻阅手账 */
+  --viewer: var(--p-night-900);
+  --viewer-2: var(--p-oak);
+  --viewer-ink: var(--p-umber-100);
+  --viewer-ink-2: var(--p-umber-300);
+
+  /* 照片遮罩：中性黑基底（配合 bg-scrim/NN 透明度修饰符）+ 恒白文字 */
+  --scrim: var(--p-soot);
+  --scrim-ink: var(--p-milk);
+
+  /* 和纸胶带：面 = 强调色柔和洗染，字 = 深琥珀墨（与 primary-soft 配对墨同源） */
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  /* 相纸白边 */
+  --polaroid: var(--p-milk);
+}
+
+[data-mode='dark'] {
+  /* 暗色翻阅室：比主界面更暗一档但同暖（烛光暗房），不是冷黑 */
+  --viewer: var(--p-night-950);
+  --viewer-2: var(--p-oak-dark);
+  --viewer-ink: var(--p-umber-100);
+  --viewer-ink-2: var(--p-umber-300);
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: var(--p-night-800);
+}
+
+[data-palette='candle'][data-mode='light'] {
+  --viewer: #2e2418;
+  --viewer-2: #3d3122;
+  --viewer-ink: #f2ead9;
+  --viewer-ink-2: #b5a68e;
+
+  --tape: #f3e5c4;
+  --tape-ink: #7d531c;
+  --polaroid: #fffdf7;
+}
+
+[data-palette='candle'][data-mode='dark'] {
+  --viewer: #130e09;
+  --viewer-2: #221a10;
+  --viewer-ink: #f2ead9;
+  --viewer-ink-2: #b5a68e;
+
+  --tape: #3a2d16;
+  --tape-ink: #d9a55e;
+
+  --polaroid: #241e15;
+}
+
+[data-palette='yuebai'][data-mode='light'] {
+  --viewer: #232a2e;
+  --viewer-2: #2e373c;
+  --viewer-ink: #eef2f2;
+  --viewer-ink-2: #a9b6ba;
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: #ffffff;
+}
+
+[data-palette='yuebai'][data-mode='dark'] {
+  --viewer: #12181c;
+  --viewer-2: #1d262b;
+  --viewer-ink: #eef2f2;
+  --viewer-ink-2: #a9b6ba;
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: #22292d;
+}
+
+[data-palette='dailan'][data-mode='light'] {
+  --viewer: #1f2733;
+  --viewer-2: #2a3441;
+  --viewer-ink: #e9eef6;
+  --viewer-ink-2: #a8b4c6;
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: #ffffff;
+}
+
+[data-palette='dailan'][data-mode='dark'] {
+  --viewer: #10141d;
+  --viewer-2: #191f2a;
+  --viewer-ink: #e9eef6;
+  --viewer-ink-2: #a8b4c6;
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: #1f2632;
+}
+
+[data-palette='qingci'][data-mode='light'] {
+  --viewer: #1d2925;
+  --viewer-2: #27352f;
+  --viewer-ink: #e9f1ed;
+  --viewer-ink-2: #a6b8b0;
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: #ffffff;
+}
+
+[data-palette='qingci'][data-mode='dark'] {
+  --viewer: #0e1613;
+  --viewer-2: #16211c;
+  --viewer-ink: #e9f1ed;
+  --viewer-ink-2: #a6b8b0;
+
+  --tape: var(--gt-accent-soft);
+  --tape-ink: var(--primary-soft-ink);
+
+  --polaroid: #1a2620;
+}

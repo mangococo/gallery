@@ -116,7 +116,7 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] no-drag bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[60] no-drag bg-overlay backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
     >
       <motion.div
@@ -127,15 +127,15 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
         className="bg-background rounded-2xl shadow-2xl w-[440px] max-w-full overflow-hidden"
         data-testid="move-dialog"
         style={{
-          background: 'linear-gradient(160deg, var(--g-background) 0%, var(--g-surface-2) 100%)',
-          border: '2px solid color-mix(in srgb, var(--g-primary) 22%, transparent)',
+          background: 'linear-gradient(160deg, var(--background) 0%, var(--surface-2) 100%)',
+          border: '2px solid color-mix(in srgb, var(--primary) 22%, transparent)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 标题区 */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-dashed border-primary/20">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-soft text-primary shrink-0">
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-soft text-primary-soft-ink shrink-0">
               <MoveToFolderIcon size={17} />
             </span>
             <div className="min-w-0">
@@ -202,7 +202,7 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
               <button
                 type="submit"
                 disabled={!newTitle.trim() || moving}
-                className="px-5 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="px-5 py-2 bg-primary text-primary-ink rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {moving ? '移动中…' : `创建并移入 ${photos.length} ${noun}`}
               </button>
@@ -305,7 +305,7 @@ const MoveToTripDialog: React.FC<MoveToTripDialogProps> = ({
               <button
                 onClick={() => picked && void doMove({ tripId: picked.id })}
                 disabled={!picked || moving}
-                className="px-6 py-2 bg-primary text-white rounded-xl text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="px-6 py-2 bg-primary text-primary-ink rounded-xl text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {moving ? '移动中…' : `移动 ${photos.length} ${noun}`}
               </button>

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
+import { useTheme } from '../theme'
+import type { ThemeMode, ThemePaletteId } from '../theme'
 import { confirmDialog, toast } from './feedback'
 import { useEscClaim, isEscTop } from '../lib/esc'
 import { WarningIcon, XIcon } from './icons'
@@ -13,9 +15,55 @@ interface SettingsModalProps {
   onChanged: () => Promise<void>
 }
 
-/** 设置弹窗：相册管理 / 重新扫描 / 导入旧数据 / 清除数据 */
+const MODE_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: '亮色' },
+  { value: 'dark', label: '暗色' },
+  { value: 'system', label: '跟随系统' },
+]
+
+/** 主题预览卡：data-palette/data-mode 局部落域，色块全部走语义 token（所见即所选） */
+function ThemeCard({ id, name, description }: { id: ThemePaletteId; name: string; description: string }) {
+  const { theme, resolvedMode, setTheme } = useTheme()
+  const active = theme === id
+  return (
+    <button
+      onClick={() => void setTheme(id)}
+      aria-pressed={active}
+      data-testid={`theme-card-${id}`}
+      className={`flex-1 rounded-xl border-2 p-2.5 text-left transition-colors ${
+        active ? 'border-primary' : 'border-line hover:border-primary/40'
+      }`}
+    >
+      <div
+        data-palette={id}
+        data-mode={resolvedMode}
+        className="rounded-lg p-2 flex items-center gap-1.5 bg-background"
+      >
+        <span
+          className="w-7 h-9 rounded-[3px] shadow-sm flex items-end justify-center pb-1"
+          style={{ background: 'var(--polaroid)' }}
+        >
+          <span className="w-5 h-4 rounded-[2px]" style={{ background: 'var(--primary-soft)' }} />
+        </span>
+        <span className="flex flex-col gap-1">
+          <span className="w-8 h-1 rounded-full" style={{ background: 'var(--tape-ink)' }} />
+          <span className="w-6 h-1 rounded-full" style={{ background: 'var(--ink-3)' }} />
+          <span className="w-4 h-1 rounded-full" style={{ background: 'var(--primary)' }} />
+        </span>
+      </div>
+      <div className="mt-2 text-sm text-ink font-medium">
+        {name}
+        {active && <span className="text-xs text-primary-soft-ink ml-1.5">使用中</span>}
+      </div>
+      <div className="text-xs text-ink-3">{description}</div>
+    </button>
+  )
+}
+
+/** 设置弹窗：外观 / 相册管理 / 重新扫描 / 导入旧数据 / 清除数据 */
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => {
   const { albums, reloadAlbums } = useApp()
+  const { mode, themes, setMode } = useTheme()
   const [busy, setBusy] = React.useState<string | null>(null)
   const [importResult, setImportResult] = React.useState<LegacyImportResult | null>(null)
   // Esc 关闭（有操作进行中不关）
@@ -94,7 +142,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
   // portal 到 body：侧栏是 sticky 层叠上下文，弹窗留在内部会被照片堆叠盖住
   return createPortal(
     <div
-      className="fixed inset-0 z-50 no-drag bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 no-drag bg-overlay backdrop-blur-[2px] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <motion.div
@@ -116,6 +164,53 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
         </header>
 
         <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto scroll-slim">
+          {/* 外观 */}
+          <section>
+            <h3 className="text-sm font-medium text-ink mb-2">外观</h3>
+            <div
+              role="radiogroup"
+              aria-label="主题模式"
+              className="flex bg-surface-2 rounded-lg p-0.5 mb-3"
+            >
+              {MODE_OPTIONS.map((opt) => {
+                const active = mode === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    role="radio"
+                    aria-checked={active}
+                    data-testid={`theme-mode-${opt.value}`}
+                    onClick={() => void setMode(opt.value)}
+                    className={`flex-1 px-2.5 py-1 rounded-md text-xs transition-colors ${
+                      active
+                        ? 'bg-surface text-primary shadow-sm font-medium'
+                        : 'text-ink-2 hover:text-ink'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {themes.map((t) => (
+                <ThemeCard key={t.id} id={t.id} name={t.name} description={t.description} />
+              ))}
+            </div>
+            <div className="flex items-center justify-between gap-3 mt-3 px-0.5">
+              <div className="min-w-0">
+                <div className="text-xs text-ink-2">自定义样式</div>
+                <div className="text-xs text-ink-3 truncate">userData/theme.css · 用语义 token 覆盖，保存即热更新</div>
+              </div>
+              <button
+                onClick={() => void api.openThemeCustomCss()}
+                className="text-xs bg-primary-soft text-primary-soft-ink rounded-lg px-3 py-1.5 shrink-0 hover:opacity-85 transition-opacity"
+              >
+                编辑 theme.css
+              </button>
+            </div>
+          </section>
+
           {/* 相册管理 */}
           <section>
             <h3 className="text-sm font-medium text-ink mb-2">相册</h3>
@@ -156,14 +251,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
             <button
               onClick={handleRescanAll}
               disabled={busy !== null}
-              className="w-full px-4 py-2.5 text-sm bg-primary-soft text-primary rounded-xl hover:opacity-85 transition-opacity disabled:opacity-50"
+              className="w-full px-4 py-2.5 text-sm bg-primary-soft text-primary-soft-ink rounded-xl hover:opacity-85 transition-opacity disabled:opacity-50"
             >
               {busy === 'rescan' ? '扫描中…' : '重新扫描所有相册'}
             </button>
             <button
               onClick={handleImportLegacy}
               disabled={busy !== null}
-              className="w-full px-4 py-2.5 text-sm bg-primary-soft text-primary rounded-xl hover:opacity-85 transition-opacity disabled:opacity-50"
+              className="w-full px-4 py-2.5 text-sm bg-primary-soft text-primary-soft-ink rounded-xl hover:opacity-85 transition-opacity disabled:opacity-50"
             >
               {busy === 'import' ? '导入中…' : '导入旧版数据目录'}
             </button>
