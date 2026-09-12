@@ -5,6 +5,15 @@ import { displaySrc } from '../lib/api'
 import { confirmDialog } from './feedback'
 import { CheckCircleIcon, HeartIcon, PenIcon, StarIcon, TrashIcon } from './icons'
 
+/** 多选选中态的实心勾（#8）：16px 下描边勾辨识度低，粗实心勾一眼可辨 */
+function CheckFilledIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12.5 10 17.5 19 7" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 interface PhotoWallProps {
   photos: Photo[]
   onPhotoClick?: (photo: Photo) => void
@@ -241,20 +250,37 @@ const CardInner: React.FC<{
   }
   return (
     <div
-      className={`relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border ${
-        selected ? 'border-primary ring-2 ring-primary' : 'border-line'
+      className={`relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow ${
+        selected ? '' : 'border border-line'
       }`}
+      data-testid="wall-card"
+      data-selected={selected ? 'true' : 'false'}
     >
       <WallMedia photo={photo} />
+      {selected && (
+        <>
+          <div className="absolute inset-0 bg-primary-soft/45 pointer-events-none" data-testid="selection-veil" />
+          {/* 选中描边（#8）：inset ring 画在卡片内部——外置 box-shadow 会被
+              .wall-item 的 content-visibility（paint containment）裁掉直边段，
+              只剩圆角弧；inset 沿 rounded-xl 全周均匀、不依赖溢出绘制 */}
+          <div
+            className="absolute inset-0 rounded-xl ring-[3px] ring-inset ring-primary pointer-events-none z-10"
+            data-testid="selection-ring"
+          />
+        </>
+      )}
 
-      {/* 多选勾选徽标 */}
+      {/* 多选勾选徽标（#8）：不透明底——半透明底叠照片后观感受底图明暗左右，
+          浅色照片上发灰难辨。未选中 = 白底 + 深色圆环勾；选中 = success 实底 +
+          白色粗实心勾，高对比且不依赖底图 */}
       {(selectionMode || selected) && (
         <div
-          className={`absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-colors ${
-            selected ? 'bg-primary text-primary-ink' : 'bg-scrim/40 text-scrim-ink/70'
+          data-testid="select-badge"
+          className={`absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${
+            selected ? 'bg-success text-white' : 'bg-surface text-ink-2'
           }`}
         >
-          <CheckCircleIcon size={16} />
+          {selected ? <CheckFilledIcon size={18} /> : <CheckCircleIcon size={16} />}
         </div>
       )}
 
