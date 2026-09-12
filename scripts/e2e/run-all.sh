@@ -60,6 +60,17 @@ for f in "$STEPS_DIR"/*.json; do
     echo "---- $name: SKIP（跑 scripts/e2e/custom-css.sh）"
     continue
   fi
+  # 23-thumb-resume 两阶段共享 userData，由专脚本驱动
+  if [ "$name" = "23-thumb-resume" ]; then
+    echo "---- $name"
+    if bash scripts/e2e/thumb-resume.sh; then
+      PASS=$((PASS + 1))
+    else
+      FAIL=$((FAIL + 1))
+      FAILED_LIST="$FAILED_LIST $name"
+    fi
+    continue
+  fi
   echo "---- $name"
   # 08/22 用大相册（性能/缩略图增量验收），其余用小相册（启动扫描 <1s，链路时序稳定）
   if { [ "$name" = "08-large-album" ] || [ "$name" = "22-thumb-progress" ]; } && [ -d "$DEMO_ROOT/album-large" ]; then

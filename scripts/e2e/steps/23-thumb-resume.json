@@ -1,0 +1,1 @@
+[{"name": "placeholder", "wait": 1, "script": "return \"由 scripts/e2e/thumb-resume.sh 两阶段驱动，本文件仅占位让 run-all 识别链路名\""}]

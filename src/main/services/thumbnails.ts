@@ -2,19 +2,21 @@ import { BrowserWindow, app } from 'electron'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 import sharp from 'sharp'
-import type { ScanProgress } from '../../shared/types'
-import {
-  getAlbumPath,
-  getPhotoRow,
-  listPendingThumbPhotos,
-  setPhotoDimensions,
-  setPhotoThumbStatus,
-} from '../db'
+import type { PhotoDTO, ScanProgress } from '../../shared/types'
+import { getAlbumPath, listPendingThumbPhotos, markThumbResults } from '../db'
 import { decodeHeicRaw, isHeicFamily } from './heic'
+import {
+  splitThumbJobs,
+  resolveImageConcurrency,
+  VIDEO_CONCURRENCY,
+  type ThumbReadyItem,
+} from './thumb-plan'
+
+export { splitThumbJobs, resolveImageConcurrency } from './thumb-plan'
+export type { ThumbReadyItem } from './thumb-plan'
 
 /** 缩略图规格：约 400px webp */
 const THUMB_SIZE = 400
-const CONCURRENCY = 3
 
 const thumbDir = (): string => join(app.getPath('userData'), 'thumbnails')
 
@@ -23,21 +25,13 @@ function thumbPath(photoId: string): string {
 }
 
 // —— 队列状态 ——
-interface QueueJob {
-  photoId: string
-  albumId: string
+interface QueueState {
+  cancelled: boolean
 }
-const queues = new Map<string, { jobs: QueueJob[]; running: number; cancelled: boolean }>()
+const queues = new Map<string, QueueState>()
 /** 同相册进行中的生成任务（并发调用合并为一次，防止两个队列对同一批照片重复生成） */
 const inflight = new Map<string, Promise<void>>()
 let progressWindow: BrowserWindow | null = null
-
-export interface ThumbReadyItem {
-  id: string
-  thumbUrl: string
-  width: number | null
-  height: number | null
-}
 
 export interface ThumbHooks {
   progress(p: ScanProgress): void
@@ -48,9 +42,10 @@ export interface ThumbHooks {
 const thumbUrlOf = (photoId: string): string => `gallery-media://t/${photoId}.webp`
 
 /**
- * 为相册中所有 pending 照片生成缩略图（并发队列，向渲染层推送进度）。
+ * 为相册中所有 pending 照片生成缩略图（图片/视频双池并行，向渲染层推送进度）。
  * 幂等：重复调用会跳过已就绪的；同相册并发调用合并，并在结束后补扫本轮新增的 pending
  * （此前队列运行期间的导入要等下一次全量触发才出缩略图）。
+ * 应用中途退出只留下 pending 行，下次启动 bootstrap → fullRescan 会重新入队续跑。
  */
 export function generateThumbsForAlbum(
   albumId: string,
@@ -64,17 +59,24 @@ export function generateThumbsForAlbum(
   return p
 }
 
+/** 双池中的一种生成器：成功返回就绪描述符，文件缺失/失败返回 null（由批缓冲落 failed） */
+type ItemGenerator = (photo: PhotoDTO & { albumId: string }, albumRoot: string) => Promise<ThumbReadyItem | null>
+
 async function runThumbQueue(albumId: string, albumName: string, hooks: ThumbHooks): Promise<void> {
   await fs.mkdir(thumbDir(), { recursive: true })
 
-  const q = { jobs: [] as QueueJob[], running: 0, cancelled: false }
+  const q: QueueState = { cancelled: false }
   queues.set(albumId, q)
+
+  const imageConcurrency = resolveImageConcurrency()
 
   // 扫描/导入可能在本轮生成期间又标记了新的 pending：收敛循环补扫（上限防意外死循环）
   for (let round = 0; round < 5 && !q.cancelled; round++) {
     const pending = listPendingThumbPhotos(albumId)
     const total = pending.length
     if (total === 0) return
+    const albumRoot = getAlbumPath(albumId)
+    if (!albumRoot) return // 相册行已不存在，等下一次触发
 
     let done = 0
     let lastPush = 0
@@ -87,41 +89,53 @@ async function runThumbQueue(albumId: string, albumName: string, hooks: ThumbHoo
     }
     pushProgress()
 
-    q.jobs = pending.map((p) => ({ photoId: p.id, albumId }))
-
-    // 就绪批量缓冲：300ms 或 40 张择一触发，避免逐张推送打爆 IPC
+    // 就绪/失败批量缓冲：DB 事务批写与 IPC 推送同节奏（300ms 或 40 张），
+    // 替代此前每张两条同步 UPDATE——大批量时减少 sqlite 写放大
     let readyBuf: ThumbReadyItem[] = []
-    let lastReadyFlush = 0
-    const flushReady = (force = false): void => {
-      if (!hooks.ready || readyBuf.length === 0) return
+    let failedBuf: string[] = []
+    let lastFlush = 0
+    const flush = (force = false): void => {
+      if (readyBuf.length === 0 && failedBuf.length === 0) return
       const now = Date.now()
-      if (!force && now - lastReadyFlush < 300 && readyBuf.length < 40) return
-      hooks.ready(readyBuf)
+      if (!force && now - lastFlush < 300 && readyBuf.length < 40) return
+      markThumbResults(
+        readyBuf.map((r) => ({ id: r.id, width: r.width ?? 0, height: r.height ?? 0 })),
+        failedBuf,
+      )
+      if (hooks.ready && readyBuf.length > 0) hooks.ready(readyBuf)
       readyBuf = []
-      lastReadyFlush = now
+      failedBuf = []
+      lastFlush = now
     }
 
-    const worker = async (): Promise<void> => {
-      while (q.jobs.length > 0 && !q.cancelled) {
-        const job = q.jobs.shift()!
-        try {
-          const item = await generateOne(job.photoId)
-          if (item) {
-            readyBuf.push(item)
-            flushReady()
+    const { images, videos } = splitThumbJobs(pending)
+
+    const runPool = async (items: (PhotoDTO & { albumId: string })[], concurrency: number, gen: ItemGenerator): Promise<void> => {
+      let i = 0
+      const worker = async (): Promise<void> => {
+        while (i < items.length && !q.cancelled) {
+          const item = items[i++]
+          try {
+            const r = await gen(item, albumRoot)
+            if (r) readyBuf.push(r)
+            else failedBuf.push(item.id)
+          } catch {
+            failedBuf.push(item.id)
           }
-        } catch {
-          // 单张失败不影响整体
+          flush()
+          done++
+          pushProgress()
         }
-        done++
-        pushProgress()
       }
+      await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, worker))
     }
 
-    q.running = CONCURRENCY
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker))
-    q.running = 0
-    flushReady(true)
+    // 图片池（sharp，按核数）与视频池（隐藏页截帧，低并发）同时推进，互不占用
+    await Promise.all([
+      runPool(images, imageConcurrency, generateImageThumb),
+      runPool(videos, VIDEO_CONCURRENCY, generateVideoThumb),
+    ])
+    flush(true)
     hooks.progress({ albumId, albumName, phase: 'thumb', done, total })
   }
 }
@@ -131,49 +145,52 @@ export function cancelThumbsForAlbum(albumId: string): void {
   if (q) q.cancelled = true
 }
 
-/** 单张缩略图：图片走 sharp；视频走隐藏渲染页截帧，失败落占位图。成功返回就绪描述符 */
-async function generateOne(photoId: string): Promise<ThumbReadyItem | null> {
-  const photo = getPhotoRow(photoId)
-  if (!photo) return null
-  const root = getAlbumPath(photo.albumId)
-  if (!root) return null
-  const abs = join(root, photo.relPath)
-
+/** 图片缩略图：sharp resize → webp；HEIC 走 WASM 解码回退管线。文件缺失返回 null（批落 failed） */
+const generateImageThumb: ItemGenerator = async (photo, albumRoot) => {
+  const abs = join(albumRoot, photo.relPath)
   try {
     await fs.access(abs)
   } catch {
-    // 文件已不在：标记失败，等待增量校对清理
-    setPhotoThumbStatus(photoId, 'failed')
     return null
   }
 
+  let out: { width: number; height: number }
   try {
-    if (photo.type === 'image') {
-      let out: { width: number; height: number }
-      try {
-        out = await sharp(abs)
-          .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 82 })
-          .toFile(thumbPath(photoId))
-      } catch (err) {
-        // sharp 的 libheif 无 HEVC 解码插件（实测）：HEIC 回退 WASM 解码后重走管线
-        if (!isHeicFamily(photo.fileName)) throw err
-        const raw = await decodeHeicRaw(abs)
-        if (!raw) throw err
-        out = await sharp(raw.data, { raw: { width: raw.width, height: raw.height, channels: 4 } })
-          .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 82 })
-          .toFile(thumbPath(photoId))
-      }
-      setPhotoDimensions(photoId, out.width, out.height)
-      setPhotoThumbStatus(photoId, 'ready')
-      return { id: photoId, thumbUrl: thumbUrlOf(photoId), width: out.width, height: out.height }
+    try {
+      out = await sharp(abs)
+        .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toFile(thumbPath(photo.id))
+    } catch (err) {
+      // sharp 的 libheif 无 HEVC 解码插件（实测）：HEIC 回退 WASM 解码后重走管线
+      if (!isHeicFamily(photo.fileName)) throw err
+      const raw = await decodeHeicRaw(abs)
+      if (!raw) throw err
+      out = await sharp(raw.data, { raw: { width: raw.width, height: raw.height, channels: 4 } })
+        .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toFile(thumbPath(photo.id))
     }
-    // 视频：隐藏窗口截帧（不引入 ffmpeg）
-    const frame = await captureVideoFrame(`gallery-media://m/${photo.albumId}/${encodeURIComponent(photo.relPath)}`)
-    let buffer: Buffer
-    let width = 400
-    let height = 300
+  } catch {
+    return null
+  }
+  return { id: photo.id, thumbUrl: thumbUrlOf(photo.id), width: out.width, height: out.height }
+}
+
+/** 视频缩略图：隐藏渲染页截帧；失败落暖棕占位图（同样是「就绪」，避免永久 pending） */
+const generateVideoThumb: ItemGenerator = async (photo, albumRoot) => {
+  const abs = join(albumRoot, photo.relPath)
+  try {
+    await fs.access(abs)
+  } catch {
+    return null
+  }
+
+  let buffer: Buffer
+  let width = 400
+  let height = 300
+  const frame = await captureVideoFrame(`gallery-media://m/${photo.albumId}/${encodeURIComponent(photo.relPath)}`)
+  try {
     if (frame) {
       const pipeline = sharp(frame).resize(THUMB_SIZE, THUMB_SIZE, {
         fit: 'inside',
@@ -184,17 +201,13 @@ async function generateOne(photoId: string): Promise<ThumbReadyItem | null> {
       height = meta.height ?? height
       buffer = await pipeline.webp({ quality: 82 }).toBuffer()
     } else {
-      // 兜底占位图（暖棕底 + ▶）
       buffer = await placeholderThumb()
     }
-    await fs.writeFile(thumbPath(photoId), buffer)
-    setPhotoDimensions(photoId, width, height)
-    setPhotoThumbStatus(photoId, 'ready')
-    return { id: photoId, thumbUrl: thumbUrlOf(photoId), width, height }
+    await fs.writeFile(thumbPath(photo.id), buffer)
   } catch {
-    setPhotoThumbStatus(photoId, 'failed')
     return null
   }
+  return { id: photo.id, thumbUrl: thumbUrlOf(photo.id), width, height }
 }
 
 /** 占位缩略图：暖棕渐变底 + 播放三角 */
