@@ -67,6 +67,10 @@ const api: GalleryApi = {
   trashRestore: (sel) => ipcRenderer.invoke(IPC.trashRestore, sel),
   trashPurge: (sel) => ipcRenderer.invoke(IPC.trashPurge, sel),
 
+  getAppVersion: () => ipcRenderer.invoke(IPC.appVersionGet),
+  checkUpdates: () => ipcRenderer.invoke(IPC.updatesCheck),
+  openReleasePage: (url: string) => ipcRenderer.invoke(IPC.updatesOpenPage, url),
+
   onScanProgress: (cb: (p: ScanProgress) => void) => subscribe(IPC.pushScanProgress, cb),
   onFsChanged: (cb) => subscribe(IPC.pushFsChanged, cb),
   onThumbsReady: (cb) => subscribe(IPC.pushThumbsReady, cb),

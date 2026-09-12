@@ -1,0 +1,50 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"软件更新链路（GALLERY_E2E mock 注入，不真实访问网络）：设置 → 关于区显示当前版本 → 检查更新（mock 返回 v99.0.0）→ 发现新版提示 + 发布说明摘要 → 前往下载（E2E 下 shell.openExternal 记日志不真开）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3000
+  },
+  {
+    "name": "02-open-settings",
+    "wait": 900,
+    "script": "const btn = document.querySelector('[title=\"设置\"]'); if (!btn) throw new Error('设置按钮缺失'); btn.click(); await new Promise(r => setTimeout(r, 400)); const about = document.querySelector('[data-testid=about-section]'); if (!about) throw new Error('关于区缺失'); about.scrollIntoView({ block: 'center' }); await new Promise(r => setTimeout(r, 200)); 'settings-open'"
+  },
+  {
+    "name": "03-version-shown",
+    "wait": 600,
+    "script": "const v = document.querySelector('[data-testid=app-version]'); if (!v) throw new Error('版本行缺失'); if (!/当前版本 \\d+\\.\\d+\\.\\d+/.test(v.textContent)) throw new Error('版本号格式不对: ' + v.textContent); window.__verText = v.textContent; return v.textContent"
+  },
+  {
+    "name": "04-check-update",
+    "wait": 400,
+    "script": "const btn = document.querySelector('[data-testid=check-update-btn]'); if (!btn) throw new Error('检查更新按钮缺失'); btn.click(); 'checking'"
+  },
+  {
+    "name": "05-update-found",
+    "wait": 1500,
+    "script": "const card = document.querySelector('[data-testid=update-available]'); if (!card) { const err = document.querySelector('[data-testid=update-error]'); throw new Error('新版提示未出现' + (err ? '：' + err.textContent : '')); } if (!card.textContent.includes('v99.0.0')) throw new Error('新版版本号不对: ' + card.textContent.slice(0, 60)); if (!card.textContent.includes('E2E 演示更新说明')) throw new Error('发布说明摘要缺失'); 'found'"
+  },
+  {
+    "name": "06-update-card-shot",
+    "wait": 400
+  },
+  {
+    "name": "07-open-release-page",
+    "wait": 900,
+    "script": "const btn = document.querySelector('[data-testid=open-release-btn]'); if (!btn) throw new Error('前往下载按钮缺失'); btn.click(); await new Promise(r => setTimeout(r, 500)); if (!document.body.textContent.includes('已在浏览器打开下载页')) throw new Error('打开提示 toast 缺失'); 'opened'"
+  },
+  {
+    "name": "08-toast-shot",
+    "wait": 500
+  },
+  {
+    "name": "09-close",
+    "wait": 600,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'closed'"
+  }
+]

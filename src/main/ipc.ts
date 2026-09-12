@@ -17,6 +17,7 @@ import type {
   TrashSelection,
   TripDTO,
   TripPatch,
+  UpdateCheckResult,
 } from '../shared/types'
 import {
   getSetting,
@@ -63,7 +64,29 @@ import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbna
 import type { ThumbReadyItem } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
 import { exportJournal } from './services/journal'
+import { fetchLatestRelease, RELEASES_PAGE_URL, type FetchLike } from './services/update-check'
 import { getMainWindow } from './windows'
+
+/** 生产网络入口（全局 fetch；Electron 主进程 Node 侧原生可用） */
+function globalFetch(): FetchLike {
+  return fetch as unknown as FetchLike
+}
+
+/** E2E mock：固定返回 v99.0.0 的 Release（发现新版 → 提示 → 打开链接链路断言用） */
+const e2eMockFetcher: FetchLike = async () => ({
+  status: 200,
+  ok: true,
+  json: async () => ({
+    tag_name: 'v99.0.0',
+    name: 'v99.0.0 · E2E 演示新版',
+    published_at: '2026-09-12T08:00:00Z',
+    html_url: 'https://github.com/mangococo/gallery/releases/tag/v99.0.0',
+    body: '## 新增\n- E2E 演示更新说明\n\n## 修复\n- 若干修复',
+    assets: [
+      { name: 'gallery-99.0.0-mac-arm64.dmg', size: 9e7, browser_download_url: 'https://github.com/mangococo/gallery/releases/download/v99.0.0/gallery-99.0.0-mac-arm64.dmg' },
+    ],
+  }),
+})
 
 /** 主动推送的目标窗口（见 windows.ts 的说明——不能再用 getAllWindows()[0]） */
 function senderWindow(): BrowserWindow | null {
@@ -610,6 +633,27 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.trashPurge, async (_e, sel: TrashSelection) =>
     purgeItems(sel, (albumId) => pushChanged(albumId)),
   )
+
+  // —— 软件更新：仅手动触发的「检查 + 引导打开下载页」（决策与理由见 services/update-check.ts） ——
+  ipcMain.handle(IPC.appVersionGet, () => app.getVersion())
+
+  ipcMain.handle(IPC.updatesCheck, async (): Promise<UpdateCheckResult> => {
+    // E2E：注入 mock fetcher，链路内不真实访问网络
+    if (process.env.GALLERY_E2E === '1') {
+      return fetchLatestRelease(e2eMockFetcher, app.getVersion())
+    }
+    return fetchLatestRelease(globalFetch(), app.getVersion())
+  })
+
+  ipcMain.handle(IPC.updatesOpenPage, async (_e, url: string) => {
+    const safe = /^https:\/\/github\.com\/mangococo\/gallery\//.test(url) ? url : RELEASES_PAGE_URL
+    if (process.env.GALLERY_E2E === '1') {
+      console.log(`[e2e] updatesOpenPage（E2E 不真实打开）: ${safe}`)
+      return true
+    }
+    await shell.openExternal(safe)
+    return true
+  })
 
   // —— 旧数据导入 ——
   ipcMain.handle(IPC.importLegacy, async (e): Promise<LegacyImportResult | null> => {
