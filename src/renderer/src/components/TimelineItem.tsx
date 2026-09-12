@@ -19,11 +19,14 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
 
   const getDaysDiff = () => {
     const start = parseLocalDate(trip.startDate)
-    const end = parseLocalDate(trip.endDate)
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return '?'
+    // 结束未填视为当天（开放式行程）；起止缺一则不显示天数，不渲染「?」
+    const end = parseLocalDate(trip.endDate || trip.startDate)
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null
     const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
     return diff + 1
   }
+
+  const days = getDaysDiff()
 
   return (
     <motion.div
@@ -90,7 +93,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ trip, onEdit, onToggleFavor
         )}
         <div className="flex items-center gap-3 text-xs text-ink-3">
           <span>{(trip.photos || []).length} 张照片</span>
-          <span className="font-display">{getDaysDiff()} 天旅程</span>
+          {days !== null && <span className="font-display">{days} 天旅程</span>}
           {missing && (
             <span className="px-2 py-0.5 bg-danger/10 text-danger rounded-full flex items-center gap-1">
               <WarningIcon size={10} />

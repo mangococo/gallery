@@ -9,6 +9,7 @@ import { useEscClaim, isEscTop } from '../lib/esc'
 import { SearchIcon, TrashIcon } from './icons'
 import ThemeSwitch from './ThemeSwitch'
 import SettingsModal from './SettingsModal'
+import AdoptFlatDialog, { AdoptFlatPending } from './AdoptFlatDialog'
 import {
   EllipsisIcon,
   GearIcon,
@@ -40,6 +41,8 @@ const Sidebar: React.FC = () => {
   const [renamingAlbum, setRenamingAlbum] = React.useState<Album | null>(null)
   const [renameText, setRenameText] = React.useState('')
   const [showSettings, setShowSettings] = React.useState(false)
+  // 平铺照片归档确认（#2）：registerAlbum 检测到根目录平铺媒体时挂起，等用户确认
+  const [adoptPending, setAdoptPending] = React.useState<AdoptFlatPending | null>(null)
   const menuRef = React.useRef<HTMLDivElement | null>(null)
 
   // 相册操作菜单：点菜单外任意处关闭（此前只靠 onMouseLeave，键盘/精准点击场景关不掉）
@@ -85,12 +88,34 @@ const Sidebar: React.FC = () => {
     filters.favoritesOnly || filters.tags.length > 0 || filters.year !== null
 
   const handleRegister = async () => {
-    const album = await api.registerAlbum()
-    if (album) {
+    const result = await api.registerAlbum()
+    if (result.status === 'ok' && result.album) {
       await reloadAlbums()
-      await setActiveAlbum(album.id)
+      await setActiveAlbum(result.album.id)
+    } else if (result.status === 'flat-media') {
+      // 平铺媒体：不注册，先弹确认（拒绝则零落库、零文件移动）
+      setAdoptPending(result)
     }
   }
+
+  const handleAdopted = async (album: Album) => {
+    const count = adoptPending?.fileCount ?? 0
+    setAdoptPending(null)
+    await reloadAlbums()
+    await setActiveAlbum(album.id)
+    toast(`已创建默认旅行并归档 ${count} 张照片`)
+  }
+
+  // E2E 注入点（#2）：原生目录选择对话框无法在链路中驱动，
+  // GALLERY_E2E 模式下用事件直接把预检结果喂给确认弹窗（生产路径不触发）
+  React.useEffect(() => {
+    if (!(window as unknown as { __galleryE2e?: boolean }).__galleryE2e) return
+    const onOpen = (ev: Event) => {
+      setAdoptPending((ev as CustomEvent<AdoptFlatPending>).detail)
+    }
+    window.addEventListener('gallery:open-adopt-dialog', onOpen)
+    return () => window.removeEventListener('gallery:open-adopt-dialog', onOpen)
+  }, [])
 
   const handleRelocate = async (album: Album) => {
     try {
@@ -470,6 +495,20 @@ const Sidebar: React.FC = () => {
           }}
         />
       )}
+
+      {adoptPending &&
+        createPortal(
+          <AdoptFlatDialog
+            key={adoptPending.path}
+            pending={adoptPending}
+            onClose={() => {
+              setAdoptPending(null)
+              toast('已取消导入，未注册该相册')
+            }}
+            onAdopted={(album) => void handleAdopted(album)}
+          />,
+          document.body,
+        )}
     </aside>
   )
 }
