@@ -2,7 +2,7 @@ import { app, protocol } from 'electron'
 import { join, normalize, sep } from 'path'
 import { createReadStream, promises as fs } from 'fs'
 import { Readable } from 'stream'
-import { convertHeicForDisplay, isHeicFamily } from './services/heic'
+import { convertHeicForDisplay, isHeicFamily, isHeifFile } from './services/heic'
 
 export const MEDIA_SCHEME = 'gallery-media'
 
@@ -123,8 +123,9 @@ async function serveMedia(
   const stat = await fs.stat(abs)
   if (!stat.isFile()) return json(404, { error: 'not a file' })
 
-  // HEIC：Chromium 无法解码，协议层换成 JPEG 展示缓存（带 Range 的视频路径不走这里）
-  if (isHeicFamily(abs)) {
+  // HEIC：Chromium 无法解码，协议层换成 JPEG 展示缓存（带 Range 的视频路径不走这里）。
+  // 扩展名之外按内容嗅探——微信转存常见「HEIC 内容 + .jpg 扩展名」，Chromium 按 JPEG 解析必然失败
+  if (isHeicFamily(abs) || (await isHeifFile(abs))) {
     const converted = await convertHeicForDisplay(abs, relPath, stat.mtimeMs, stat.size)
     if (converted) {
       const cstat = await fs.stat(converted)

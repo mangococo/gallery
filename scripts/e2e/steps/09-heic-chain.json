@@ -17,7 +17,7 @@
   {
     "name": "03-wall-with-heic",
     "wait": 2500,
-    "script": "const imgs = [...document.querySelectorAll('main img')]; const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('照片墙有未加载图 ' + bad.length); if (!document.body.textContent.match(/10 张照片/)) throw new Error('应为 10 张（8 jpg + 2 heic）'); 'wall-ok'"
+    "script": "const imgs = [...document.querySelectorAll('main img')]; const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('照片墙有未加载图 ' + bad.length); if (!document.body.textContent.match(/11 张照片/)) throw new Error('应为 11 张（8 jpg + 2 heic + 1 伪装 heic-jpg）'); 'wall-ok'"
   },
   {
     "name": "04-open-heic-lightbox",

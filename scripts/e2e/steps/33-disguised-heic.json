@@ -1,0 +1,47 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"伪装扩展名 HEIC（微信转存形态）：HEIC 内容 + .jpg 扩展名 → 缩略图经内容嗅探走 WASM 回退上墙 → 灯箱大图协议层转 JPEG → 信息面板文件名。前置：macOS（gen-demo sips 造伪装样张）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 4200
+  },
+  {
+    "name": "02-open-kyoto",
+    "wait": 2600,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-wall-all-loaded",
+    "wait": 3000,
+    "script": "const imgs = [...document.querySelectorAll('main img')]; const bad = imgs.filter(i => !(i.complete && i.naturalWidth > 0)); if (bad.length > 0) throw new Error('照片墙有未加载图 ' + bad.length); if (!document.body.textContent.match(/11 张照片/)) throw new Error('应为 11 张（伪装样张未入墙或计数不符）'); 'wall-ok'"
+  },
+  {
+    "name": "04-find-disguised-card",
+    "wait": 600,
+    "script": "const cap = [...document.querySelectorAll('main [role=\"button\"]')].find(el => el.textContent.includes('微信伪装样张')); if (!cap) throw new Error('找不到伪装样张卡片（gen-demo 未生成？需 macOS sips）'); const card = cap.closest('.group'); const img = card?.querySelector('img'); if (!img) throw new Error('卡片内无 img'); if (!(img.complete && img.naturalWidth > 0)) throw new Error('伪装样张缩略图未加载（内容嗅探回退未生效）'); if (!img.src.startsWith('gallery-media://t/')) throw new Error('缩略图不是缓存 URL: ' + img.src); 'thumb-ok'"
+  },
+  {
+    "name": "05-open-lightbox",
+    "wait": 900,
+    "script": "const cap = [...document.querySelectorAll('main [role=\"button\"]')].find(el => el.textContent.includes('微信伪装样张')); const img = cap.closest('.group')?.querySelector('img'); img.click(); 'ok'"
+  },
+  {
+    "name": "06-lightbox-bigimage",
+    "wait": 2500,
+    "script": "const lb = document.querySelector('.fixed.inset-0.z-50'); if (!lb) throw new Error('灯箱未打开'); const img = lb.querySelector('img'); if (!img) throw new Error('灯箱无大图'); if (!(img.complete && img.naturalWidth > 0)) throw new Error('伪装 HEIC 大图未加载（协议层内容嗅探转换未生效）'); 'bigimage-ok'"
+  },
+  {
+    "name": "07-info-panel",
+    "wait": 500,
+    "script": "const lb = document.querySelector('.fixed.inset-0.z-50'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' })); await new Promise(r => setTimeout(r, 400)); const aside = lb.querySelector('aside'); if (!aside) throw new Error('信息面板未展开'); if (!aside.textContent.includes('img_wx')) throw new Error('信息面板文件名不是伪装样张'); 'info-ok'"
+  },
+  {
+    "name": "08-close",
+    "wait": 600,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'closed'"
+  }
+]

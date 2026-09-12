@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 import sharp from 'sharp'
+import { HEIF_SNIFF_BYTES, isHeifBuffer } from './heif-sniff'
 
 /**
  * HEIC/HEIF 兼容层。
@@ -18,6 +19,26 @@ export function isHeicFamily(fileName: string): boolean {
   const dot = fileName.lastIndexOf('.')
   if (dot < 0) return false
   return HEIC_EXTS.has(fileName.slice(dot).toLowerCase())
+}
+
+/**
+ * 按内容判定是否 HEIF 家族（读文件头 ftyp brand 嗅探）。
+ * 微信等 IM 转存的图片常见「HEIC 内容 + .jpg 扩展名」，扩展名判断会漏网；
+ * 与 isHeicFamily 任一命中即应走 WASM 解码回退。
+ */
+export async function isHeifFile(absPath: string): Promise<boolean> {
+  try {
+    const fh = await fs.open(absPath, 'r')
+    try {
+      const head = Buffer.alloc(HEIF_SNIFF_BYTES)
+      const { bytesRead } = await fh.read(head, 0, HEIF_SNIFF_BYTES, 0)
+      return isHeifBuffer(head.subarray(0, bytesRead))
+    } finally {
+      await fh.close()
+    }
+  } catch {
+    return false
+  }
 }
 
 interface HeicRaw {
