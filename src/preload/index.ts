@@ -22,6 +22,8 @@ const api: GalleryApi = {
 
   listAlbums: () => ipcRenderer.invoke(IPC.albumsList),
   registerAlbum: () => ipcRenderer.invoke(IPC.albumsRegister),
+  probeFlatMedia: (path) => ipcRenderer.invoke(IPC.albumsProbeFlat, path),
+  adoptFlatMedia: (path, tripName) => ipcRenderer.invoke(IPC.albumsAdoptFlat, path, tripName),
   removeAlbum: (id) => ipcRenderer.invoke(IPC.albumsRemove, id),
   renameAlbum: (id, name) => ipcRenderer.invoke(IPC.albumsRename, id, name),
   relocateAlbum: (id) => ipcRenderer.invoke(IPC.albumsRelocate, id),

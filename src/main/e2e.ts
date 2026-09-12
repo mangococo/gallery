@@ -85,6 +85,9 @@ export async function runE2EIfEnabled(win: Electron.BrowserWindow): Promise<void
       }
     })
 
+    // E2E 模式标志：渲染层据此挂只在链路里用的注入点（如平铺归档弹窗的打开事件）
+    await win.webContents.executeJavaScript('window.__galleryE2e = true', true)
+
     for (const step of steps) {
       // 先等待（给外部操作/异步任务留时间），再执行输入/脚本，再截图
       await new Promise((r) => setTimeout(r, step.wait ?? 800))
