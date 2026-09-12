@@ -561,6 +561,11 @@ for (const trip of TRIPS) {
   console.log(`${trip.dir} ✓ (${trip.count} 张${trip.gps ? ' +GPS' : ''})`)
 }
 
+// 2.4 空旅行目录（#1 验收）：无照片、无 .settings.json 的空子目录，
+// 代表「一次尚未导入照片的旅行」；修复前扫描门槛会静默跳过
+mkdirSync(join(ALBUM, 'seoul-planned-2026'), { recursive: true })
+console.log('seoul-planned-2026 ✓ (空目录，无 settings)')
+
 // 2.5 大相册旅行（性能验收用）：场景循环复用，尺寸减半提速生成
 if (LARGE_COUNT > 0) {
   const allScenes = [kyoto.scene, iceland.scene, dali.scene, cityTrip.scene]

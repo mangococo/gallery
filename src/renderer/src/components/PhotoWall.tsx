@@ -24,6 +24,9 @@ interface PhotoWallProps {
   onPhotoContextMenu?: (e: React.MouseEvent, photo: Photo) => void
   /** 空白区域右键（目标非卡片时才触发） */
   onWallContextMenu?: (e: React.MouseEvent) => void
+  /** 空态文案：无照片时的标题/提示（默认「还没有照片」） */
+  emptyTitle?: string
+  emptyHint?: string
 }
 
 /** 超过该张数走大相册模式：逐项 framer-motion 入场动画关闭（CSS 悬停替代），保滚动流畅 */
@@ -85,6 +88,8 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   onToggleSelect,
   onPhotoContextMenu,
   onWallContextMenu,
+  emptyTitle,
+  emptyHint,
 }) => {
   const handleDelete = async (photo: Photo) => {
     const ok = await confirmDialog({
@@ -117,6 +122,19 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
         if (e.target === e.currentTarget) onWallContextMenu?.(e)
       }}
     >
+      {/* 空态：拍立得空白相框占位（空旅行 / 筛选无结果），右键同样可呼出墙菜单 */}
+      {photos.length === 0 && (
+        <div
+          data-testid="photo-wall-empty"
+          className="py-14 flex flex-col items-center gap-4 text-center"
+          onContextMenu={(e) => onWallContextMenu?.(e)}
+        >
+          <div className="w-44 h-32 polaroid-frame -rotate-2 flex items-center justify-center">
+            <span className="font-display text-xs text-ink-3">{emptyTitle ?? '还没有照片'}</span>
+          </div>
+          {emptyHint && <p className="text-sm text-ink-3 max-w-md leading-relaxed">{emptyHint}</p>}
+        </div>
+      )}
       {photos.map((photo, index) => {
         const selected = selectedIds?.has(photo.id) ?? false
         const inner = (

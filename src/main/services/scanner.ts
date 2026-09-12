@@ -68,7 +68,7 @@ export interface ScanHooks {
 /**
  * 扫描相册目录入库：
  * - 只处理子目录；根目录散落的 index.html / .DS_Store 等一律跳过
- * - 子目录含媒体文件或 .settings.json 即收录为旅行（空目录跳过）
+ * - 每个非隐藏子目录都收录为旅行：空目录 = 一次尚未导入照片的旅行（标题取目录名）
  * - 新发现的旅行从 .settings.json 导入元数据（保留旧 id）；已入库旅行不覆盖用户编辑
  * - 文件级增量校对：以 文件名 + file_mtime 对比；拍摄时间取 EXIF（回退 mtime）
  */
@@ -127,9 +127,8 @@ export async function scanAlbum(albumId: string, hooks: ScanHooks): Promise<Scan
       // 目录读取失败按空处理
     }
 
-    // 决策 15：含媒体或已有 .settings.json 才收录
-    if (fileNames.length === 0 && !settings) continue
-
+    // 空目录同样收录（#1）：目录本身即「一次尚未导入照片的旅行」，
+    // reconcileTrip 对 0 张照片安全（封面/开始日期推断都有 diskFiles.size > 0 守卫）
     await reconcileTrip(albumId, folderName, dirPath, settings, fileNames, repairLegacy, counters, (label) =>
       push({ albumId, albumName: album.name, phase: 'scan', done: counters.trips, total, label }),
     )
