@@ -64,6 +64,9 @@ const photoMenuIcons: PhotoMenuIcons = {
   trash: <TrashIcon size={14} />,
 }
 
+/** 旅行页照片墙首屏渲染条数，触底按此步长追加（对齐首页照片墙策略） */
+const WALL_CHUNK = 500
+
 const TripPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -88,6 +91,8 @@ const TripPage: React.FC = () => {
   /** 多选体系：模式开关 + 勾选集合 */
   const [selectionMode, setSelectionMode] = React.useState(false)
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  /** 照片墙增量渲染（#7）：千张级旅行全量挂载会拖垮滚动，先渲染首批、触底追加 */
+  const [wallLimit, setWallLimit] = React.useState(WALL_CHUNK)
   /** 移动到旅行对话框的待移动清单（null 关闭） */
   const [moveTarget, setMoveTarget] = React.useState<Photo[] | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -123,6 +128,11 @@ const TripPage: React.FC = () => {
     setEditedTrip(updated)
     if (!isEditing) setTrip(updated)
   }
+
+  // 换旅行 / 换筛选时照片墙渲染窗口回到首批（与数据收敛配合，不留超大窗口）
+  React.useEffect(() => {
+    setWallLimit(WALL_CHUNK)
+  }, [id, favOnly, tagFilter])
 
   // 缩略图批量就绪（store 广播）：旅行页持有本地照片副本，按 id 原位合并，
   // 首扫期间照片墙逐步点亮、不整页刷新、不回退原图（#3）
@@ -579,9 +589,9 @@ const TripPage: React.FC = () => {
   const visiblePhotos = photos.filter(
     (p: Photo) => (!favOnly || p.favorite) && (!tagFilter || (p.tags || []).includes(tagFilter)),
   )
+  const visibleWallPhotos = visiblePhotos.slice(0, wallLimit)
 
-  return (
-    <div
+  return (    <div
       className="min-h-screen bg-background"
       onDragEnter={(e) => {
         e.preventDefault()
@@ -906,7 +916,7 @@ const TripPage: React.FC = () => {
               </div>
             )}
             <PhotoWall
-              photos={visiblePhotos}
+              photos={visibleWallPhotos}
               emptyTitle={photos.length === 0 ? '这次旅行还没有照片' : '没有符合筛选的照片'}
               emptyHint={
                 photos.length === 0
@@ -926,6 +936,16 @@ const TripPage: React.FC = () => {
               onPhotoContextMenu={handlePhotoContextMenu}
               onWallContextMenu={handleWallContextMenu}
             />
+            {visiblePhotos.length > wallLimit && (
+              <div className="py-10 text-center">
+                <button
+                  onClick={() => setWallLimit((n) => Math.min(n + WALL_CHUNK, visiblePhotos.length))}
+                  className="px-6 py-2.5 bg-surface-2 text-ink-2 rounded-xl hover:text-ink transition-colors text-sm"
+                >
+                  继续浏览（还有 {visiblePhotos.length - wallLimit} 张）
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <MapView photos={photos} onOpenPhoto={handlePhotoClick} />
