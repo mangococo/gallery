@@ -385,6 +385,12 @@ const HomePage: React.FC = () => {
     setWallSelectionMode(true)
   }
 
+  /** 框选提交：普通拖拽替换选择，⌘/Ctrl 拖拽并入现有选择（空集=清空手势） */
+  const handleWallMarqueeSelect = (ids: Set<string>, additive: boolean) => {
+    if (ids.size > 0) setWallSelectionMode(true)
+    setSelectedIds((prev) => (additive ? new Set([...prev, ...ids]) : ids))
+  }
+
   const handleWallToggleFavorite = async (photoId: string, favorite: boolean) => {
     try {
       await api.setPhotoFavorite(photoId, favorite)
@@ -763,6 +769,7 @@ const HomePage: React.FC = () => {
                 selectionMode={wallSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelect={handleWallToggleSelect}
+                onMarqueeSelect={handleWallMarqueeSelect}
                 onPhotoContextMenu={handleWallPhotoContextMenu}
                 density={wallDensity}
                 layout={wallLayout}

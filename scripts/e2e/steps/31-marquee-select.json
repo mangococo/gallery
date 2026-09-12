@@ -1,0 +1,101 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"框选多选链路（marquee）：真实输入拖拽成框 → 命中/计数/卡片选中态与框选矩形一致 → 拖拽中 overlay 几何（跨脚本步骤不断链）→ 释放后消失 → Esc 取消回滚 → 亚阈值放行点击（开灯箱）→ ⌘ 增量框选 → 反方向替换 → 真实点击/右键菜单回归 → 批量工具条 → 首页填充布局（columns）框选。断言口径：拖拽端点取整（MouseEvent 坐标为整数）+ 卡片矩形原始浮点，与控制器完全同输入。前置：小相册（run-all 默认）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-enter-trip",
+    "wait": 1200,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都 · 岚山秋色')); if (!h) throw new Error('找不到京都旅行'); h.click(); await new Promise(r => setTimeout(r, 1600)); const els = [...document.querySelectorAll('[data-photo-id]')]; if (els.length < 6) throw new Error('照片卡不足: ' + els.length); 'enter-ok'"
+  },
+  {
+    "name": "03-real-drag",
+    "wait": 600,
+    "drag": {
+      "from": {
+        "selector": "[data-testid=photo-wall] > div:nth-child(1) [data-photo-id]"
+      },
+      "to": {
+        "selector": "[data-testid=photo-wall] > div:nth-child(5) [data-photo-id]"
+      },
+      "steps": 12
+    }
+  },
+  {
+    "name": "04-verify-real-drag",
+    "wait": 400,
+    "log": true,
+    "script": "const cs = [...document.querySelectorAll('[data-photo-id]')].map(el => ({ id: el.dataset.photoId, el, rect: el.getBoundingClientRect() })); const c1 = cs[0].rect, c5 = cs[4].rect; const a = { x: Math.round(c1.left + c1.width / 2), y: Math.round(c1.top + c1.height / 2) }, b = { x: Math.round(c5.left + c5.width / 2), y: Math.round(c5.top + c5.height / 2) }; const R = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) }; const expect = cs.filter(c => R.x < c.rect.right && R.x + R.w > c.rect.left && R.y < c.rect.bottom && R.y + R.h > c.rect.top).map(c => c.id); if (expect.length < 2) throw new Error('拖拽矩形命中过少，链路无意义: ' + expect.length); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('框选后多选工具条未出现'); const m = bar.textContent.match(/已选 (\\d+)/); if (!m || +m[1] !== expect.length) throw new Error('框选计数不符: ' + (m && m[1]) + ' 期望 ' + expect.length); let bad = 0; cs.forEach(c => { const on = c.el.getAttribute('data-selected') === 'true'; if (on !== expect.includes(c.id)) bad++; }); if (bad) throw new Error(bad + ' 张卡片选中态与框选矩形不符'); if (document.querySelector('[data-testid=lightbox-root]')) throw new Error('框选不应打开灯箱'); return { hits: expect.length }"
+  },
+  {
+    "name": "05-overlay-mid-drag",
+    "wait": 500,
+    "log": true,
+    "script": "const els = [...document.querySelectorAll('[data-photo-id]')]; const r0 = els[0].getBoundingClientRect(); const P0 = { x: Math.round(r0.left) - 8, y: Math.round(r0.top) - 8 }, P1 = { x: Math.round(r0.right) + 6, y: Math.round(r0.bottom) + 8 }; window.__P = { P0, P1 }; const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); fire('mousedown', P0.x, P0.y); await new Promise(r => setTimeout(r, 80)); const Pm = { x: Math.round((P0.x + P1.x) / 2), y: Math.round((P0.y + P1.y) / 2) }; fire('mousemove', Pm.x, Pm.y); await new Promise(r => setTimeout(r, 250)); const ov = document.querySelector('[data-testid=marquee-rect]'); if (!ov) throw new Error('拖拽中框选矩形未出现'); const or = ov.getBoundingClientRect(); const Ex = Math.min(P0.x, Pm.x), Ey = Math.min(P0.y, Pm.y), Ew = Math.abs(P0.x - Pm.x), Eh = Math.abs(P0.y - Pm.y); if (Math.abs(or.x - Ex) > 1 || Math.abs(or.y - Ey) > 1 || Math.abs(or.width - Ew) > 1 || Math.abs(or.height - Eh) > 1) throw new Error('框选矩形几何不符: ' + JSON.stringify({ got: { x: or.x, y: or.y, w: or.width, h: or.height }, exp: { Ex, Ey, Ew, Eh } })); const cs = [...document.querySelectorAll('[data-photo-id]')].map(el => ({ id: el.dataset.photoId, rect: el.getBoundingClientRect() })); const expIds = cs.filter(c => Ex < c.rect.right && Ex + Ew > c.rect.left && Ey < c.rect.bottom && Ey + Eh > c.rect.top).map(c => c.id); if (expIds.length !== 1) throw new Error('条带应恰好命中首卡（余量断言）: ' + expIds.length); const m = (document.querySelector('[data-testid=selection-bar]') || { textContent: '' }).textContent.match(/已选 (\\d+)/); if (!m || +m[1] !== 1) throw new Error('拖拽中已选计数不符: ' + (m && m[1]) + ' 期望 1'); return { midHits: expIds.length, overlay: { x: Math.round(or.x), y: Math.round(or.y), w: Math.round(or.width), h: Math.round(or.height) } }"
+  },
+  {
+    "name": "06-finish-blank-marquee",
+    "wait": 500,
+    "log": true,
+    "script": "const ov0 = document.querySelector('[data-testid=marquee-rect]'); if (!ov0) throw new Error('跨步骤框选会话丢失（stale state）'); const { P0, P1 } = window.__P; const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); fire('mousemove', P1.x, P1.y); await new Promise(r => setTimeout(r, 150)); fire('mouseup', P1.x, P1.y); await new Promise(r => setTimeout(r, 300)); if (document.querySelector('[data-testid=marquee-rect]')) throw new Error('释放后框选矩形未消失'); const cs = [...document.querySelectorAll('[data-photo-id]')].map(el => ({ id: el.dataset.photoId, el, rect: el.getBoundingClientRect() })); const R = { x: Math.min(P0.x, P1.x), y: Math.min(P0.y, P1.y), w: Math.abs(P0.x - P1.x), h: Math.abs(P0.y - P1.y) }; const expect = cs.filter(c => R.x < c.rect.right && R.x + R.w > c.rect.left && R.y < c.rect.bottom && R.y + R.h > c.rect.top).map(c => c.id); const bar = document.querySelector('[data-testid=selection-bar]'); const m = bar && bar.textContent.match(/已选 (\\d+)/); if (!m || +m[1] !== expect.length) throw new Error('释放后计数不符: ' + (m && m[1]) + ' 期望 ' + expect.length); if (expect.length !== 1) throw new Error('条带应恰好命中首卡: ' + expect.length); let bad = 0; cs.forEach(c => { const on = c.el.getAttribute('data-selected') === 'true'; if (on !== expect.includes(c.id)) bad++; }); if (bad) throw new Error(bad + ' 张卡片选中态与最终矩形不符'); return { finalHits: expect.length }"
+  },
+  {
+    "name": "07-esc-cancel-rollback",
+    "wait": 500,
+    "log": true,
+    "script": "const before = [...document.querySelectorAll('[data-photo-id][data-selected=true]')].map(el => el.dataset.photoId); if (before.length === 0) throw new Error('前置选择为空，回滚断言无意义'); const els = [...document.querySelectorAll('[data-photo-id]')]; const r0 = els[0].getBoundingClientRect(), r2 = els[2].getBoundingClientRect(); const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); fire('mousedown', Math.round(r0.right) + 8, Math.round(r0.bottom) + 8); await new Promise(r => setTimeout(r, 60)); fire('mousemove', Math.round(r2.right), Math.round(r2.bottom)); await new Promise(r => setTimeout(r, 250)); if (!document.querySelector('[data-testid=marquee-rect]')) throw new Error('拖拽中 overlay 缺失'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await new Promise(r => setTimeout(r, 300)); if (document.querySelector('[data-testid=marquee-rect]')) throw new Error('Esc 后框选矩形未消失'); const after = [...document.querySelectorAll('[data-photo-id][data-selected=true]')].map(el => el.dataset.photoId); if (after.length !== before.length || !before.every(id => after.includes(id))) throw new Error('Esc 取消未回滚: before=' + before.length + ' after=' + after.length); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('Esc 取消框选不应退出多选模式'); return { restored: after.length }"
+  },
+  {
+    "name": "08-tiny-drag-click",
+    "wait": 500,
+    "log": true,
+    "script": "const exitBtn = document.querySelector('[data-testid=selection-bar] button[title=\"退出多选（Esc）\"]'); if (exitBtn) { exitBtn.click(); await new Promise(r => setTimeout(r, 400)); } if (document.querySelector('[data-testid=selection-bar]')) throw new Error('退出多选失败'); const els = [...document.querySelectorAll('[data-photo-id]')]; const r = els[1].getBoundingClientRect(); const cx = Math.round(r.left + r.width / 2), cy = Math.round(r.top + r.height / 2); const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); fire('mousedown', cx, cy); await new Promise(r => setTimeout(r, 60)); fire('mousemove', cx + 2, cy + 1); await new Promise(r => setTimeout(r, 60)); if (document.querySelector('[data-testid=marquee-rect]')) throw new Error('亚阈值位移不应出现框选矩形'); fire('mouseup', cx + 2, cy + 1); await new Promise(r => setTimeout(r, 200)); els[1].parentElement.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 600)); if (!document.querySelector('[data-testid=lightbox-root]')) throw new Error('亚阈值拖拽后的点击未打开灯箱（被误判为框选吞掉）'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await new Promise(r => setTimeout(r, 600)); if (document.querySelector('[data-testid=lightbox-root]')) throw new Error('灯箱未按 Esc 关闭'); 'tiny-drag-click-ok'"
+  },
+  {
+    "name": "09-cmd-additive",
+    "wait": 500,
+    "log": true,
+    "script": "const els = [...document.querySelectorAll('[data-photo-id]')]; const R = i => els[i].getBoundingClientRect(); const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y, mods) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y, ...(mods || {}) })); const hitsOf = (a, b) => { const Rr = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) }; return els.map(el => ({ id: el.dataset.photoId, rect: el.getBoundingClientRect() })).filter(c => Rr.x < c.rect.right && Rr.x + Rr.w > c.rect.left && Rr.y < c.rect.bottom && Rr.y + Rr.h > c.rect.top).map(c => c.id); }; const r0 = R(0), r1 = R(1); const A0 = { x: Math.round(r0.left) + 2, y: Math.round(r0.top) + 2 }, A1 = { x: Math.round(r0.left + r0.width / 2), y: Math.round(r0.top + r0.height / 2) }; fire('mousedown', A0.x, A0.y); await new Promise(r => setTimeout(r, 60)); fire('mousemove', A1.x, A1.y); await new Promise(r => setTimeout(r, 200)); fire('mouseup', A1.x, A1.y); await new Promise(r => setTimeout(r, 250)); const base = [...document.querySelectorAll('[data-photo-id][data-selected=true]')].map(el => el.dataset.photoId); if (base.length === 0) throw new Error('底选建立失败'); const r3 = R(3), r4 = R(4); const B0 = { x: Math.round(r3.left + r3.width / 2), y: Math.round(r3.top) + 4 }, B1 = { x: Math.round(r3.right) + 8, y: Math.round(r4.bottom) }; fire('mousedown', B0.x, B0.y, { metaKey: true }); await new Promise(r => setTimeout(r, 60)); fire('mousemove', B1.x, B1.y); await new Promise(r => setTimeout(r, 200)); fire('mouseup', B1.x, B1.y); await new Promise(r => setTimeout(r, 250)); const expect = [...new Set([...base, ...hitsOf(B0, B1)])]; const after = [...document.querySelectorAll('[data-photo-id][data-selected=true]')].map(el => el.dataset.photoId); if (after.length !== expect.length || !expect.every(id => after.includes(id))) throw new Error('⌘ 增量框选结果不符: ' + after.length + ' 期望 ' + expect.length + '（底选 ' + base.length + '）'); if (!document.querySelector('[data-testid=selection-bar]')) throw new Error('增量框选后多选工具条缺失'); return { base: base.length, added: expect.length - base.length, total: after.length }"
+  },
+  {
+    "name": "10-reverse-replace",
+    "wait": 500,
+    "log": true,
+    "script": "const els = [...document.querySelectorAll('[data-photo-id]')]; const r0 = els[0].getBoundingClientRect(), r3 = els[3].getBoundingClientRect(); const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); const S = { x: Math.round(r3.right), y: Math.round(r3.bottom) }, E = { x: Math.round(r0.left), y: Math.round(r0.top) }; fire('mousedown', S.x, S.y); await new Promise(r => setTimeout(r, 60)); fire('mousemove', E.x, E.y); await new Promise(r => setTimeout(r, 200)); fire('mouseup', E.x, E.y); await new Promise(r => setTimeout(r, 250)); const Rr = { x: Math.min(S.x, E.x), y: Math.min(S.y, E.y), w: Math.abs(S.x - E.x), h: Math.abs(S.y - E.y) }; const expect = els.map(el => ({ id: el.dataset.photoId, rect: el.getBoundingClientRect() })).filter(c => Rr.x < c.rect.right && Rr.x + Rr.w > c.rect.left && Rr.y < c.rect.bottom && Rr.y + Rr.h > c.rect.top).map(c => c.id); const after = [...document.querySelectorAll('[data-photo-id][data-selected=true]')].map(el => el.dataset.photoId); if (after.length !== expect.length || !expect.every(id => after.includes(id))) throw new Error('反方向框选（替换语义）结果不符: ' + after.length + ' 期望 ' + expect.length); const exitBtn = document.querySelector('[data-testid=selection-bar] button[title=\"退出多选（Esc）\"]'); if (!exitBtn) throw new Error('退出按钮缺失'); exitBtn.click(); await new Promise(r => setTimeout(r, 400)); if (document.querySelector('[data-testid=selection-bar]')) throw new Error('退出多选失败'); return { reversedHits: expect.length }"
+  },
+  {
+    "name": "11-real-click-lightbox",
+    "wait": 400,
+    "click": {
+      "selector": "[data-testid=photo-wall] > div:nth-child(2) [data-photo-id]"
+    },
+    "script": "await new Promise(r => setTimeout(r, 400)); if (!document.querySelector('[data-testid=lightbox-root]')) throw new Error('框选会话后的真实点击未打开灯箱（点击被误吞？）'); 'real-click-ok'"
+  },
+  {
+    "name": "12-close-contextmenu",
+    "wait": 400,
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await new Promise(r => setTimeout(r, 600)); if (document.querySelector('[data-testid=lightbox-root]')) throw new Error('灯箱未按 Esc 关闭'); const els = [...document.querySelectorAll('[data-photo-id]')]; const r = els[2].getBoundingClientRect(); els[2].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: Math.round(r.left + r.width / 2), clientY: Math.round(r.top + r.height / 2) })); await new Promise(r => setTimeout(r, 400)); const menu = document.querySelector('.ctx-menu-panel'); if (!menu) throw new Error('卡片右键菜单未弹出'); if (![...menu.querySelectorAll('[role=menuitem]')].some(el => el.textContent.includes('选择多张'))) throw new Error('右键菜单缺少「选择多张」项'); document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); await new Promise(r => setTimeout(r, 300)); if (document.querySelector('.ctx-menu-panel')) throw new Error('右键菜单未随外部按下关闭'); 'ctx-menu-ok'"
+  },
+  {
+    "name": "13-batch-bar",
+    "wait": 500,
+    "log": true,
+    "script": "const els = [...document.querySelectorAll('[data-photo-id]')]; const r0 = els[0].getBoundingClientRect(), r1 = els[1].getBoundingClientRect(); const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); fire('mousedown', Math.round(r0.left) + 2, Math.round(r0.top) + 2); await new Promise(r => setTimeout(r, 60)); fire('mousemove', Math.round(r1.right), Math.round(r1.bottom)); await new Promise(r => setTimeout(r, 200)); fire('mouseup', Math.round(r1.right), Math.round(r1.bottom)); await new Promise(r => setTimeout(r, 300)); let bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('框选后工具条缺失'); const favBtn = [...bar.querySelectorAll('button')].find(b => b.textContent.includes('收藏')); if (favBtn) { favBtn.click(); await new Promise(r => setTimeout(r, 600)); bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('批量收藏后工具条异常消失'); } const selBtn = [...bar.querySelectorAll('button')].find(b => b.textContent.includes('全选') || b.textContent.includes('全不选')); if (!selBtn) throw new Error('全选/全不选按钮缺失'); selBtn.click(); await new Promise(r => setTimeout(r, 300)); const total = document.querySelectorAll('[data-photo-id]').length; const m1 = bar.textContent.match(/已选 (\\d+)/); if (!m1 || +m1[1] !== total) throw new Error('全选后计数不符: ' + (m1 && m1[1]) + ' 期望 ' + total); const clearBtn = [...bar.querySelectorAll('button')].find(b => b.textContent.includes('全不选')); if (!clearBtn) throw new Error('全不选按钮缺失'); clearBtn.click(); await new Promise(r => setTimeout(r, 300)); const m2 = bar.textContent.match(/已选 (\\d+)/); if (!m2 || +m2[1] !== 0) throw new Error('全不选后计数非 0: ' + (m2 && m2[1])); const exitBtn = bar.querySelector('button[title=\"退出多选（Esc）\"]'); exitBtn.click(); await new Promise(r => setTimeout(r, 400)); if (document.querySelector('[data-testid=selection-bar]')) throw new Error('退出多选失败'); const left = document.querySelectorAll('[data-photo-id][data-selected=true]').length; if (left !== 0) throw new Error('退出后仍有选中卡片: ' + left); 'batch-ok'"
+  },
+  {
+    "name": "14-home-wall-fill",
+    "wait": 500,
+    "log": true,
+    "script": "const back = [...document.querySelectorAll('header button')].find(b => b.textContent.includes('返回')); if (!back) throw new Error('返回按钮缺失'); back.click(); await new Promise(r => setTimeout(r, 1200)); const tab = document.querySelector('[data-testid=home-view-wall]'); if (!tab) throw new Error('首页照片墙切换缺失'); tab.click(); await new Promise(r => setTimeout(r, 1200)); const els = [...document.querySelectorAll('[data-photo-id]')]; if (els.length < 4) throw new Error('首页墙卡片不足: ' + els.length); const r0 = els[0].getBoundingClientRect(), r1 = els[1].getBoundingClientRect(); const wall = document.querySelector('[data-testid=photo-wall]'); const fire = (t, x, y) => wall.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })); const P0 = { x: Math.round(r0.left) - 8, y: Math.round(r0.top) - 8 }, P1 = { x: Math.round(r0.right) + 6, y: Math.round(r0.bottom) + 8 }; fire('mousedown', P0.x, P0.y); await new Promise(r => setTimeout(r, 60)); fire('mousemove', P1.x, P1.y); await new Promise(r => setTimeout(r, 200)); fire('mouseup', P1.x, P1.y); await new Promise(r => setTimeout(r, 300)); if (document.querySelector('[data-testid=marquee-rect]')) throw new Error('首页墙释放后 overlay 未消失'); const Rr = { x: Math.min(P0.x, P1.x), y: Math.min(P0.y, P1.y), w: Math.abs(P0.x - P1.x), h: Math.abs(P0.y - P1.y) }; const expect = els.map(el => ({ id: el.dataset.photoId, rect: el.getBoundingClientRect() })).filter(c => Rr.x < c.rect.right && Rr.x + Rr.w > c.rect.left && Rr.y < c.rect.bottom && Rr.y + Rr.h > c.rect.top).map(c => c.id); const bar = document.querySelector('[data-testid=selection-bar]'); const m = bar && bar.textContent.match(/已选 (\\d+)/); if (!m || +m[1] !== expect.length) throw new Error('首页墙（columns 布局）框选计数不符: ' + (m && m[1]) + ' 期望 ' + expect.length); if (expect.length !== 1) throw new Error('首页条带应恰好命中首卡: ' + expect.length); const exitBtn = bar.querySelector('button[title=\"退出多选（Esc）\"]'); exitBtn.click(); await new Promise(r => setTimeout(r, 400)); return { homeHits: expect.length }"
+  },
+  {
+    "name": "15-final-shot",
+    "wait": 400
+  }
+]
