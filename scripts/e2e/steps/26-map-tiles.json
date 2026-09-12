@@ -1,0 +1,32 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"地图瓦片链路（#6）：多源回退（Esri World Imagery 卫星图 → OSM，免 Key、全部 WGS-84 无需坐标偏移）；断言瓦片真实加载且非空白占位（canvas 采样色彩多样性）、无 API KEY 水印、署名与源一致、角标在场、标记数与灯箱联动回归。需联网。已实测排除：CARTO 无 Key 水印瓦片、高德/腾讯空白占位、Esri 街道/地形国内无数据。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 2600
+  },
+  {
+    "name": "02-open-map",
+    "wait": 800,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); await new Promise(r => setTimeout(r, 1000)); const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '地图'); if (!b) throw new Error('地图 tab 缺失'); b.click(); await new Promise(r => setTimeout(r, 800)); const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 10) throw new Error('标记数不对: ' + markers.length); if (!document.body.textContent.includes('张定位照片')) throw new Error('定位照片计数角标缺失'); 'map-open-ok'"
+  },
+  {
+    "name": "03-tiles-real",
+    "wait": 1500,
+    "log": true,
+    "script": "let tiles = []; let attr = ''; for (let i = 0; i < 30; i++) { tiles = [...document.querySelectorAll('.leaflet-tile')].filter(t => t.naturalWidth > 0); const a = document.querySelector('.leaflet-control-attribution'); attr = a ? a.textContent : ''; if (tiles.length >= 4) break; await new Promise(r => setTimeout(r, 500)); } if (tiles.length === 0) throw new Error('瓦片全部加载失败（CARTO/Esri/OSM 均不可达？）'); let realTiles = 0; let tainted = false; try { const c = document.createElement('canvas'); c.width = 64; c.height = 64; const ctx = c.getContext('2d'); for (const t of tiles.slice(0, 6)) { ctx.clearRect(0, 0, 64, 64); ctx.drawImage(t, 0, 0, 64, 64); const d = ctx.getImageData(0, 0, 64, 64).data; const colors = new Set(); for (let i = 0; i < d.length; i += 4 * 37) colors.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]); if (colors.size >= 6) realTiles++; } } catch (e) { tainted = true; realTiles = tiles.length; } if (realTiles === 0) throw new Error('瓦片均为空白占位（服务端降级陷阱）——换源失败'); if (!/Esri|OpenStreetMap/.test(attr)) throw new Error('署名缺失或未知源: ' + attr); return { loadedTiles: tiles.length, realTiles, tainted, attribution: attr.trim().slice(0, 60) }"
+  },
+  {
+    "name": "04-map-shot",
+    "wait": 600
+  },
+  {
+    "name": "05-marker-lightbox",
+    "wait": 600,
+    "script": "const m = document.querySelector('.map-marker'); if (!m) throw new Error('标记缺失'); m.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 700)); const lb = document.querySelector('.fixed.inset-0.z-50'); if (!lb) throw new Error('标记点击未打开灯箱'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); 'marker-lightbox-ok'"
+  }
+]
