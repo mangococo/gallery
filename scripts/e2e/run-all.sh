@@ -61,8 +61,8 @@ for f in "$STEPS_DIR"/*.json; do
     continue
   fi
   echo "---- $name"
-  # 08 用大相册（性能验收），其余用小相册（启动扫描 <1s，链路时序稳定）
-  if [ "$name" = "08-large-album" ] && [ -d "$DEMO_ROOT/album-large" ]; then
+  # 08/22 用大相册（性能/缩略图增量验收），其余用小相册（启动扫描 <1s，链路时序稳定）
+  if { [ "$name" = "08-large-album" ] || [ "$name" = "22-thumb-progress" ]; } && [ -d "$DEMO_ROOT/album-large" ]; then
     PRISTINE="$DEMO_ROOT/album-large"
   else
     PRISTINE="$DEMO_ROOT/album-small"
