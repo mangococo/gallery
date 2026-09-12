@@ -7,7 +7,14 @@ import { Trip, Photo } from '../types'
 import TimelineItem from '../components/TimelineItem'
 import TimelineAddButton from '../components/TimelineAddButton'
 import AddTripModal from '../components/AddTripModal'
-import PhotoWall from '../components/PhotoWall'
+import PhotoWall, {
+  loadWallDensity,
+  saveWallDensity,
+  loadWallLayout,
+  saveWallLayout,
+  type WallDensity,
+  type WallLayout,
+} from '../components/PhotoWall'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
 import PhotoTagEditor from '../components/PhotoTagEditor'
@@ -29,6 +36,7 @@ import { toast, confirmDialog } from '../components/feedback'
 import { hasMediaExt } from '../lib/media'
 import {
   ArrowLeftIcon,
+  ChevronRightIcon,
   CopyIcon,
   GridIcon,
   HeartIcon,
@@ -97,6 +105,22 @@ const HomePage: React.FC = () => {
   /** 照片墙增量渲染：先渲染 WALL_CHUNK 张，哨兵进入视口再追加 */
   const [wallLimit, setWallLimit] = React.useState(WALL_CHUNK)
   const wallSentinelRef = React.useRef<HTMLDivElement | null>(null)
+  /** 照片墙按旅行筛选（#5）：null = 全部。只作用于墙视图的本地态，与侧栏收藏/标签/年份叠加 */
+  const [wallTripId, setWallTripId] = React.useState<string | null>(null)
+  /** 筛选树展开/折叠（旅行多时不占工具区） */
+  const [tripFilterOpen, setTripFilterOpen] = React.useState(false)
+  /** 照片墙密度（#9）：三档，全局偏好持久化（与旅行页共享） */
+  const [wallDensity, setWallDensity] = React.useState<WallDensity>(loadWallDensity)
+  const changeWallDensity = (d: WallDensity) => {
+    setWallDensity(d)
+    saveWallDensity(d)
+  }
+  /** 排列方式（#10）：无持久化偏好时首页默认「填充」（与历史行为一致） */
+  const [wallLayout, setWallLayout] = React.useState<WallLayout>(() => loadWallLayout() ?? 'fill')
+  const changeWallLayout = (l: WallLayout) => {
+    setWallLayout(l)
+    saveWallLayout(l)
+  }
   /** 删除确认弹窗打开期间锁住，防重复点击 */
   const [deletingTripId, setDeletingTripId] = React.useState<string | null>(null)
   /** 「导入照片到这次旅行」的隐藏文件选择器 */
@@ -131,16 +155,18 @@ const HomePage: React.FC = () => {
    * 照片墙数据源：全部（筛选后）旅行中的照片与视频拍平。
    * 排序沿用画廊一贯约定——最新在前（时间线按 start_date 倒序的同类逻辑），
    * 拍摄时间缺失的排在末尾、按库内顺序。tripTitle 供灯箱与右键菜单展示上下文。
+   * 旅行筛选（#5）在这里叠加：选中的旅行之外不进墙，灯箱与多选自然同范围。
    */
   const wallPhotos = React.useMemo(() => {
     const all: (Photo & { tripTitle?: string })[] = []
     for (const t of filteredTrips) {
+      if (wallTripId && t.id !== wallTripId) continue
       for (const p of t.photos ?? []) {
         all.push({ ...p, tripTitle: t.title })
       }
     }
     return all.sort((a, b) => (b.takenAt ?? 0) - (a.takenAt ?? 0))
-  }, [filteredTrips])
+  }, [filteredTrips, wallTripId])
 
   const visibleWallPhotos = React.useMemo(() => wallPhotos.slice(0, wallLimit), [wallPhotos, wallLimit])
 
@@ -170,6 +196,19 @@ const HomePage: React.FC = () => {
       return next.size === prev.size ? prev : next
     })
   }, [wallPhotos])
+
+  // 切换旅行筛选：渲染窗口回到首屏批量、清空多选（#5 验收——不一次性渲染全量）
+  React.useEffect(() => {
+    setWallLimit(WALL_CHUNK)
+    setSelectedIds(new Set())
+    setWallLightboxIndex(null)
+  }, [wallTripId])
+
+  // 旅行筛选失效自愈：仅当旅行记录本身消失（被删除）才回退「全部」；
+  // 被侧栏收藏/标签/年份筛除时保留选择，走空态提示（叠加语义在 UI 上可见）
+  React.useEffect(() => {
+    if (wallTripId && !trips.some((t) => t.id === wallTripId)) setWallTripId(null)
+  }, [trips, wallTripId])
 
   // ESC 退出照片墙多选（灯箱/弹窗打开时不抢——它们已认领更高的 Esc 处理权）
   const selectionEscRef = useEscClaim(wallSelectionMode)
@@ -611,14 +650,107 @@ const HomePage: React.FC = () => {
         <div className="max-w-[1200px] mx-auto px-10 py-10" onContextMenu={handleHomeContextMenu}>
           {wallPhotos.length > 0 ? (
             <>
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <button
+                  data-testid="wall-trip-filter-toggle"
+                  onClick={() => setTripFilterOpen((v) => !v)}
+                  className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-colors ${
+                    wallTripId || tripFilterOpen
+                      ? 'bg-surface text-primary shadow-sm'
+                      : 'bg-surface-2 text-ink-2 hover:text-ink'
+                  }`}
+                  aria-expanded={tripFilterOpen}
+                >
+                  <ChevronRightIcon
+                    size={12}
+                    className={`transition-transform ${tripFilterOpen ? 'rotate-90' : ''}`}
+                  />
+                  <span>筛选旅行</span>
+                  <span className="text-ink-3">
+                    {wallTripId
+                      ? `· ${filteredTrips.find((t) => t.id === wallTripId)?.title ?? trips.find((t) => t.id === wallTripId)?.title ?? ''}`
+                      : '· 全部'}
+                  </span>
+                </button>
                 <p className="text-sm text-ink-3">
-                  {photoTotal} 张照片与视频 · 按拍摄时间从新到旧
+                  {wallTripId ? `${wallPhotos.length} / ${photoTotal}` : photoTotal} 张照片与视频 · 按拍摄时间从新到旧
                 </p>
                 {selectedIds.size > 0 && (
                   <span className="text-sm text-ink-2 font-display">已选 {selectedIds.size} 项</span>
                 )}
+                {/* 密度三档（#9）：全局偏好，与旅行页照片墙共享 */}
+                <div
+                  data-testid="wall-density-switch"
+                  className="flex items-center bg-surface-2 rounded-full p-0.5 ml-auto"
+                  title="照片排列密度"
+                >
+                  {(['large', 'medium', 'small'] as const).map((d) => (
+                    <button
+                      key={d}
+                      data-testid={`wall-density-${d}`}
+                      onClick={() => changeWallDensity(d)}
+                      className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                        wallDensity === d ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                      }`}
+                    >
+                      {d === 'large' ? '大' : d === 'medium' ? '中' : '小'}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  data-testid="wall-layout-switch"
+                  className="flex items-center bg-surface-2 rounded-full p-0.5"
+                  title="排列方式"
+                >
+                  {(['timeline', 'fill'] as const).map((l) => (
+                    <button
+                      key={l}
+                      data-testid={`wall-layout-${l}`}
+                      onClick={() => changeWallLayout(l)}
+                      className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                        wallLayout === l ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                      }`}
+                    >
+                      {l === 'timeline' ? '按时间' : '填充'}
+                    </button>
+                  ))}
+                </div>
               </div>
+              {/* 筛选树：全部 + 有照片的旅行（可折叠；与侧栏收藏/标签/年份叠加） */}
+              {tripFilterOpen && (
+                <div
+                  data-testid="wall-trip-filter-panel"
+                  className="flex flex-wrap gap-2 items-center mb-5 px-3 py-2.5 bg-surface/70 rounded-2xl border border-line"
+                >
+                  <button
+                    data-testid="wall-trip-filter-all"
+                    onClick={() => setWallTripId(null)}
+                    className={`px-3 py-1 rounded-full text-xs transition-colors ${
+                      !wallTripId ? 'bg-primary text-primary-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                    }`}
+                  >
+                    全部
+                  </button>
+                  {filteredTrips
+                    .filter((t) => (t.photos?.length || 0) > 0)
+                    .map((t) => (
+                      <button
+                        key={t.id}
+                        data-testid="wall-trip-filter-item"
+                        onClick={() => setWallTripId(t.id)}
+                        className={`px-3 py-1 rounded-full text-xs transition-colors max-w-[16rem] truncate ${
+                          wallTripId === t.id ? 'bg-primary text-primary-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'
+                        }`}
+                        title={t.title}
+                      >
+                        {t.title}
+                        <span className={`ml-1.5 ${wallTripId === t.id ? 'opacity-75' : 'text-ink-3'}`}>
+                          {t.photos.length}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              )}
               <PhotoWall
                 photos={visibleWallPhotos}
                 onPhotoClick={handleWallPhotoClick}
@@ -632,6 +764,8 @@ const HomePage: React.FC = () => {
                 selectedIds={selectedIds}
                 onToggleSelect={handleWallToggleSelect}
                 onPhotoContextMenu={handleWallPhotoContextMenu}
+                density={wallDensity}
+                layout={wallLayout}
               />
               {wallPhotos.length > wallLimit && (
                 <div ref={wallSentinelRef} className="py-10 text-center">
@@ -644,6 +778,18 @@ const HomePage: React.FC = () => {
                 </div>
               )}
             </>
+          ) : wallTripId && trips.some((t) => t.id === wallTripId) ? (
+            <div className="text-center py-24">
+              <p className="text-ink-3 mb-2 font-display text-2xl">这次旅行没有可展示的照片</p>
+              <p className="text-ink-3 text-sm mb-8">它可能被侧栏的收藏 / 标签 / 年份筛掉了，调整侧栏筛选或切回「全部」。</p>
+              <button
+                data-testid="wall-trip-filter-clear"
+                onClick={() => setWallTripId(null)}
+                className="px-6 py-2.5 bg-surface-2 text-ink-2 rounded-xl hover:text-ink transition-colors text-sm"
+              >
+                查看全部照片
+              </button>
+            </div>
           ) : trips.length > 0 ? (
             <div className="text-center py-24">
               <p className="text-ink-3 mb-2 font-display text-2xl">还没有照片</p>

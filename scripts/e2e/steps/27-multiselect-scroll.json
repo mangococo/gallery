@@ -1,0 +1,48 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"多选滚动链路（#7）：进入大相册旅行 → 多选态 → 连续勾选 → 量化滚动帧率（rAF 间隔采样）与回弹（静置后 scrollTop 漂移）→ 单次勾选重渲染范围（E2E 渲染计量 ≤6 卡）→ 全选/批量收藏回归。前置：album-large（run-all 定向，420 张）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-enter-trip-select-mode",
+    "wait": 1200,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大相册压力测试')); if (!h) throw new Error('找不到大相册旅行'); h.click(); await new Promise(r => setTimeout(r, 1500)); const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img') && !el.querySelector('.border-l-primary') && !el.textContent.includes('视频海报')); if (cards.length < 10) throw new Error('照片卡不足: ' + cards.length); const first = cards[0]; first.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 420, clientY: 300 })); await new Promise(r => setTimeout(r, 300)); const item = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('选择多张')); if (!item) throw new Error('「选择多张」菜单缺失'); item.click(); await new Promise(r => setTimeout(r, 400)); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('多选工具条未出现'); window.__e2e = { cards: cards.length }; 'select-mode-ok'"
+  },
+  {
+    "name": "03-toggle-render-scope",
+    "wait": 600,
+    "log": true,
+    "script": "window.__cardRenders = 0; const cards = [...document.querySelectorAll('[data-testid=photo-wall] > div')].filter(el => el.querySelector('img') && !el.querySelector('.border-l-primary')); const before = window.__cardRenders; cards[3].dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 350)); const during = window.__cardRenders; cards[4].dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 350)); const after = window.__cardRenders; const delta2 = after - during; if (delta2 > 6) throw new Error('单次勾选重渲染范围过大: ' + delta2 + ' 卡（期望 ≤6）'); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar.textContent.includes('已选 3')) throw new Error('勾选计数不对（入口菜单应带选首张 + 两次点击）: ' + bar.textContent); window.__e2e.renderDelta = delta2; return { firstToggleRenders: during - before, secondToggleRenders: delta2 }"
+  },
+  {
+    "name": "04-scroll-frame-metrics",
+    "wait": 800,
+    "log": true,
+    "script": "const sc = document.querySelector('main.overflow-y-auto') || document.scrollingElement; const frames = []; let raf = 0; const tick = (t) => { frames.push(t); raf = requestAnimationFrame(tick) }; raf = requestAnimationFrame(tick); const t0 = sc.scrollTop; for (let i = 0; i < 14; i++) { sc.scrollTop = sc.scrollTop + 240; await new Promise(r => setTimeout(r, 70)); } await new Promise(r => setTimeout(r, 300)); cancelAnimationFrame(raf); const deltas = []; for (let i = 1; i < frames.length; i++) deltas.push(frames[i] - frames[i - 1]); deltas.sort((a, b) => a - b); const median = deltas[Math.floor(deltas.length / 2)]; const p95 = deltas[Math.floor(deltas.length * 0.95)]; const max = deltas[deltas.length - 1]; const after = sc.scrollTop; await new Promise(r => setTimeout(r, 800)); const settled = sc.scrollTop; const drift = Math.abs(settled - after); if (drift > 4) throw new Error('滚动位置回弹/漂移: ' + drift.toFixed(1) + 'px'); if (median > 40) throw new Error('滚动中位帧间隔过高: ' + median.toFixed(1) + 'ms'); window.__e2e.frames = { median, p95, max, drift }; return { samples: deltas.length, median: +median.toFixed(1), p95: +p95.toFixed(1), max: +max.toFixed(1), driftPx: +drift.toFixed(1), scrolled: after - t0 }"
+  },
+  {
+    "name": "03b-selection-visual-state",
+    "wait": 500,
+    "log": true,
+    "script": "const card = document.querySelector('[data-testid=wall-card][data-selected=true]'); if (!card) throw new Error('没有选中卡片'); card.scrollIntoView({ block: 'center' }); await new Promise(r => setTimeout(r, 500)); const rect = card.getBoundingClientRect(); if (rect.top < 60 || rect.bottom > innerHeight - 10) throw new Error('选中卡片未滚入视口: top=' + rect.top); if (!card.querySelector('[data-testid=selection-veil]')) throw new Error('选中遮罩缺失（#8 卡片级反馈）'); const badge = card.querySelector('[data-testid=select-badge]'); if (!badge) throw new Error('勾选徽标缺失'); if (badge.className.includes('/40')) throw new Error('徽标底应为不透明（#8）'); const unselected = [...document.querySelectorAll('[data-testid=wall-card][data-selected=false]')].find(c => { const r = c.getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight; }); if (!unselected) throw new Error('视口内没有未选中卡片'); const ub = unselected.querySelector('[data-testid=select-badge]'); if (!ub || getComputedStyle(ub).backgroundColor === getComputedStyle(badge).backgroundColor) throw new Error('选中/未选中徽标底色无区分'); const ring = card.querySelector('[data-testid=selection-ring]'); if (!ring || !ring.className.includes('ring-inset')) throw new Error('选中描边应为 inset ring 覆盖层'); if (card.className.includes('border-primary')) throw new Error('双层描边回归'); 'selection-visual-ok'"
+  },
+  {
+    "name": "05-scroll-shot",
+    "wait": 400
+  },
+  {
+    "name": "06-select-all-and-batch",
+    "wait": 800,
+    "script": "const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar) throw new Error('多选工具条缺失'); const allBtn = [...bar.querySelectorAll('button')].find(b => b.textContent.includes('全选')); if (!allBtn) throw new Error('全选按钮缺失'); allBtn.click(); await new Promise(r => setTimeout(r, 600)); if (!bar.textContent.includes('已选')) throw new Error('全选后计数异常: ' + bar.textContent); const favBtn = [...bar.querySelectorAll('button')].find(b => b.textContent.includes('收藏')); if (favBtn) { favBtn.click(); await new Promise(r => setTimeout(r, 700)); } const exitBtn = bar.querySelector('button[title=\"退出多选（Esc）\"]'); if (exitBtn) { exitBtn.click(); await new Promise(r => setTimeout(r, 500)); } if (document.querySelector('[data-testid=selection-bar]')) throw new Error('退出多选失败'); 'batch-ok'"
+  },
+  {
+    "name": "07-final-shot",
+    "wait": 400
+  }
+]

@@ -6,9 +6,11 @@ import { IPC } from '../shared/types'
 import type {
   Album,
   CreateTripInput,
+  FlatMediaProbe,
   LegacyImportResult,
   MovePhotosResult,
   MoveTarget,
+  RegisterAlbumResult,
   ScanProgress,
   ThemeMode,
   ThemePaletteId,
@@ -51,10 +53,12 @@ import {
 } from './db'
 import { scanAlbum } from './services/scanner'
 import { mediaTypeOf } from './services/scanner'
+import { splitFlatMediaFiles } from './services/flat-media'
 import { collisionSafeDestName, planCoverReassignment, validateMovePhotos } from './services/move-plan'
 import { listTrash, purgeItems, restoreItems, trashPhoto, trashTrip } from './services/trash'
 import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
+import type { ThumbReadyItem } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
 import { exportJournal } from './services/journal'
 import { getMainWindow } from './windows'
@@ -70,6 +74,12 @@ function pushProgress(p: ScanProgress): void {
 
 function pushChanged(albumId: string): void {
   senderWindow()?.webContents.send(IPC.pushFsChanged, { albumId })
+}
+
+/** 缩略图批量就绪推送：渲染层增量点亮，首扫期间照片墙不再回退原图（#3） */
+function pushThumbsReady(albumId: string, items: ThumbReadyItem[]): void {
+  if (items.length === 0) return
+  senderWindow()?.webContents.send(IPC.pushThumbsReady, { albumId, photos: items })
 }
 
 /** 路径可访问（存在且可 stat） */
@@ -105,12 +115,17 @@ export async function fullRescan(albumId: string, pushEvents = true): Promise<Sc
   if (!counters) return null
   await generateThumbsForAlbum(albumId, album.name, {
     progress: pushEvents ? pushProgress : () => {},
+    ready: pushEvents ? (items) => pushThumbsReady(albumId, items) : () => {},
   })
   if (pushEvents) pushChanged(albumId)
   // 激活相册时同步 watcher
   const activeId = getSetting('active_album_id')
   if (activeId === albumId) {
-    void watchAlbum(albumId, { progress: pushProgress, changed: pushChanged })
+    void watchAlbum(albumId, {
+      progress: pushProgress,
+      changed: pushChanged,
+      thumbsReady: (items) => pushThumbsReady(albumId, items),
+    })
   }
   return { albumId, albumName: album.name, phase: 'thumb', done: 1, total: 1 }
 }
@@ -148,15 +163,39 @@ export function registerIpcHandlers(): void {
   // —— 相册 ——
   ipcMain.handle(IPC.albumsList, () => listAlbumsWithStatusCheck())
 
-  ipcMain.handle(IPC.albumsRegister, async (e): Promise<Album | null> => {
-    const win = BrowserWindow.fromWebContents(e.sender)
-    const res = await dialog.showOpenDialog(win!, {
-      title: '选择相册目录',
-      properties: ['openDirectory'],
-    })
-    if (res.canceled || res.filePaths.length === 0) return null
-    return registerAlbumAt(res.filePaths[0])
-  })
+  ipcMain.handle(
+    IPC.albumsRegister,
+    async (e): Promise<RegisterAlbumResult> => {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const res = await dialog.showOpenDialog(win!, {
+        title: '选择相册目录',
+        properties: ['openDirectory'],
+      })
+      if (res.canceled || res.filePaths.length === 0) return { status: 'canceled' }
+      const rootPath = res.filePaths[0]
+
+      const existing = getAlbumRowByPath(rootPath)
+      if (existing) {
+        fullRescanInBackground(existing.id)
+        return { status: 'ok', album: existing }
+      }
+
+      // 平铺媒体预检（#2）：根目录直接放照片时不能静默丢弃，交给用户确认归档
+      const probe = await probeFlatMediaAt(rootPath)
+      if (probe.fileCount > 0) {
+        return { status: 'flat-media', ...probe, suggestedName: '未整理的照片' }
+      }
+
+      const album = await registerAlbumAt(rootPath)
+      return album ? { status: 'ok', album } : { status: 'canceled' }
+    },
+  )
+
+  ipcMain.handle(IPC.albumsProbeFlat, (_e, path: string): Promise<FlatMediaProbe> => probeFlatMediaAt(path))
+
+  ipcMain.handle(IPC.albumsAdoptFlat, (_e, path: string, tripName: string): Promise<Album> =>
+    adoptFlatMediaAt(path, tripName),
+  )
 
   ipcMain.handle(IPC.albumsRemove, async (_e, id: string) => {
     cancelThumbsForAlbum(id)
@@ -197,7 +236,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.albumsSetActive, async (_e, id: string | null) => {
     setSetting('active_album_id', id ?? '')
     if (id) {
-      await watchAlbum(id, { progress: pushProgress, changed: pushChanged })
+      await watchAlbum(id, {
+        progress: pushProgress,
+        changed: pushChanged,
+        thumbsReady: (items) => pushThumbsReady(id, items),
+      })
     } else {
       await closeWatcher()
     }
@@ -322,7 +365,10 @@ export function registerIpcHandlers(): void {
 
     // 后台补缩略图并通知（导入链路的收尾任务，失败只记日志）
     void (async () => {
-      await generateThumbsForAlbum(album.id, album.name, { progress: pushProgress })
+      await generateThumbsForAlbum(album.id, album.name, {
+        progress: pushProgress,
+        ready: (items) => pushThumbsReady(album.id, items),
+      })
       pushChanged(album.id)
     })().catch((err) => {
       console.error('[thumb] 导入后补缩略图失败:', (err as Error)?.message ?? err)
@@ -568,7 +614,10 @@ export function registerIpcHandlers(): void {
       photos: 0,
       skippedCaptions: 0,
     }
-    await generateThumbsForAlbum(album.id, album.name, { progress: pushProgress })
+    await generateThumbsForAlbum(album.id, album.name, {
+        progress: pushProgress,
+        ready: (items) => pushThumbsReady(album.id, items),
+      })
     pushChanged(album.id)
     return { album: getAlbumRow(album.id)!, ...counters }
   })
@@ -642,6 +691,124 @@ export async function registerAlbumAt(rootPath: string, quiet = false): Promise<
   // 后台扫描：进度经 pushProgress 推送
   fullRescanInBackground(album.id)
   return album
+}
+
+/** 相册根目录的平铺媒体文件全量清单（stat 逐个校验，竞态消失的静默跳过） */
+async function listFlatMediaFiles(rootPath: string): Promise<string[]> {
+  let entries: string[]
+  try {
+    entries = await fs.readdir(rootPath)
+  } catch {
+    return []
+  }
+  const facts: { name: string; isDirectory: boolean }[] = []
+  for (const name of entries) {
+    try {
+      const st = await fs.stat(join(rootPath, name))
+      facts.push({ name, isDirectory: st.isDirectory() })
+    } catch {
+      // 竞态：条目刚好消失
+    }
+  }
+  return splitFlatMediaFiles(facts, (n) => mediaTypeOf(n) !== null)
+}
+
+/** 只读预检：根目录平铺媒体数量与样例（注册前确认弹窗 / E2E 断言用） */
+export async function probeFlatMediaAt(rootPath: string): Promise<FlatMediaProbe> {
+  const files = await listFlatMediaFiles(rootPath)
+  return { path: rootPath, fileCount: files.length, sample: files.slice(0, 5) }
+}
+
+/** 默认旅行名（确认弹窗的初始值，用户可改） */
+const DEFAULT_FLAT_TRIP_NAME = '未整理的照片'
+
+/**
+ * 确认后的平铺归档（#2）：建默认旅行目录 → 把根目录平铺媒体 rename 进去 → 注册相册并扫描。
+ * 磁盘先行、落库在后：任何一步失败都把已移动文件搬回根部并清掉空目录，不留半成品；
+ * 用户拒绝则本函数根本不会被调用（相册零落库）。
+ */
+export async function adoptFlatMediaAt(rootPath: string, rawName: string): Promise<Album> {
+  if (getAlbumRowByPath(rootPath)) throw new Error('该目录已注册为相册')
+  const files = await listFlatMediaFiles(rootPath)
+  if (files.length === 0) throw new Error('没有检测到相册根目录下的平铺照片')
+
+  const title = rawName.trim() || DEFAULT_FLAT_TRIP_NAME
+  // 目录名避让只看磁盘：此刻相册尚未注册，库内无该相册旅行
+  const folderName = dedupeFolderName(rootPath, sanitizeFileName(title), () => false)
+  const destDir = join(rootPath, folderName)
+  await fs.mkdir(destDir, { recursive: true })
+
+  // 同目录内 rename（原子）；逐个落地，失败即整体回滚
+  const moved: { from: string; to: string }[] = []
+  try {
+    for (const name of files) {
+      const destName = collisionSafeDestName(name, (n) => existsSync(join(destDir, n)))
+      const from = join(rootPath, name)
+      const to = join(destDir, destName)
+      await fs.rename(from, to)
+      moved.push({ from: to, to: from })
+    }
+  } catch (err) {
+    const stuck = await rollbackMoves(moved, destDir)
+    if (stuck.length > 0) {
+      throw new Error(
+        `归档失败（${(err as Error).message}），${stuck.length} 个文件未能搬回，仍留在「${folderName}」文件夹中，请手动处理`,
+      )
+    }
+    throw new Error(`归档失败，已恢复原状：${(err as Error).message}`)
+  }
+
+  const album: Album = {
+    id: nanoid(12),
+    name: basename(rootPath),
+    path: rootPath,
+    status: 'ok',
+    createdAt: Date.now(),
+  }
+  try {
+    insertAlbumRow(album)
+    insertTripRow({
+      id: nanoid(12),
+      albumId: album.id,
+      folderName,
+      title,
+      description: '由相册根目录的平铺照片自动归档创建。',
+      startDate: '',
+      endDate: '',
+      isFavorite: false,
+    })
+  } catch (err) {
+    // 库失败同样回滚磁盘，保持「要么全成、要么全无」
+    const stuck = await rollbackMoves(moved, destDir)
+    removeAlbumRow(album.id)
+    if (stuck.length > 0) {
+      throw new Error(
+        `归档后入库失败（${(err as Error).message}），${stuck.length} 个文件未能搬回，仍留在「${folderName}」文件夹中`,
+      )
+    }
+    throw new Error(`归档后入库失败，已恢复原状：${(err as Error).message}`)
+  }
+
+  fullRescanInBackground(album.id)
+  return album
+}
+
+/** 把已移动文件搬回原位，尽量清掉空的目的目录；返回没能搬回的文件名 */
+async function rollbackMoves(moved: { from: string; to: string }[], destDir: string): Promise<string[]> {
+  const stuck: string[] = []
+  for (const m of moved.reverse()) {
+    try {
+      await fs.rename(m.from, m.to)
+    } catch {
+      stuck.push(basename(m.from))
+    }
+  }
+  try {
+    await fs.rmdir(destDir)
+  } catch {
+    // 目录非空（回滚残留）或已消失，交由上层文案说明
+  }
+  return stuck
 }
 
 function sanitizeFileName(name: string): string {

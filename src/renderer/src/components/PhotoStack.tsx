@@ -12,9 +12,13 @@ interface PhotoStackProps {
 /** 堆叠/网格内的媒体缩略块：视频优先用已生成的海报帧 */
 function StackMedia({ photo, className }: { photo: PhotoDTO; className?: string }) {
   const src = displaySrc(photo)
-  if (photo.type === 'video' && !src) {
-    // 视频缩略图未就绪：降级为元数据预览（#t 让 Chromium 定位到首帧，否则常渲染黑帧）
-    return <video src={`${photo.mediaUrl}#t=0.1`} className={className} muted preload="metadata" />
+  // 缩略图未就绪（图片/视频同理）：占位块，绝不回退原图（#3 首扫卡死根因）
+  if (!src) {
+    return (
+      <div className="absolute inset-0 bg-surface-2 flex items-center justify-center">
+        <span className="font-display text-[10px] text-ink-3">生成中…</span>
+      </div>
+    )
   }
   return <img src={src} alt="" className={className} loading="lazy" />
 }

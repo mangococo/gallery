@@ -1,0 +1,71 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"空旅行链路（#1 空子目录收录）：空目录收录为 0 张旅行 → 时间线卡片占位 → 旅行页空态 → 编辑元数据 → 重扫不清理 → 删除/恢复（0 张旅行进回收站）→ 移入照片归入已存在旅行 → 重扫无重复。前置：gen-demo 演示数据含 seoul-planned-2026 空目录（无 settings）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-empty-trip-exists",
+    "wait": 600,
+    "log": true,
+    "script": "const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const empty = trips.find(t => t.folderName === 'seoul-planned-2026'); if (!empty) throw new Error('空子目录未收录为旅行（#1 回归）'); if (empty.photos.length !== 0) throw new Error('空旅行照片数应为 0: ' + empty.photos.length); if (empty.title !== 'seoul-planned-2026') throw new Error('空旅行标题应回退目录名: ' + empty.title); if (empty.status !== 'ok') throw new Error('空旅行目录应在位: ' + empty.status); window.__e2e = { albumId, tripId: empty.id }; return { title: empty.title, photos: empty.photos.length, startDate: empty.startDate }"
+  },
+  {
+    "name": "03-timeline-card",
+    "wait": 500,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('seoul-planned-2026')); if (!h) throw new Error('时间线没有空旅行卡片'); const card = h.closest('.relative.flex'); if (!card) throw new Error('空旅行卡片结构缺失'); if (!card.textContent.includes('0 张照片')) throw new Error('空旅行应显示 0 张照片'); if (!card.textContent.includes('还没有照片')) throw new Error('堆叠占位文案缺失'); card.scrollIntoView({ block: 'center' }); 'timeline-card-ok'"
+  },
+  {
+    "name": "04-timeline-empty-card-shot",
+    "wait": 300
+  },
+  {
+    "name": "05-enter-trip-page",
+    "wait": 900,
+    "script": "const st = window.__e2e; const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('seoul-planned-2026')); if (!h) throw new Error('找不到空旅行标题'); h.click(); await new Promise(r => setTimeout(r, 900)); if (!location.hash.includes('/trip/')) throw new Error('未进入旅行页: ' + location.hash); if (!document.querySelector('[data-testid=photo-wall]')) throw new Error('旅行页照片墙缺失'); if (!document.querySelector('[data-testid=photo-wall-empty]')) throw new Error('旅行页缺少空态占位'); if (!document.body.textContent.includes('这次旅行还没有照片')) throw new Error('空态标题文案缺失'); if (!document.body.textContent.includes('0 张照片')) throw new Error('旅行页应显示 0 张照片'); 'trip-page-ok'"
+  },
+  {
+    "name": "06-trip-page-empty-shot",
+    "wait": 400
+  },
+  {
+    "name": "07-edit-metadata",
+    "wait": 600,
+    "script": "const st = window.__e2e; const updated = await window.api.updateTrip(st.tripId, { title: '首尔 · 计划中', description: '还没出发，先把目录建好了。', startDate: '2026-10-01', endDate: '2026-10-05' }); if (updated.title !== '首尔 · 计划中') throw new Error('标题未更新'); if (updated.startDate !== '2026-10-01') throw new Error('开始日期未更新: ' + updated.startDate); const again = await window.api.getTrip(st.tripId); if (again.title !== '首尔 · 计划中' || again.description !== '还没出发，先把目录建好了。') throw new Error('空旅行元数据未持久化'); 'meta-edit-ok'"
+  },
+  {
+    "name": "08-rescan-keeps-empty-trip",
+    "wait": 800,
+    "script": "const st = window.__e2e; await window.api.rescanAlbum(st.albumId); await new Promise(r => setTimeout(r, 1500)); const trips = await window.api.listTrips(st.albumId); const empty = trips.find(t => t.id === st.tripId); if (!empty) throw new Error('重扫后空旅行被清理'); if (empty.photos.length !== 0) throw new Error('重扫后照片数漂移: ' + empty.photos.length); if (empty.title !== '首尔 · 计划中') throw new Error('重扫覆盖了用户编辑的标题'); const dups = trips.filter(t => t.folderName === 'seoul-planned-2026'); if (dups.length !== 1) throw new Error('重扫产生重复旅行: ' + dups.length); 'rescan-keep-ok'"
+  },
+  {
+    "name": "09-delete-empty-trip",
+    "wait": 800,
+    "script": "const st = window.__e2e; await window.api.deleteTrip(st.tripId); const trips = await window.api.listTrips(st.albumId); if (trips.some(t => t.id === st.tripId)) throw new Error('删除后空旅行仍在业务视图'); const trash = await window.api.listTrash(); const item = trash.find(i => i.kind === 'trip' && i.id === st.tripId); if (!item) throw new Error('回收站没有空旅行'); if (item.photoCount !== 0) throw new Error('空旅行回收站计数应为 0: ' + item.photoCount); 'empty-trip-trashed-ok'"
+  },
+  {
+    "name": "10-restore-empty-trip",
+    "wait": 900,
+    "script": "const st = window.__e2e; const result = await window.api.trashRestore({ photoIds: [], tripIds: [st.tripId] }); if (result.tripsCount !== 1 || result.failed.length > 0) throw new Error('空旅行恢复失败: ' + JSON.stringify(result)); const trips = await window.api.listTrips(st.albumId); const empty = trips.find(t => t.id === st.tripId); if (!empty) throw new Error('恢复后空旅行未回到业务视图'); if (empty.status !== 'ok') throw new Error('恢复后空旅行目录应在位: ' + empty.status); if (empty.title !== '首尔 · 计划中') throw new Error('恢复丢失了用户编辑'); 'empty-trip-restored-ok'"
+  },
+  {
+    "name": "11-move-photo-into-empty-trip",
+    "wait": 900,
+    "script": "const st = window.__e2e; const trips = await window.api.listTrips(st.albumId); const kyoto = trips.find(t => t.title.includes('京都')); if (!kyoto) throw new Error('找不到京都'); const before = kyoto.photos.length; if (before < 1) throw new Error('京都照片不足'); const mover = kyoto.photos[0]; const result = await window.api.movePhotos([mover.id], { tripId: st.tripId }); if (!result.movedIds.includes(mover.id)) throw new Error('移动失败: ' + JSON.stringify(result.movedIds)); if (result.targetTrip.id !== st.tripId) throw new Error('目标旅行不对'); window.__e2e.photoId = mover.id; window.__e2e.kyotoId = kyoto.id; window.__e2e.kyotoBefore = before; 'move-ok'"
+  },
+  {
+    "name": "12-rescan-adopts-photo",
+    "wait": 1200,
+    "script": "const st = window.__e2e; await window.api.rescanAlbum(st.albumId); await new Promise(r => setTimeout(r, 1500)); const trips = await window.api.listTrips(st.albumId); const target = trips.find(t => t.id === st.tripId); if (!target) throw new Error('重扫后目标旅行消失'); if (target.photos.length !== 1) throw new Error('照片未归入旅行: ' + target.photos.length); if (target.photos[0].id !== st.photoId) throw new Error('归入的照片不对'); const dups = trips.filter(t => t.folderName === 'seoul-planned-2026'); if (dups.length !== 1) throw new Error('重扫重复建旅行: ' + dups.length); const kyoto = trips.find(t => t.id === st.kyotoId); if (!kyoto) throw new Error('京都消失'); if (kyoto.photos.length !== st.kyotoBefore - 1) throw new Error('源旅行照片数不对: ' + kyoto.photos.length); 'adopt-ok'"
+  },
+  {
+    "name": "13-final-home-shot",
+    "wait": 600,
+    "script": "const brand = document.querySelector('button[title=回到主页]'); if (brand) { brand.click(); await new Promise(r => setTimeout(r, 900)); } const card = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('首尔 · 计划中')); if (!card) throw new Error('最终时间线缺少已改名的旅行卡片'); 'final-ok'"
+  }
+]

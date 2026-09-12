@@ -18,6 +18,26 @@ export interface Album {
   createdAt: number
 }
 
+/** albums:register 的结果：正常注册 / 检测到根目录平铺媒体（待用户确认）/ 用户取消 */
+export type RegisterAlbumResult =
+  | { status: 'ok'; album: Album }
+  | { status: 'flat-media'; path: string; fileCount: number; sample: string[]; suggestedName: string }
+  | { status: 'canceled' }
+
+/** 相册根目录平铺媒体预检结果 */
+export interface FlatMediaProbe {
+  path: string
+  fileCount: number
+  /** 最多 5 个文件名（确认弹窗展示用） */
+  sample: string[]
+}
+
+/** push:thumbs-ready 载荷：一批生成完毕的缩略图（渲染层按 id 增量合并） */
+export interface ThumbsReadyPayload {
+  albumId: string
+  photos: { id: string; thumbUrl: string; width: number | null; height: number | null }[]
+}
+
 /** 照片/视频 DTO：mediaUrl 与 thumbUrl 由主进程生成，渲染进程不接触真实路径 */
 export interface PhotoDTO {
   id: string
@@ -201,8 +221,16 @@ export interface GalleryApi {
   getStats(): Promise<Stats>
 
   listAlbums(): Promise<Album[]>
-  /** 弹出目录选择器注册新相册并扫描 */
-  registerAlbum(): Promise<Album | null>
+  /**
+   * 弹出目录选择器注册新相册并扫描。
+   * 检测到根目录平铺媒体文件时不直接注册，返回 flat-media 描述符，
+   * 由用户确认旅行名后走 adoptFlatMedia（拒绝则什么都不建立）。
+   */
+  registerAlbum(): Promise<RegisterAlbumResult>
+  /** 只读探测某目录根部的平铺媒体文件（注册预检同一逻辑，E2E/诊断用） */
+  probeFlatMedia(path: string): Promise<FlatMediaProbe>
+  /** 确认归档：建默认旅行目录、把根目录平铺媒体移入、注册相册并扫描（失败回滚） */
+  adoptFlatMedia(path: string, tripName: string): Promise<Album>
   /** 仅解除注册，不删除任何文件 */
   removeAlbum(id: string): Promise<void>
   renameAlbum(id: string, name: string): Promise<Album>
@@ -270,6 +298,8 @@ export interface GalleryApi {
 
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
+  /** 缩略图批量就绪（扫描期间照片墙/堆叠增量点亮，不整页刷新） */
+  onThumbsReady(cb: (p: ThumbsReadyPayload) => void): Unsubscribe
   onThemeSystemChanged(cb: (p: { systemDark: boolean }) => void): Unsubscribe
   /** 自定义样式文件变化推送（保存即热更新；payload 为全文或 null=文件被删除） */
   onThemeCustomCssChanged(cb: (css: string | null) => void): Unsubscribe
@@ -285,6 +315,8 @@ export const IPC = {
 
   albumsList: 'albums:list',
   albumsRegister: 'albums:register',
+  albumsAdoptFlat: 'albums:adopt-flat',
+  albumsProbeFlat: 'albums:probe-flat',
   albumsRemove: 'albums:remove',
   albumsRename: 'albums:rename',
   albumsRelocate: 'albums:relocate',
@@ -330,6 +362,7 @@ export const IPC = {
 
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',
+  pushThumbsReady: 'push:thumbs-ready',
   pushThemeSystemChanged: 'push:theme-system-changed',
   pushThemeCustomCssChanged: 'push:theme-custom-css-changed',
 } as const

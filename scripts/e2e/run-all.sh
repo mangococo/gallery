@@ -60,9 +60,20 @@ for f in "$STEPS_DIR"/*.json; do
     echo "---- $name: SKIP（跑 scripts/e2e/custom-css.sh）"
     continue
   fi
+  # 23-thumb-resume 两阶段共享 userData，由专脚本驱动
+  if [ "$name" = "23-thumb-resume" ]; then
+    echo "---- $name"
+    if bash scripts/e2e/thumb-resume.sh; then
+      PASS=$((PASS + 1))
+    else
+      FAIL=$((FAIL + 1))
+      FAILED_LIST="$FAILED_LIST $name"
+    fi
+    continue
+  fi
   echo "---- $name"
-  # 08 用大相册（性能验收），其余用小相册（启动扫描 <1s，链路时序稳定）
-  if [ "$name" = "08-large-album" ] && [ -d "$DEMO_ROOT/album-large" ]; then
+  # 08/22 用大相册（性能/缩略图增量验收），其余用小相册（启动扫描 <1s，链路时序稳定）
+  if { [ "$name" = "08-large-album" ] || [ "$name" = "22-thumb-progress" ] || [ "$name" = "27-multiselect-scroll" ] || [ "$name" = "29-wall-density" ] || [ "$name" = "30-wall-layout" ]; } && [ -d "$DEMO_ROOT/album-large" ]; then
     PRISTINE="$DEMO_ROOT/album-large"
   else
     PRISTINE="$DEMO_ROOT/album-small"
@@ -76,7 +87,8 @@ for f in "$STEPS_DIR"/*.json; do
     "GALLERY_USER_DATA=$WORK/userdata"
     "GALLERY_E2E_ALBUM=$DEMO_ROOT/我的旅行"
     "GALLERY_E2E_STEPS=$f"
-    "GALLERY_E2E_DIR=$WORK/shots-$name")
+    "GALLERY_E2E_DIR=$WORK/shots-$name"
+    "GALLERY_E2E_FLAT_ALBUM=$DEMO_ROOT/flat-root")
   if [ "$name" = "07-export-journal" ]; then
     rm -rf "$WORK/exports"
     mkdir -p "$WORK/exports"

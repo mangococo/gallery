@@ -5,6 +5,15 @@ import { displaySrc } from '../lib/api'
 import { confirmDialog } from './feedback'
 import { CheckCircleIcon, HeartIcon, PenIcon, StarIcon, TrashIcon } from './icons'
 
+/** 多选选中态的实心勾（#8）：16px 下描边勾辨识度低，粗实心勾一眼可辨 */
+function CheckFilledIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12.5 10 17.5 19 7" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 interface PhotoWallProps {
   photos: Photo[]
   onPhotoClick?: (photo: Photo) => void
@@ -24,39 +33,112 @@ interface PhotoWallProps {
   onPhotoContextMenu?: (e: React.MouseEvent, photo: Photo) => void
   /** 空白区域右键（目标非卡片时才触发） */
   onWallContextMenu?: (e: React.MouseEvent) => void
+  /** 空态文案：无照片时的标题/提示（默认「还没有照片」） */
+  emptyTitle?: string
+  emptyHint?: string
+  /** 密度档位（#9）：默认 large（响应式 1/2/3 列，与旧行为一致） */
+  density?: WallDensity
+  /** 排列方式（#10）：fill=瀑布流填充（默认）；timeline=时间序行优先网格（数据序即视觉阅读序） */
+  layout?: WallLayout
 }
 
 /** 超过该张数走大相册模式：逐项 framer-motion 入场动画关闭（CSS 悬停替代），保滚动流畅 */
 const LARGE_ALBUM_THRESHOLD = 120
 
+/** 密度档位（#9）：large=响应式 1/2/3（现状）；medium=4 列；small=6 列（1080p 一屏 ~42 张） */
+export type WallDensity = 'large' | 'medium' | 'small'
+
+const DENSITY_COLUMN_COUNT: Record<Exclude<WallDensity, 'large'>, number> = {
+  medium: 4,
+  small: 6,
+}
+
+/** 密度偏好持久化（会话级 localStorage，与首页视图偏好同一模式），首页/旅行页全局共享 */
+export const WALL_DENSITY_KEY = 'gallery.wall_density'
+export function loadWallDensity(): WallDensity {
+  try {
+    const v = localStorage.getItem(WALL_DENSITY_KEY)
+    if (v === 'medium' || v === 'small' || v === 'large') return v
+  } catch {
+    // 隐私模式读不到就算了
+  }
+  return 'large'
+}
+export function saveWallDensity(d: WallDensity): void {
+  try {
+    localStorage.setItem(WALL_DENSITY_KEY, d)
+  } catch {
+    // 存不进就算了
+  }
+}
+
+/** 排列方式（#10）：fill=瀑布流紧凑填充（CSS columns，列优先视觉）；timeline=按时间序行优先网格 */
+export type WallLayout = 'fill' | 'timeline'
+
+export const WALL_LAYOUT_KEY = 'gallery.wall_layout'
+/** 偏好持久化。无偏好时返回 null，由调用方决定各自默认（首页 fill、旅行页 timeline） */
+export function loadWallLayout(): WallLayout | null {
+  try {
+    const v = localStorage.getItem(WALL_LAYOUT_KEY)
+    if (v === 'fill' || v === 'timeline') return v
+  } catch {
+    // 隐私模式读不到就算了
+  }
+  return null
+}
+export function saveWallLayout(l: WallLayout): void {
+  try {
+    localStorage.setItem(WALL_LAYOUT_KEY, l)
+  } catch {
+    // 存不进就算了
+  }
+}
+
+/** timeline 行优先网格的列宽下限：随密度档收窄（与 #9 档位联动） */
+const TIMELINE_MIN_COL: Record<WallDensity, string> = {
+  large: '260px',
+  medium: '200px',
+  small: '150px',
+}
+
+
 /** 照片墙单元：图片用缩略图；视频用海报帧 + 播放角标 */
 function WallMedia({ photo }: { photo: PhotoDTO }) {
   const src = displaySrc(photo)
-  if (photo.type === 'video' && !src) {
-    return (
-      <div className="relative aspect-[4/3]">
-        <PlaceholderBackdrop failed={photo.thumbStatus === 'failed'} />
-        <PlayBadge />
-      </div>
-    )
-  }
   if (photo.type === 'video') {
     return (
       <div className="relative aspect-[4/3]">
-        <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+        {src ? (
+          <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <PlaceholderBackdrop text={photo.thumbStatus === 'failed' ? '视频海报生成失败' : '视频海报生成中…'} />
+        )}
         <PlayBadge />
       </div>
     )
   }
-  return <img src={src} alt="" className="w-full h-auto" loading="lazy" />
+  // 图片缩略图未就绪：占位（不回退原图，#3）；就绪后经 push:thumbs-ready 增量点亮。
+  // 宽高来自缩略图生成时回写（无则 4:3 兜底）——容器先占住最终高度，
+  // 图片加载完成不再改变卡片高度，多列瀑布流不重平衡（#7 滚动回弹根因）
+  const aspect = photo.width && photo.height ? `${photo.width} / ${photo.height}` : '4 / 3'
+  if (!src) {
+    return (
+      <div className="relative w-full" style={{ aspectRatio: aspect }}>
+        <PlaceholderBackdrop text={photo.thumbStatus === 'failed' ? '缩略图生成失败' : '缩略图生成中…'} />
+      </div>
+    )
+  }
+  return (
+    <div className="relative w-full" style={{ aspectRatio: aspect }}>
+      <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
+    </div>
+  )
 }
 
-function PlaceholderBackdrop({ failed }: { failed: boolean }) {
+function PlaceholderBackdrop({ text }: { text: string }) {
   return (
     <div className="absolute inset-0 bg-surface-2 flex items-center justify-center">
-      <span className="font-display text-ink-3 text-xs">
-        {failed ? '视频海报生成失败' : '视频海报生成中…'}
-      </span>
+      <span className="font-display text-ink-3 text-xs">{text}</span>
     </div>
   )
 }
@@ -69,6 +151,17 @@ function PlayBadge() {
       </div>
     </div>
   )
+}
+
+/**
+ * 稳定回调（ref 转发）：卡片级回调身份恒定，CardInner 的 memo 浅比较才不会
+ * 因页面重渲染（如每次勾选生成新 Set / 新闭包）而失效——单次勾选只重渲染
+ * 受影响的卡片，整墙其余卡片全部跳过（#7）。
+ */
+function useStableCallback<T extends (...args: never[]) => unknown>(fn: T | undefined): T {
+  const ref = React.useRef(fn)
+  ref.current = fn
+  return React.useCallback(((...args: never[]) => ref.current?.(...args)) as T, [])
 }
 
 const PhotoWall: React.FC<PhotoWallProps> = ({
@@ -85,8 +178,12 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   onToggleSelect,
   onPhotoContextMenu,
   onWallContextMenu,
+  emptyTitle,
+  emptyHint,
+  density = 'large',
+  layout = 'fill',
 }) => {
-  const handleDelete = async (photo: Photo) => {
+  const handleDelete = useStableCallback(async (photo: Photo) => {
     const ok = await confirmDialog({
       title: '把这张照片移入回收站？',
       body: photo.fileName,
@@ -94,7 +191,13 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
       danger: true,
     })
     if (ok) onDeletePhoto?.(photo.id)
-  }
+  })
+
+  // 透过 ref 转发拿到稳定身份的卡片级回调（页面传入的闭包每次渲染都是新的）
+  const stableEditCaption = useStableCallback(onEditCaption)
+  const stableSetCover = useStableCallback(onSetCover)
+  const stableDeletePhoto = useStableCallback(onDeletePhoto)
+  const stableToggleFavorite = useStableCallback(onToggleFavorite)
 
   const largeMode = photos.length > LARGE_ALBUM_THRESHOLD
 
@@ -108,26 +211,54 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
     onPhotoClick?.(photo)
   }
 
+  // 密度档位（#9）：small/medium 固定列数（inline style 注入，避免再开一组响应式断点）；
+  // 列宽随容器收缩，小卡片仍由 #7 的固定 aspect 容器保证不重排。
+  // timeline 模式（#10）改用 grid 行优先：视觉阅读顺序与数据序（时间序）一致
+  const wallStyle: React.CSSProperties | undefined =
+    layout === 'timeline'
+      ? { display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${TIMELINE_MIN_COL[density]}, 1fr))`, gap: '1rem' }
+      : density === 'large'
+        ? undefined
+        : { columnCount: DENSITY_COLUMN_COUNT[density], columnGap: '1rem' }
+
   return (
     <div
       data-testid="photo-wall"
-      className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4"
+      data-density={density}
+      data-layout={layout}
+      style={wallStyle}
+      className={`gap-4 space-y-4 ${
+        layout === 'fill' && density === 'large' ? 'columns-1 sm:columns-2 lg:columns-3' : ''
+      }`}
       onContextMenu={(e) => {
         // 只有真正点在留白处（容器自身）才算空白区右键
         if (e.target === e.currentTarget) onWallContextMenu?.(e)
       }}
     >
+      {/* 空态：拍立得空白相框占位（空旅行 / 筛选无结果），右键同样可呼出墙菜单 */}
+      {photos.length === 0 && (
+        <div
+          data-testid="photo-wall-empty"
+          className="py-14 flex flex-col items-center gap-4 text-center"
+          onContextMenu={(e) => onWallContextMenu?.(e)}
+        >
+          <div className="w-44 h-32 polaroid-frame -rotate-2 flex items-center justify-center">
+            <span className="font-display text-xs text-ink-3">{emptyTitle ?? '还没有照片'}</span>
+          </div>
+          {emptyHint && <p className="text-sm text-ink-3 max-w-md leading-relaxed">{emptyHint}</p>}
+        </div>
+      )}
       {photos.map((photo, index) => {
         const selected = selectedIds?.has(photo.id) ?? false
         const inner = (
           <CardInner
             photo={photo}
             coverPhotoId={coverPhotoId}
-            onEditCaption={onEditCaption}
-            onSetCover={onSetCover}
+            onEditCaption={stableEditCaption}
+            onSetCover={stableSetCover}
             showDeleteButton={showDeleteButton}
-            onDeletePhoto={onDeletePhoto}
-            onToggleFavorite={onToggleFavorite}
+            onDeletePhoto={stableDeletePhoto}
+            onToggleFavorite={stableToggleFavorite}
             onDelete={handleDelete}
             selected={selected}
             selectionMode={selectionMode}
@@ -165,7 +296,8 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   )
 }
 
-/** 卡片本体（普通/大相册两种包装共用） */
+/** 卡片本体（普通/大相册两种包装共用）。memo：勾选只改 selected 布尔，
+ * 其余 prop 经 useStableCallback/数据稳定引用保持恒定 → 只重渲染受影响卡片 */
 const CardInner: React.FC<{
   photo: Photo
   coverPhotoId: string | null
@@ -177,7 +309,7 @@ const CardInner: React.FC<{
   onDelete: (photo: Photo) => Promise<void>
   selected: boolean
   selectionMode: boolean
-}> = ({
+}> = React.memo(({
   photo,
   coverPhotoId,
   onEditCaption,
@@ -189,22 +321,44 @@ const CardInner: React.FC<{
   selected,
   selectionMode,
 }) => {
+  // E2E 渲染计量（#7）：生产零开销分支预测，链路断言单次勾选的重渲染范围
+  if (typeof window !== 'undefined' && (window as unknown as { __galleryE2e?: boolean }).__galleryE2e) {
+    const w = window as unknown as { __cardRenders?: number }
+    w.__cardRenders = (w.__cardRenders ?? 0) + 1
+  }
   return (
     <div
-      className={`relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border ${
-        selected ? 'border-primary ring-2 ring-primary' : 'border-line'
+      className={`relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow ${
+        selected ? '' : 'border border-line'
       }`}
+      data-testid="wall-card"
+      data-selected={selected ? 'true' : 'false'}
     >
       <WallMedia photo={photo} />
+      {selected && (
+        <>
+          <div className="absolute inset-0 bg-primary-soft/45 pointer-events-none" data-testid="selection-veil" />
+          {/* 选中描边（#8）：inset ring 画在卡片内部——外置 box-shadow 会被
+              .wall-item 的 content-visibility（paint containment）裁掉直边段，
+              只剩圆角弧；inset 沿 rounded-xl 全周均匀、不依赖溢出绘制 */}
+          <div
+            className="absolute inset-0 rounded-xl ring-[3px] ring-inset ring-primary pointer-events-none z-10"
+            data-testid="selection-ring"
+          />
+        </>
+      )}
 
-      {/* 多选勾选徽标 */}
+      {/* 多选勾选徽标（#8）：不透明底——半透明底叠照片后观感受底图明暗左右，
+          浅色照片上发灰难辨。未选中 = 白底 + 深色圆环勾；选中 = success 实底 +
+          白色粗实心勾，高对比且不依赖底图 */}
       {(selectionMode || selected) && (
         <div
-          className={`absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-colors ${
-            selected ? 'bg-primary text-primary-ink' : 'bg-scrim/40 text-scrim-ink/70'
+          data-testid="select-badge"
+          className={`absolute top-2 left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${
+            selected ? 'bg-success text-white' : 'bg-surface text-ink-2'
           }`}
         >
-          <CheckCircleIcon size={16} />
+          {selected ? <CheckFilledIcon size={18} /> : <CheckCircleIcon size={16} />}
         </div>
       )}
 
@@ -299,6 +453,6 @@ const CardInner: React.FC<{
       )}
     </div>
   )
-}
+})
 
 export default PhotoWall

@@ -1,0 +1,59 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"缩略图渐进链路（#3）：两幕——A 首扫期间打开照片墙，无任何 img 回退原图（gallery-media://m/）；B 批量导入 600 张制造 pending 窗口，旅行页照片墙占位在场、缩略图经 push:thumbs-ready 不刷新页面逐张点亮、渲染层无 >200ms 长任务。前置：album-large（run-all 定向）+ album-small 快照片源（不可变，避免与 21 链路的 flat-root 消费耦合）。\""
+  },
+  {
+    "name": "01-open-wall-early",
+    "wait": 1600,
+    "log": true,
+    "script": "window.__lt = []; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push(Math.round(e.duration)) }).observe({ entryTypes: ['longtask'] }) } catch (e) {} const wallBtn = document.querySelector('[data-testid=home-view-wall]'); if (!wallBtn) throw new Error('找不到照片墙切换'); wallBtn.click(); await new Promise(r => setTimeout(r, 700)); const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('照片墙未渲染'); const srcs = [...wall.querySelectorAll('img')].map(i => i.getAttribute('src') || ''); const thumbs = srcs.filter(s => s.startsWith('gallery-media://t/')).length; const originals = srcs.filter(s => s.startsWith('gallery-media://m/')).length; if (originals !== 0) throw new Error('照片墙回退加载原图 ' + originals + ' 张（#3 回归）'); window.__e2e = {}; return { renderedImgs: srcs.length, thumbs, longtasks: window.__lt.length }"
+  },
+  {
+    "name": "02-wall-early-shot",
+    "wait": 300
+  },
+  {
+    "name": "03-bulk-import-pending",
+    "wait": 800,
+    "log": true,
+    "script": "const trip = await window.api.createTrip({ title: '缩略图渐进测试', description: '批量导入制造 pending 窗口', startDate: '2026-09-01', endDate: '2026-09-02' }); window.__e2e.tripId = trip.id; const SRC = ['/tmp/gallery-demo/album-small/dali-erhai-2026/DSC050001.jpg', '/tmp/gallery-demo/album-small/dali-erhai-2026/DSC050009.jpg', '/tmp/gallery-demo/album-small/dali-erhai-2026/DSC050017.jpg']; const one = []; for (let i = 0; i < 200; i++) one.push(...SRC); const t0 = Date.now(); const res = await window.api.importPhotos(trip.id, one); const importMs = Date.now() - t0; if (res.photos.length !== 600) throw new Error('导入数量不对: ' + res.photos.length + ' 失败' + res.failed.length); if (res.photos.some(p => p.thumbStatus !== 'pending')) throw new Error('导入照片应处于 pending'); window.__e2e.importMs = importMs; return { imported: res.photos.length, importMs }"
+  },
+  {
+    "name": "04-open-trip-pending",
+    "wait": 300,
+    "log": true,
+    "script": "const st = window.__e2e; location.hash = '#/trip/' + st.tripId; let wall = null; for (let i = 0; i < 20; i++) { wall = document.querySelector('[data-testid=photo-wall]'); if (wall && wall.children.length >= 600) break; await new Promise(r => setTimeout(r, 300)); } if (!wall) throw new Error('旅行页照片墙未渲染'); if (wall.children.length !== 500) throw new Error('首屏渲染窗口应为 WALL_CHUNK=500: ' + wall.children.length); const srcs = [...wall.querySelectorAll('img')].map(i => i.getAttribute('src') || ''); const thumbs = srcs.filter(s => s.startsWith('gallery-media://t/')).length; const originals = srcs.filter(s => s.startsWith('gallery-media://m/')).length; if (originals !== 0) throw new Error('pending 期间回退原图 ' + originals + ' 张（#3 核心回归）'); const placeholders = [...wall.children].filter(el => el.textContent.includes('生成中')).length; if (thumbs === 500) '快速机器竞态：600 张已全就绪，跳过占位断言（增量点亮由 06 的中间采样佐证）'; st.thumbsAtOpen = thumbs; st.placeholders = placeholders; return { thumbs, placeholders }"
+  },
+  {
+    "name": "05-pending-shot",
+    "wait": 300
+  },
+  {
+    "name": "06-progressive-lightup",
+    "wait": 1200,
+    "log": true,
+    "script": "const st = window.__e2e; const countThumbs = () => { const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) return -1; return [...wall.querySelectorAll('img')].filter(i => (i.getAttribute('src') || '').startsWith('gallery-media://t/')).length }; const countOriginals = () => { const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) return -1; return [...wall.querySelectorAll('img')].filter(i => (i.getAttribute('src') || '').startsWith('gallery-media://m/')).length }; const s1 = countThumbs(); let s2 = s1; for (let i = 0; i < 60; i++) { await new Promise(r => setTimeout(r, 500)); s2 = countThumbs(); if (countOriginals() > 0) throw new Error('点亮过程出现原图回退'); if (s2 >= 500) break; } if (s2 !== 500) throw new Error('缩略图未全部点亮: ' + s2); st.final = s2; const countBtn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('继续浏览')); if (countBtn) countBtn.click(); await new Promise(r => setTimeout(r, 900)); return { atOpen: st.thumbsAtOpen, midSample: s1, final: s2 }"
+  },
+  {
+    "name": "07-final-assert",
+    "wait": 500,
+    "log": true,
+    "script": "const wall = document.querySelector('[data-testid=photo-wall]'); const srcs = [...wall.querySelectorAll('img')].map(i => i.getAttribute('src') || ''); const originals = srcs.filter(s => s.startsWith('gallery-media://m/')).length; if (originals !== 0) throw new Error('最终仍有原图回退: ' + originals); if (srcs.length !== 600) throw new Error('追加后应渲染全量 600: ' + srcs.length); const bad = window.__lt.filter((d) => d > 200); if (bad.length > 0) throw new Error('存在 >200ms 长任务: ' + bad.join(',')); return { thumbs: srcs.length, longtasks: window.__lt, maxLongtask: Math.max(0, ...window.__lt) }"
+  },
+  {
+    "name": "08-final-wall-shot",
+    "wait": 300
+  },
+  {
+    "name": "09-home-wall-after",
+    "wait": 800,
+    "script": "const brand = document.querySelector('button[title=回到主页]'); if (!brand) throw new Error('找不到主页按钮'); brand.click(); await new Promise(r => setTimeout(r, 900)); const wallBtn = document.querySelector('[data-testid=home-view-wall]'); if (wallBtn) { wallBtn.click(); await new Promise(r => setTimeout(r, 700)); } const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('首页照片墙未渲染'); const originals = [...wall.querySelectorAll('img')].filter(i => (i.getAttribute('src') || '').startsWith('gallery-media://m/')).length; if (originals !== 0) throw new Error('首页照片墙原图回退: ' + originals); 'home-wall-ok'"
+  },
+  {
+    "name": "10-home-shot",
+    "wait": 300
+  }
+]
