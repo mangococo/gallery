@@ -6,7 +6,14 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { hasMediaExt } from '../lib/media'
-import PhotoWall, { loadWallDensity, saveWallDensity, type WallDensity } from '../components/PhotoWall'
+import PhotoWall, {
+  loadWallDensity,
+  saveWallDensity,
+  loadWallLayout,
+  saveWallLayout,
+  type WallDensity,
+  type WallLayout,
+} from '../components/PhotoWall'
 import TagInput from '../components/TagInput'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
@@ -98,6 +105,12 @@ const TripPage: React.FC = () => {
   const changeWallDensity = (d: WallDensity) => {
     setWallDensity(d)
     saveWallDensity(d)
+  }
+  /** 排列方式（#10）：无持久化偏好时旅行页默认「按时间」（时间线浏览是旅行页主诉求） */
+  const [wallLayout, setWallLayout] = React.useState<WallLayout>(() => loadWallLayout() ?? 'timeline')
+  const changeWallLayout = (l: WallLayout) => {
+    setWallLayout(l)
+    saveWallLayout(l)
   }
   /** 移动到旅行对话框的待移动清单（null 关闭） */
   const [moveTarget, setMoveTarget] = React.useState<Photo[] | null>(null)
@@ -226,7 +239,7 @@ const TripPage: React.FC = () => {
     setLightboxIndex((cur) =>
       cur === null
         ? null
-        : indexAfterRemoval(editedTrip.photos.map((p: Photo) => p.id), new Set([photoId]), cur),
+        : indexAfterRemoval(orderedPhotos.map((p: Photo) => p.id), new Set([photoId]), cur),
     )
     toast('已移入回收站', 'success')
     await refreshAll()
@@ -390,7 +403,7 @@ const TripPage: React.FC = () => {
       : editedTrip.coverPhotoId
     await applyUpdate({ ...editedTrip, photos: remaining, coverPhotoId: nextCover })
     setLightboxIndex((cur) =>
-      cur === null ? null : indexAfterRemoval(editedTrip.photos.map((p: Photo) => p.id), ids, cur),
+      cur === null ? null : indexAfterRemoval(orderedPhotos.map((p: Photo) => p.id), ids, cur),
     )
     setSelectedIds((prev) => {
       const next = new Set([...prev].filter((x) => !ids.has(x)))
@@ -438,7 +451,7 @@ const TripPage: React.FC = () => {
     setLightboxIndex((cur) =>
       cur === null
         ? null
-        : indexAfterRemoval(editedTrip.photos.map((p: Photo) => p.id), movedSet, cur),
+        : indexAfterRemoval(orderedPhotos.map((p: Photo) => p.id), movedSet, cur),
     )
     setSelectedIds((prev) => {
       const next = new Set([...prev].filter((x) => !movedSet.has(x)))
@@ -557,8 +570,7 @@ const TripPage: React.FC = () => {
   }
 
   const handlePhotoClick = (photo: Photo) => {
-    const list = editedTrip?.photos || trip?.photos || []
-    setLightboxIndex(list.findIndex((p: Photo) => p.id === photo.id))
+    setLightboxIndex(orderedPhotos.findIndex((p: Photo) => p.id === photo.id))
   }
 
   /** DatePicker 展示值：date-only 字符串按本地时区解析（UTC 解析会在西半球偏一天） */
@@ -595,7 +607,14 @@ const TripPage: React.FC = () => {
   const visiblePhotos = photos.filter(
     (p: Photo) => (!favOnly || p.favorite) && (!tagFilter || (p.tags || []).includes(tagFilter)),
   )
-  const visibleWallPhotos = visiblePhotos.slice(0, wallLimit)
+  // 时间序（#10）：旅行页照片原为入库序（文件名/导入顺序），时间序模式下按拍摄时间
+  // 倒序（缺失排末尾、库内顺序稳定），照片墙与灯箱共用此序。普通计算而非 useMemo：
+  // 本组件有 trip 加载态早退 return（React #310 hook 陷阱——hook 必须全部在早退之前）
+  const orderedPhotos =
+    wallLayout === 'timeline'
+      ? [...visiblePhotos].sort((a, b) => (b.takenAt ?? 0) - (a.takenAt ?? 0))
+      : visiblePhotos
+  const visibleWallPhotos = orderedPhotos.slice(0, wallLimit)
 
   return (    <div
       className="min-h-screen bg-background"
@@ -877,6 +896,26 @@ const TripPage: React.FC = () => {
                 ))}
               </div>
             )}
+            {viewMode === 'photos' && (
+              <div
+                data-testid="wall-layout-switch"
+                className="flex items-center bg-surface-2 rounded-full p-0.5"
+                title="排列方式"
+              >
+                {(['timeline', 'fill'] as const).map((l) => (
+                  <button
+                    key={l}
+                    data-testid={`wall-layout-${l}`}
+                    onClick={() => changeWallLayout(l)}
+                    className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                      wallLayout === l ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                    }`}
+                  >
+                    {l === 'timeline' ? '按时间' : '填充'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {viewMode === 'photos' && (
             <div className="flex items-center gap-4">
@@ -962,6 +1001,7 @@ const TripPage: React.FC = () => {
               onPhotoContextMenu={handlePhotoContextMenu}
               onWallContextMenu={handleWallContextMenu}
               density={wallDensity}
+              layout={wallLayout}
             />
             {visiblePhotos.length > wallLimit && (
               <div className="py-10 text-center">
@@ -1067,10 +1107,10 @@ const TripPage: React.FC = () => {
 
       {/* 灯箱 */}
       <AnimatePresence>
-        {lightboxIndex !== null && photos[lightboxIndex] && (
+        {lightboxIndex !== null && orderedPhotos[lightboxIndex] && (
           <Lightbox
             key="lightbox"
-            photos={photos}
+            photos={orderedPhotos}
             index={lightboxIndex}
             onNavigate={setLightboxIndex}
             onClose={() => setLightboxIndex(null)}

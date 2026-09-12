@@ -7,7 +7,14 @@ import { Trip, Photo } from '../types'
 import TimelineItem from '../components/TimelineItem'
 import TimelineAddButton from '../components/TimelineAddButton'
 import AddTripModal from '../components/AddTripModal'
-import PhotoWall, { loadWallDensity, saveWallDensity, type WallDensity } from '../components/PhotoWall'
+import PhotoWall, {
+  loadWallDensity,
+  saveWallDensity,
+  loadWallLayout,
+  saveWallLayout,
+  type WallDensity,
+  type WallLayout,
+} from '../components/PhotoWall'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
 import PhotoTagEditor from '../components/PhotoTagEditor'
@@ -107,6 +114,12 @@ const HomePage: React.FC = () => {
   const changeWallDensity = (d: WallDensity) => {
     setWallDensity(d)
     saveWallDensity(d)
+  }
+  /** 排列方式（#10）：无持久化偏好时首页默认「填充」（与历史行为一致） */
+  const [wallLayout, setWallLayout] = React.useState<WallLayout>(() => loadWallLayout() ?? 'fill')
+  const changeWallLayout = (l: WallLayout) => {
+    setWallLayout(l)
+    saveWallLayout(l)
   }
   /** 删除确认弹窗打开期间锁住，防重复点击 */
   const [deletingTripId, setDeletingTripId] = React.useState<string | null>(null)
@@ -684,6 +697,24 @@ const HomePage: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                <div
+                  data-testid="wall-layout-switch"
+                  className="flex items-center bg-surface-2 rounded-full p-0.5"
+                  title="排列方式"
+                >
+                  {(['timeline', 'fill'] as const).map((l) => (
+                    <button
+                      key={l}
+                      data-testid={`wall-layout-${l}`}
+                      onClick={() => changeWallLayout(l)}
+                      className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                        wallLayout === l ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                      }`}
+                    >
+                      {l === 'timeline' ? '按时间' : '填充'}
+                    </button>
+                  ))}
+                </div>
               </div>
               {/* 筛选树：全部 + 有照片的旅行（可折叠；与侧栏收藏/标签/年份叠加） */}
               {tripFilterOpen && (
@@ -734,6 +765,7 @@ const HomePage: React.FC = () => {
                 onToggleSelect={handleWallToggleSelect}
                 onPhotoContextMenu={handleWallPhotoContextMenu}
                 density={wallDensity}
+                layout={wallLayout}
               />
               {wallPhotos.length > wallLimit && (
                 <div ref={wallSentinelRef} className="py-10 text-center">
