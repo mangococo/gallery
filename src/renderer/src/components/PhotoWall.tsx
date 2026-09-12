@@ -36,10 +36,40 @@ interface PhotoWallProps {
   /** 空态文案：无照片时的标题/提示（默认「还没有照片」） */
   emptyTitle?: string
   emptyHint?: string
+  /** 密度档位（#9）：默认 large（响应式 1/2/3 列，与旧行为一致） */
+  density?: WallDensity
 }
 
 /** 超过该张数走大相册模式：逐项 framer-motion 入场动画关闭（CSS 悬停替代），保滚动流畅 */
 const LARGE_ALBUM_THRESHOLD = 120
+
+/** 密度档位（#9）：large=响应式 1/2/3（现状）；medium=4 列；small=6 列（1080p 一屏 ~42 张） */
+export type WallDensity = 'large' | 'medium' | 'small'
+
+const DENSITY_COLUMN_COUNT: Record<Exclude<WallDensity, 'large'>, number> = {
+  medium: 4,
+  small: 6,
+}
+
+/** 密度偏好持久化（会话级 localStorage，与首页视图偏好同一模式），首页/旅行页全局共享 */
+export const WALL_DENSITY_KEY = 'gallery.wall_density'
+export function loadWallDensity(): WallDensity {
+  try {
+    const v = localStorage.getItem(WALL_DENSITY_KEY)
+    if (v === 'medium' || v === 'small' || v === 'large') return v
+  } catch {
+    // 隐私模式读不到就算了
+  }
+  return 'large'
+}
+export function saveWallDensity(d: WallDensity): void {
+  try {
+    localStorage.setItem(WALL_DENSITY_KEY, d)
+  } catch {
+    // 存不进就算了
+  }
+}
+
 
 /** 照片墙单元：图片用缩略图；视频用海报帧 + 播放角标 */
 function WallMedia({ photo }: { photo: PhotoDTO }) {
@@ -119,6 +149,7 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   onWallContextMenu,
   emptyTitle,
   emptyHint,
+  density = 'large',
 }) => {
   const handleDelete = useStableCallback(async (photo: Photo) => {
     const ok = await confirmDialog({
@@ -148,10 +179,21 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
     onPhotoClick?.(photo)
   }
 
+  // 密度档位（#9）：small/medium 固定列数（inline style 注入，避免再开一组响应式断点）；
+  // 列宽随容器收缩，小卡片仍由 #7 的固定 aspect 容器保证不重排
+  const wallStyle =
+    density === 'large'
+      ? undefined
+      : { columnCount: DENSITY_COLUMN_COUNT[density], columnGap: '1rem' }
+
   return (
     <div
       data-testid="photo-wall"
-      className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4"
+      data-density={density}
+      style={wallStyle}
+      className={`gap-4 space-y-4 ${
+        density === 'large' ? 'columns-1 sm:columns-2 lg:columns-3' : ''
+      }`}
       onContextMenu={(e) => {
         // 只有真正点在留白处（容器自身）才算空白区右键
         if (e.target === e.currentTarget) onWallContextMenu?.(e)
