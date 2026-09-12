@@ -38,6 +38,8 @@ interface PhotoWallProps {
   emptyHint?: string
   /** 密度档位（#9）：默认 large（响应式 1/2/3 列，与旧行为一致） */
   density?: WallDensity
+  /** 排列方式（#10）：fill=瀑布流填充（默认）；timeline=时间序行优先网格（数据序即视觉阅读序） */
+  layout?: WallLayout
 }
 
 /** 超过该张数走大相册模式：逐项 framer-motion 入场动画关闭（CSS 悬停替代），保滚动流畅 */
@@ -68,6 +70,35 @@ export function saveWallDensity(d: WallDensity): void {
   } catch {
     // 存不进就算了
   }
+}
+
+/** 排列方式（#10）：fill=瀑布流紧凑填充（CSS columns，列优先视觉）；timeline=按时间序行优先网格 */
+export type WallLayout = 'fill' | 'timeline'
+
+export const WALL_LAYOUT_KEY = 'gallery.wall_layout'
+/** 偏好持久化。无偏好时返回 null，由调用方决定各自默认（首页 fill、旅行页 timeline） */
+export function loadWallLayout(): WallLayout | null {
+  try {
+    const v = localStorage.getItem(WALL_LAYOUT_KEY)
+    if (v === 'fill' || v === 'timeline') return v
+  } catch {
+    // 隐私模式读不到就算了
+  }
+  return null
+}
+export function saveWallLayout(l: WallLayout): void {
+  try {
+    localStorage.setItem(WALL_LAYOUT_KEY, l)
+  } catch {
+    // 存不进就算了
+  }
+}
+
+/** timeline 行优先网格的列宽下限：随密度档收窄（与 #9 档位联动） */
+const TIMELINE_MIN_COL: Record<WallDensity, string> = {
+  large: '260px',
+  medium: '200px',
+  small: '150px',
 }
 
 
@@ -150,6 +181,7 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   emptyTitle,
   emptyHint,
   density = 'large',
+  layout = 'fill',
 }) => {
   const handleDelete = useStableCallback(async (photo: Photo) => {
     const ok = await confirmDialog({
@@ -180,19 +212,23 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   }
 
   // 密度档位（#9）：small/medium 固定列数（inline style 注入，避免再开一组响应式断点）；
-  // 列宽随容器收缩，小卡片仍由 #7 的固定 aspect 容器保证不重排
-  const wallStyle =
-    density === 'large'
-      ? undefined
-      : { columnCount: DENSITY_COLUMN_COUNT[density], columnGap: '1rem' }
+  // 列宽随容器收缩，小卡片仍由 #7 的固定 aspect 容器保证不重排。
+  // timeline 模式（#10）改用 grid 行优先：视觉阅读顺序与数据序（时间序）一致
+  const wallStyle: React.CSSProperties | undefined =
+    layout === 'timeline'
+      ? { display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${TIMELINE_MIN_COL[density]}, 1fr))`, gap: '1rem' }
+      : density === 'large'
+        ? undefined
+        : { columnCount: DENSITY_COLUMN_COUNT[density], columnGap: '1rem' }
 
   return (
     <div
       data-testid="photo-wall"
       data-density={density}
+      data-layout={layout}
       style={wallStyle}
       className={`gap-4 space-y-4 ${
-        density === 'large' ? 'columns-1 sm:columns-2 lg:columns-3' : ''
+        layout === 'fill' && density === 'large' ? 'columns-1 sm:columns-2 lg:columns-3' : ''
       }`}
       onContextMenu={(e) => {
         // 只有真正点在留白处（容器自身）才算空白区右键
