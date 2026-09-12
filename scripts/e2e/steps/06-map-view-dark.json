@@ -31,6 +31,6 @@
   {
     "name": "06-map-dark",
     "wait": 3000,
-    "script": "const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 10) throw new Error('标记数不对（应为 10）: ' + markers.length); 'ok'"
+    "script": "const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 11) throw new Error('标记数不对（应为 11）: ' + markers.length); 'ok'"
   }
 ]
