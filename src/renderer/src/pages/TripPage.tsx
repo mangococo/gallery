@@ -6,7 +6,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 import { api } from '../lib/api'
 import { useApp } from '../lib/store'
 import { hasMediaExt } from '../lib/media'
-import PhotoWall from '../components/PhotoWall'
+import PhotoWall, { loadWallDensity, saveWallDensity, type WallDensity } from '../components/PhotoWall'
 import TagInput from '../components/TagInput'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
@@ -93,6 +93,12 @@ const TripPage: React.FC = () => {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
   /** 照片墙增量渲染（#7）：千张级旅行全量挂载会拖垮滚动，先渲染首批、触底追加 */
   const [wallLimit, setWallLimit] = React.useState(WALL_CHUNK)
+  /** 照片墙密度（#9）：三档，全局偏好持久化（与首页照片墙共享） */
+  const [wallDensity, setWallDensity] = React.useState<WallDensity>(loadWallDensity)
+  const changeWallDensity = (d: WallDensity) => {
+    setWallDensity(d)
+    saveWallDensity(d)
+  }
   /** 移动到旅行对话框的待移动清单（null 关闭） */
   const [moveTarget, setMoveTarget] = React.useState<Photo[] | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -851,6 +857,26 @@ const TripPage: React.FC = () => {
                 </button>
               ))}
             </div>
+            {viewMode === 'photos' && (
+              <div
+                data-testid="wall-density-switch"
+                className="flex items-center bg-surface-2 rounded-full p-0.5"
+                title="照片排列密度"
+              >
+                {(['large', 'medium', 'small'] as const).map((d) => (
+                  <button
+                    key={d}
+                    data-testid={`wall-density-${d}`}
+                    onClick={() => changeWallDensity(d)}
+                    className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                      wallDensity === d ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                    }`}
+                  >
+                    {d === 'large' ? '大' : d === 'medium' ? '中' : '小'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {viewMode === 'photos' && (
             <div className="flex items-center gap-4">
@@ -935,6 +961,7 @@ const TripPage: React.FC = () => {
               onToggleSelect={handleToggleSelect}
               onPhotoContextMenu={handlePhotoContextMenu}
               onWallContextMenu={handleWallContextMenu}
+              density={wallDensity}
             />
             {visiblePhotos.length > wallLimit && (
               <div className="py-10 text-center">

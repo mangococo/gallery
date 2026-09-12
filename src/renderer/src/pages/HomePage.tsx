@@ -7,7 +7,7 @@ import { Trip, Photo } from '../types'
 import TimelineItem from '../components/TimelineItem'
 import TimelineAddButton from '../components/TimelineAddButton'
 import AddTripModal from '../components/AddTripModal'
-import PhotoWall from '../components/PhotoWall'
+import PhotoWall, { loadWallDensity, saveWallDensity, type WallDensity } from '../components/PhotoWall'
 import Lightbox from '../components/Lightbox'
 import CaptionEditor from '../components/CaptionEditor'
 import PhotoTagEditor from '../components/PhotoTagEditor'
@@ -102,6 +102,12 @@ const HomePage: React.FC = () => {
   const [wallTripId, setWallTripId] = React.useState<string | null>(null)
   /** 筛选树展开/折叠（旅行多时不占工具区） */
   const [tripFilterOpen, setTripFilterOpen] = React.useState(false)
+  /** 照片墙密度（#9）：三档，全局偏好持久化（与旅行页共享） */
+  const [wallDensity, setWallDensity] = React.useState<WallDensity>(loadWallDensity)
+  const changeWallDensity = (d: WallDensity) => {
+    setWallDensity(d)
+    saveWallDensity(d)
+  }
   /** 删除确认弹窗打开期间锁住，防重复点击 */
   const [deletingTripId, setDeletingTripId] = React.useState<string | null>(null)
   /** 「导入照片到这次旅行」的隐藏文件选择器 */
@@ -659,6 +665,25 @@ const HomePage: React.FC = () => {
                 {selectedIds.size > 0 && (
                   <span className="text-sm text-ink-2 font-display">已选 {selectedIds.size} 项</span>
                 )}
+                {/* 密度三档（#9）：全局偏好，与旅行页照片墙共享 */}
+                <div
+                  data-testid="wall-density-switch"
+                  className="flex items-center bg-surface-2 rounded-full p-0.5 ml-auto"
+                  title="照片排列密度"
+                >
+                  {(['large', 'medium', 'small'] as const).map((d) => (
+                    <button
+                      key={d}
+                      data-testid={`wall-density-${d}`}
+                      onClick={() => changeWallDensity(d)}
+                      className={`px-2.5 py-1 rounded-full text-xs transition-colors ${
+                        wallDensity === d ? 'bg-surface text-primary shadow-sm' : 'text-ink-3 hover:text-ink-2'
+                      }`}
+                    >
+                      {d === 'large' ? '大' : d === 'medium' ? '中' : '小'}
+                    </button>
+                  ))}
+                </div>
               </div>
               {/* 筛选树：全部 + 有照片的旅行（可折叠；与侧栏收藏/标签/年份叠加） */}
               {tripFilterOpen && (
@@ -708,6 +733,7 @@ const HomePage: React.FC = () => {
                 selectedIds={selectedIds}
                 onToggleSelect={handleWallToggleSelect}
                 onPhotoContextMenu={handleWallPhotoContextMenu}
+                density={wallDensity}
               />
               {wallPhotos.length > wallLimit && (
                 <div ref={wallSentinelRef} className="py-10 text-center">

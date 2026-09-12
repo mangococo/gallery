@@ -1,0 +1,39 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"密度调节链路（#9）：三档切换即时生效（列数 3→4→6）→ 小档一屏可见 ≥30 张 → 多选/徽标/追加在小档正常 → localStorage 持久化。前置：album-large（run-all 定向，420 张）。\""
+  },
+  {
+    "name": "01-home-large",
+    "wait": 3200
+  },
+  {
+    "name": "02-open-wall-large",
+    "wait": 700,
+    "log": true,
+    "script": "document.querySelector('[data-testid=home-view-wall]').click(); await new Promise(r => setTimeout(r, 600)); const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('照片墙未渲染'); if (wall.dataset.density !== 'large') throw new Error('默认档应为 large: ' + wall.dataset.density); const cols = getComputedStyle(wall).columnCount; if (cols !== '3') throw new Error('large 档应 3 列（宽屏）: ' + cols); 'large-ok'"
+  },
+  {
+    "name": "03-switch-medium-small",
+    "wait": 500,
+    "log": true,
+    "script": "document.querySelector('[data-testid=wall-density-medium]').click(); await new Promise(r => setTimeout(r, 400)); let wall = document.querySelector('[data-testid=photo-wall]'); if (wall.dataset.density !== 'medium') throw new Error('切 medium 未生效'); if (getComputedStyle(wall).columnCount !== '4') throw new Error('medium 应 4 列: ' + getComputedStyle(wall).columnCount); document.querySelector('[data-testid=wall-density-small]').click(); await new Promise(r => setTimeout(r, 400)); wall = document.querySelector('[data-testid=photo-wall]'); if (getComputedStyle(wall).columnCount !== '6') throw new Error('small 应 6 列: ' + getComputedStyle(wall).columnCount); const imgs = [...wall.querySelectorAll('img')].filter(i => { const r = i.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.width > 0 }); if (imgs.length < 30) throw new Error('小档一屏可见不足 30: ' + imgs.length); return { smallVisible: imgs.length }"
+  },
+  {
+    "name": "04-small-density-shot",
+    "wait": 300
+  },
+  {
+    "name": "05-multiselect-in-small",
+    "wait": 500,
+    "script": "const cards = [...document.querySelectorAll('[data-testid=wall-card]')].filter(c => { const r = c.getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight; }); if (cards.length < 3) throw new Error('小档视口内卡片不足'); const target = cards[0]; target.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true })); await new Promise(r => setTimeout(r, 300)); if (target.dataset.selected !== 'true') throw new Error('小档勾选失败'); if (!target.querySelector('[data-testid=selection-ring]')) throw new Error('小档选中描边缺失'); if (!target.querySelector('[data-testid=select-badge]')) throw new Error('小档徽标缺失'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 400)); if (document.querySelector('[data-testid=selection-bar]')) throw new Error('退出多选失败'); 'small-multiselect-ok'"
+  },
+  {
+    "name": "06-persistence",
+    "wait": 400,
+    "log": true,
+    "script": "const saved = localStorage.getItem('gallery.wall_density'); if (saved !== 'small') throw new Error('偏好未持久化: ' + saved); document.querySelector('[data-testid=wall-density-large]').click(); await new Promise(r => setTimeout(r, 300)); return { savedBeforeReset: saved, nowLarge: document.querySelector('[data-testid=photo-wall]').dataset.density }"
+  }
+]
