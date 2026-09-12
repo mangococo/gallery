@@ -282,12 +282,16 @@ const HomePage: React.FC = () => {
     const trip = trips.find((t) => t.id === tripId)
     if (!trip) return
     setDeletingTripId(tripId)
-    const deleted = await confirmAndDeleteTrip({
-      id: trip.id,
-      title: trip.title,
-      photoCount: trip.photos?.length || 0,
-      status: trip.status,
-    })
+    const deleted = await confirmAndDeleteTrip(
+      {
+        id: trip.id,
+        title: trip.title,
+        photoCount: trip.photos?.length || 0,
+        status: trip.status,
+        photoIds: (trip.photos ?? []).map((p) => p.id),
+      },
+      { candidateTrips: trips },
+    )
     if (deleted) await refreshAll()
     setDeletingTripId(null)
   }
