@@ -124,22 +124,27 @@ const TripPage: React.FC = () => {
     // ⌘K 可在旅行页之间直接跳转（同一路由组件复用）：慢的旧请求回来会覆盖新旅行，
     // 用取消标记丢弃过期响应
     let cancelled = false
-    const loadTrip = async () => {
+    // silent：只刷新展示数据（trip），不覆盖 editedTrip——照片集合后台变化
+    // （移动/删除/外部增删引发的日期与计数重算）实时反映到顶栏，编辑中的表单不被打断
+    const loadTrip = async (silent = false) => {
       try {
         const tripData = await api.getTrip(id!)
         if (cancelled) return
         setTrip(tripData)
-        setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
+        if (!silent) setEditedTrip(tripData ? { ...tripData, tags: tripData.tags || [] } : null)
       } catch {
         if (!cancelled) setTrip(null)
       }
       if (!cancelled) setTripLoaded(true)
     }
     void loadTrip()
+    // 照片集合后台变化 → 静默重拉（日期自动重算后顶栏实时更新）
+    const offFs = api.onFsChanged(() => void loadTrip(true))
     // 时间线右键「编辑旅行信息」直达编辑态
     if ((location.state as { edit?: boolean } | null)?.edit) setIsEditing(true)
     return () => {
       cancelled = true
+      offFs()
     }
   }, [id])
 
