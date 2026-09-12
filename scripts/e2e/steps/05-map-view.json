@@ -22,7 +22,7 @@
   {
     "name": "04-map-tiles-loading",
     "wait": 2500,
-    "script": "const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 10) throw new Error('应有 8 个标记，实际 ' + markers.length); 'markers-ok'"
+    "script": "const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 11) throw new Error('应有 11 个标记，实际 ' + markers.length); 'markers-ok'"
   },
   {
     "name": "05-map-loaded",

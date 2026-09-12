@@ -49,6 +49,11 @@ for f in "$STEPS_DIR"/*.json; do
     echo "---- $name: SKIP（非 macOS）"
     continue
   fi
+  # 伪装 HEIC 链路同样依赖 sips 造样张，仅 macOS 跑
+  if [ "$name" = "33-disguised-heic" ] && [ "$(uname -s)" != "Darwin" ]; then
+    echo "---- $name: SKIP（非 macOS）"
+    continue
+  fi
   # 17-theme-verify 是持久化验证的第二阶段，依赖 17-theme 留下的 userData，
   # 由 scripts/e2e/theme-persistence.sh 两阶段专跑；此处全新 userData 必假阴性
   if [ "$name" = "17-theme-verify" ]; then
