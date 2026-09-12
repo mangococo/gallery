@@ -667,6 +667,30 @@ export function setPhotoThumbStatus(id: string, status: ThumbStatus): void {
   db.prepare('UPDATE photos SET thumb_status = ? WHERE id = ?').run(status, id)
 }
 
+/**
+ * 缩略图批量落库（#4）：就绪（含宽高）与失败一次事务写入，
+ * 替代每张两条同步 UPDATE——大批量生成时显著减少 sqlite 写放大。
+ */
+export function markThumbResults(
+  ready: { id: string; width: number; height: number }[],
+  failed: string[],
+): void {
+  if (ready.length > 0) {
+    const tx = db.transaction((items: { id: string; width: number; height: number }[]) => {
+      const stmt = db.prepare('UPDATE photos SET thumb_status = ?, width = ?, height = ? WHERE id = ?')
+      for (const it of items) stmt.run('ready', it.width, it.height, it.id)
+    })
+    tx(ready)
+  }
+  if (failed.length > 0) {
+    const tx = db.transaction((ids: string[]) => {
+      const stmt = db.prepare("UPDATE photos SET thumb_status = 'failed' WHERE id = ?")
+      for (const id of ids) stmt.run(id)
+    })
+    tx(failed)
+  }
+}
+
 export function setPhotoDimensions(id: string, width: number, height: number): void {
   db.prepare('UPDATE photos SET width = ?, height = ? WHERE id = ?').run(width, height, id)
 }
