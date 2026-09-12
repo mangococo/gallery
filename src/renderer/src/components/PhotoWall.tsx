@@ -35,31 +35,34 @@ const LARGE_ALBUM_THRESHOLD = 120
 /** 照片墙单元：图片用缩略图；视频用海报帧 + 播放角标 */
 function WallMedia({ photo }: { photo: PhotoDTO }) {
   const src = displaySrc(photo)
-  if (photo.type === 'video' && !src) {
-    return (
-      <div className="relative aspect-[4/3]">
-        <PlaceholderBackdrop text={photo.thumbStatus === 'failed' ? '视频海报生成失败' : '视频海报生成中…'} />
-        <PlayBadge />
-      </div>
-    )
-  }
   if (photo.type === 'video') {
     return (
       <div className="relative aspect-[4/3]">
-        <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+        {src ? (
+          <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <PlaceholderBackdrop text={photo.thumbStatus === 'failed' ? '视频海报生成失败' : '视频海报生成中…'} />
+        )}
         <PlayBadge />
       </div>
     )
   }
-  // 图片缩略图未就绪：占位（不回退原图，#3）；就绪后经 push:thumbs-ready 增量点亮
+  // 图片缩略图未就绪：占位（不回退原图，#3）；就绪后经 push:thumbs-ready 增量点亮。
+  // 宽高来自缩略图生成时回写（无则 4:3 兜底）——容器先占住最终高度，
+  // 图片加载完成不再改变卡片高度，多列瀑布流不重平衡（#7 滚动回弹根因）
+  const aspect = photo.width && photo.height ? `${photo.width} / ${photo.height}` : '4 / 3'
   if (!src) {
     return (
-      <div className="relative aspect-[4/3]">
+      <div className="relative w-full" style={{ aspectRatio: aspect }}>
         <PlaceholderBackdrop text={photo.thumbStatus === 'failed' ? '缩略图生成失败' : '缩略图生成中…'} />
       </div>
     )
   }
-  return <img src={src} alt="" className="w-full h-auto" loading="lazy" />
+  return (
+    <div className="relative w-full" style={{ aspectRatio: aspect }}>
+      <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
+    </div>
+  )
 }
 
 function PlaceholderBackdrop({ text }: { text: string }) {
@@ -80,6 +83,17 @@ function PlayBadge() {
   )
 }
 
+/**
+ * 稳定回调（ref 转发）：卡片级回调身份恒定，CardInner 的 memo 浅比较才不会
+ * 因页面重渲染（如每次勾选生成新 Set / 新闭包）而失效——单次勾选只重渲染
+ * 受影响的卡片，整墙其余卡片全部跳过（#7）。
+ */
+function useStableCallback<T extends (...args: never[]) => unknown>(fn: T | undefined): T {
+  const ref = React.useRef(fn)
+  ref.current = fn
+  return React.useCallback(((...args: never[]) => ref.current?.(...args)) as T, [])
+}
+
 const PhotoWall: React.FC<PhotoWallProps> = ({
   photos,
   onPhotoClick,
@@ -97,7 +111,7 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   emptyTitle,
   emptyHint,
 }) => {
-  const handleDelete = async (photo: Photo) => {
+  const handleDelete = useStableCallback(async (photo: Photo) => {
     const ok = await confirmDialog({
       title: '把这张照片移入回收站？',
       body: photo.fileName,
@@ -105,7 +119,13 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
       danger: true,
     })
     if (ok) onDeletePhoto?.(photo.id)
-  }
+  })
+
+  // 透过 ref 转发拿到稳定身份的卡片级回调（页面传入的闭包每次渲染都是新的）
+  const stableEditCaption = useStableCallback(onEditCaption)
+  const stableSetCover = useStableCallback(onSetCover)
+  const stableDeletePhoto = useStableCallback(onDeletePhoto)
+  const stableToggleFavorite = useStableCallback(onToggleFavorite)
 
   const largeMode = photos.length > LARGE_ALBUM_THRESHOLD
 
@@ -147,11 +167,11 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
           <CardInner
             photo={photo}
             coverPhotoId={coverPhotoId}
-            onEditCaption={onEditCaption}
-            onSetCover={onSetCover}
+            onEditCaption={stableEditCaption}
+            onSetCover={stableSetCover}
             showDeleteButton={showDeleteButton}
-            onDeletePhoto={onDeletePhoto}
-            onToggleFavorite={onToggleFavorite}
+            onDeletePhoto={stableDeletePhoto}
+            onToggleFavorite={stableToggleFavorite}
             onDelete={handleDelete}
             selected={selected}
             selectionMode={selectionMode}
@@ -189,7 +209,8 @@ const PhotoWall: React.FC<PhotoWallProps> = ({
   )
 }
 
-/** 卡片本体（普通/大相册两种包装共用） */
+/** 卡片本体（普通/大相册两种包装共用）。memo：勾选只改 selected 布尔，
+ * 其余 prop 经 useStableCallback/数据稳定引用保持恒定 → 只重渲染受影响卡片 */
 const CardInner: React.FC<{
   photo: Photo
   coverPhotoId: string | null
@@ -201,7 +222,7 @@ const CardInner: React.FC<{
   onDelete: (photo: Photo) => Promise<void>
   selected: boolean
   selectionMode: boolean
-}> = ({
+}> = React.memo(({
   photo,
   coverPhotoId,
   onEditCaption,
@@ -213,6 +234,11 @@ const CardInner: React.FC<{
   selected,
   selectionMode,
 }) => {
+  // E2E 渲染计量（#7）：生产零开销分支预测，链路断言单次勾选的重渲染范围
+  if (typeof window !== 'undefined' && (window as unknown as { __galleryE2e?: boolean }).__galleryE2e) {
+    const w = window as unknown as { __cardRenders?: number }
+    w.__cardRenders = (w.__cardRenders ?? 0) + 1
+  }
   return (
     <div
       className={`relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-shadow border ${
@@ -323,6 +349,6 @@ const CardInner: React.FC<{
       )}
     </div>
   )
-}
+})
 
 export default PhotoWall
