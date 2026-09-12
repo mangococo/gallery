@@ -879,6 +879,12 @@ const TripPage: React.FC = () => {
             )}
             <PhotoWall
               photos={visiblePhotos}
+              emptyTitle={photos.length === 0 ? '这次旅行还没有照片' : '没有符合筛选的照片'}
+              emptyHint={
+                photos.length === 0
+                  ? `把照片放进相册里的「${trip.folderName}」文件夹，或点右上角「添加照片」`
+                  : '试试清除上方的收藏或标签筛选'
+              }
               onPhotoClick={handlePhotoClick}
               onDeletePhoto={handleDeletePhoto}
               onEditCaption={setCaptionTarget}
