@@ -261,12 +261,16 @@ const TripPage: React.FC = () => {
   const handleDeleteTrip = async () => {
     if (!trip || isDeletingTrip) return
     setIsDeletingTrip(true)
-    const deleted = await confirmAndDeleteTrip({
-      id: trip.id,
-      title: trip.title,
-      photoCount: photos.length,
-      status: trip.status,
-    })
+    const deleted = await confirmAndDeleteTrip(
+      {
+        id: trip.id,
+        title: trip.title,
+        photoCount: photos.length,
+        status: trip.status,
+        photoIds: photos.map((p: Photo) => p.id),
+      },
+      { candidateTrips: albumTrips },
+    )
     if (deleted) {
       await refreshAll()
       navigate('/')
