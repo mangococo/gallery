@@ -124,6 +124,34 @@ const TripPage: React.FC = () => {
     if (!isEditing) setTrip(updated)
   }
 
+  // 缩略图批量就绪（store 广播）：旅行页持有本地照片副本，按 id 原位合并，
+  // 首扫期间照片墙逐步点亮、不整页刷新、不回退原图（#3）
+  React.useEffect(() => {
+    const onThumbsReady = (ev: Event) => {
+      const patch = new Map(
+        (ev as CustomEvent<{ photos: { id: string; thumbUrl: string; width: number | null; height: number | null }[] }>).detail.photos.map(
+          (u) => [u.id, u],
+        ),
+      )
+      const merge = (t: Trip | null): Trip | null => {
+        if (!t || !t.photos.some((p) => patch.has(p.id))) return t
+        return {
+          ...t,
+          photos: t.photos.map((p) => {
+            const u = patch.get(p.id)
+            return u
+              ? { ...p, thumbStatus: 'ready' as const, thumbUrl: u.thumbUrl, width: u.width ?? p.width, height: u.height ?? p.height }
+              : p
+          }),
+        }
+      }
+      setTrip((t) => merge(t))
+      setEditedTrip((t) => merge(t))
+    }
+    window.addEventListener('gallery:thumbs-ready', onThumbsReady)
+    return () => window.removeEventListener('gallery:thumbs-ready', onThumbsReady)
+  }, [])
+
   const importPathsToTrip = async (paths: string[]) => {
     if (!trip || paths.length === 0) return
     setIsUploading(true)

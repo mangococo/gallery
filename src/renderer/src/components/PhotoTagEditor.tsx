@@ -74,7 +74,7 @@ const PhotoTagEditor: React.FC<PhotoTagEditorProps> = ({ photo, onClose, onSaved
               />
             ) : (
               <div className="w-20 h-20 rounded-lg border border-line bg-surface-2 shrink-0 flex items-center justify-center">
-                <span className="text-[10px] text-ink-3">视频</span>
+                <span className="text-[10px] text-ink-3">生成中…</span>
               </div>
             )}
             <div className="flex-1 min-w-0">

@@ -32,6 +32,12 @@ export interface FlatMediaProbe {
   sample: string[]
 }
 
+/** push:thumbs-ready 载荷：一批生成完毕的缩略图（渲染层按 id 增量合并） */
+export interface ThumbsReadyPayload {
+  albumId: string
+  photos: { id: string; thumbUrl: string; width: number | null; height: number | null }[]
+}
+
 /** 照片/视频 DTO：mediaUrl 与 thumbUrl 由主进程生成，渲染进程不接触真实路径 */
 export interface PhotoDTO {
   id: string
@@ -292,6 +298,8 @@ export interface GalleryApi {
 
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
+  /** 缩略图批量就绪（扫描期间照片墙/堆叠增量点亮，不整页刷新） */
+  onThumbsReady(cb: (p: ThumbsReadyPayload) => void): Unsubscribe
   onThemeSystemChanged(cb: (p: { systemDark: boolean }) => void): Unsubscribe
   /** 自定义样式文件变化推送（保存即热更新；payload 为全文或 null=文件被删除） */
   onThemeCustomCssChanged(cb: (css: string | null) => void): Unsubscribe
@@ -354,6 +362,7 @@ export const IPC = {
 
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',
+  pushThumbsReady: 'push:thumbs-ready',
   pushThemeSystemChanged: 'push:theme-system-changed',
   pushThemeCustomCssChanged: 'push:theme-custom-css-changed',
 } as const
