@@ -153,6 +153,28 @@ export interface ImportPhotosResult {
   failed: { name: string; reason: string }[]
 }
 
+// —— 软件更新检查（实现见 main/services/update-check.ts，纯逻辑可单测） ——
+
+export interface ReleaseAsset {
+  name: string
+  size: number
+  url: string
+}
+
+export interface ReleaseInfo {
+  tagName: string
+  name: string
+  /** 发布说明摘要（markdown 已清理，超长截断） */
+  notesSummary: string
+  publishedAt: string
+  releasePageUrl: string
+  assets: ReleaseAsset[]
+}
+
+export type UpdateCheckResult =
+  | { status: 'ok'; current: string; latest: ReleaseInfo | null; updateAvailable: boolean }
+  | { status: 'error'; message: string }
+
 /** 手账导出格式：PDF（矢量可打印）或长图 PNG */
 export type JournalFormat = 'pdf' | 'png'
 
@@ -296,6 +318,13 @@ export interface GalleryApi {
   /** 回收站：彻底删除（不可从画廊恢复，二次确认由调用方负责） */
   trashPurge(sel: TrashSelection): Promise<TrashOpResult>
 
+  /** 当前应用版本（package.json version，关于区展示用） */
+  getAppVersion(): Promise<string>
+  /** 检查更新（GitHub Releases；仅用户手动触发，网络在主进程） */
+  checkUpdates(): Promise<UpdateCheckResult>
+  /** 打开 Release 下载页（主进程校验域名后 shell.openExternal） */
+  openReleasePage(url: string): Promise<boolean>
+
   onScanProgress(cb: (p: ScanProgress) => void): Unsubscribe
   onFsChanged(cb: (p: { albumId: string }) => void): Unsubscribe
   /** 缩略图批量就绪（扫描期间照片墙/堆叠增量点亮，不整页刷新） */
@@ -359,6 +388,11 @@ export const IPC = {
   trashList: 'trash:list',
   trashRestore: 'trash:restore',
   trashPurge: 'trash:purge',
+
+  // 软件更新：手动检查 GitHub Releases 并引导打开下载页（不做静默自更新，见 services/update-check.ts）
+  appVersionGet: 'app:version-get',
+  updatesCheck: 'updates:check',
+  updatesOpenPage: 'updates:open-page',
 
   pushScanProgress: 'push:scan-progress',
   pushFsChanged: 'push:fs-changed',

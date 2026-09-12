@@ -9,6 +9,7 @@ import { confirmDialog, toast } from './feedback'
 import { useEscClaim, isEscTop } from '../lib/esc'
 import { WarningIcon, XIcon } from './icons'
 import type { LegacyImportResult } from '../types'
+import type { UpdateCheckResult } from '../../../shared/types'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -66,6 +67,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
   const { mode, themes, setMode } = useTheme()
   const [busy, setBusy] = React.useState<string | null>(null)
   const [importResult, setImportResult] = React.useState<LegacyImportResult | null>(null)
+  const [appVersion, setAppVersion] = React.useState('')
+  const [updateResult, setUpdateResult] = React.useState<UpdateCheckResult | null>(null)
+  React.useEffect(() => {
+    void api.getAppVersion().then(setAppVersion).catch(() => {})
+  }, [])
   // Esc 关闭（有操作进行中不关）
   const escRef = useEscClaim()
   React.useEffect(() => {
@@ -136,6 +142,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
       }
       await onChanged()
       toast('已清除，照片文件原地未动')
+    }
+  }
+
+  const handleCheckUpdates = async () => {
+    setBusy('update')
+    setUpdateResult(null)
+    try {
+      setUpdateResult(await api.checkUpdates())
+    } catch (err: any) {
+      setUpdateResult({ status: 'error', message: String(err?.message ?? err) })
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -244,6 +262,66 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onChanged }) => 
                 <li className="text-xs text-ink-3 py-2">还没有注册相册</li>
               )}
             </ul>
+          </section>
+
+          {/* 关于 / 软件更新 */}
+          <section data-testid="about-section">
+            <h3 className="text-sm font-medium text-ink mb-2">关于</h3>
+            <div className="flex items-center justify-between gap-3 px-3 py-2 bg-background rounded-lg border border-line">
+              <div className="min-w-0">
+                <div className="text-sm text-ink">画廊 Gallery</div>
+                <div className="text-xs text-ink-3 truncate" data-testid="app-version">
+                  当前版本 {appVersion || '…'}
+                </div>
+              </div>
+              <button
+                onClick={handleCheckUpdates}
+                disabled={busy !== null}
+                data-testid="check-update-btn"
+                className="text-xs bg-primary-soft text-primary-soft-ink rounded-lg px-3 py-1.5 shrink-0 hover:opacity-85 transition-opacity disabled:opacity-50"
+              >
+                {busy === 'update' ? '检查中…' : '检查更新'}
+              </button>
+            </div>
+            {updateResult && updateResult.status === 'ok' && updateResult.updateAvailable && (
+              <div
+                data-testid="update-available"
+                className="mt-2 px-3 py-2.5 bg-primary-soft/60 rounded-lg border border-primary/30"
+              >
+                <div className="text-sm text-primary-soft-ink font-medium">
+                  发现新版 {updateResult.latest?.tagName}
+                </div>
+                <div className="text-xs text-ink-2 mt-0.5">
+                  {appVersion} → {updateResult.latest?.tagName}
+                </div>
+                {updateResult.latest?.notesSummary && (
+                  <p className="text-xs text-ink-3 leading-relaxed mt-1.5" data-testid="update-notes">
+                    {updateResult.latest.notesSummary}
+                  </p>
+                )}
+                <button
+                  onClick={() => {
+                    void api.openReleasePage(updateResult.latest?.releasePageUrl ?? '').then(() => {
+                      toast('已在浏览器打开下载页')
+                    })
+                  }}
+                  data-testid="open-release-btn"
+                  className="mt-2 text-xs bg-primary text-white rounded-lg px-3 py-1.5 hover:opacity-90 transition-opacity"
+                >
+                  前往下载
+                </button>
+              </div>
+            )}
+            {updateResult && updateResult.status === 'ok' && !updateResult.updateAvailable && (
+              <p className="text-xs text-ink-3 mt-2 px-0.5" data-testid="update-latest">
+                已是最新版本（{updateResult.current}）
+              </p>
+            )}
+            {updateResult && updateResult.status === 'error' && (
+              <p className="text-xs text-danger mt-2 px-0.5" data-testid="update-error">
+                检查失败：{updateResult.message}（可稍后再试，或到 GitHub Releases 页手动查看）
+              </p>
+            )}
           </section>
 
           {/* 操作 */}
