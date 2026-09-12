@@ -58,6 +58,7 @@ import { collisionSafeDestName, planCoverReassignment, validateMovePhotos } from
 import { listTrash, purgeItems, restoreItems, trashPhoto, trashTrip } from './services/trash'
 import { resolvePhotoTakenAt, readExifGps } from './services/exif'
 import { generateThumbsForAlbum, cancelThumbsForAlbum } from './services/thumbnails'
+import type { ThumbReadyItem } from './services/thumbnails'
 import { watchAlbum, closeWatcher } from './services/watcher'
 import { exportJournal } from './services/journal'
 import { getMainWindow } from './windows'
@@ -73,6 +74,12 @@ function pushProgress(p: ScanProgress): void {
 
 function pushChanged(albumId: string): void {
   senderWindow()?.webContents.send(IPC.pushFsChanged, { albumId })
+}
+
+/** 缩略图批量就绪推送：渲染层增量点亮，首扫期间照片墙不再回退原图（#3） */
+function pushThumbsReady(albumId: string, items: ThumbReadyItem[]): void {
+  if (items.length === 0) return
+  senderWindow()?.webContents.send(IPC.pushThumbsReady, { albumId, photos: items })
 }
 
 /** 路径可访问（存在且可 stat） */
@@ -108,12 +115,17 @@ export async function fullRescan(albumId: string, pushEvents = true): Promise<Sc
   if (!counters) return null
   await generateThumbsForAlbum(albumId, album.name, {
     progress: pushEvents ? pushProgress : () => {},
+    ready: pushEvents ? (items) => pushThumbsReady(albumId, items) : () => {},
   })
   if (pushEvents) pushChanged(albumId)
   // 激活相册时同步 watcher
   const activeId = getSetting('active_album_id')
   if (activeId === albumId) {
-    void watchAlbum(albumId, { progress: pushProgress, changed: pushChanged })
+    void watchAlbum(albumId, {
+      progress: pushProgress,
+      changed: pushChanged,
+      thumbsReady: (items) => pushThumbsReady(albumId, items),
+    })
   }
   return { albumId, albumName: album.name, phase: 'thumb', done: 1, total: 1 }
 }
@@ -224,7 +236,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.albumsSetActive, async (_e, id: string | null) => {
     setSetting('active_album_id', id ?? '')
     if (id) {
-      await watchAlbum(id, { progress: pushProgress, changed: pushChanged })
+      await watchAlbum(id, {
+        progress: pushProgress,
+        changed: pushChanged,
+        thumbsReady: (items) => pushThumbsReady(id, items),
+      })
     } else {
       await closeWatcher()
     }
@@ -349,7 +365,10 @@ export function registerIpcHandlers(): void {
 
     // 后台补缩略图并通知（导入链路的收尾任务，失败只记日志）
     void (async () => {
-      await generateThumbsForAlbum(album.id, album.name, { progress: pushProgress })
+      await generateThumbsForAlbum(album.id, album.name, {
+        progress: pushProgress,
+        ready: (items) => pushThumbsReady(album.id, items),
+      })
       pushChanged(album.id)
     })().catch((err) => {
       console.error('[thumb] 导入后补缩略图失败:', (err as Error)?.message ?? err)
@@ -595,7 +614,10 @@ export function registerIpcHandlers(): void {
       photos: 0,
       skippedCaptions: 0,
     }
-    await generateThumbsForAlbum(album.id, album.name, { progress: pushProgress })
+    await generateThumbsForAlbum(album.id, album.name, {
+        progress: pushProgress,
+        ready: (items) => pushThumbsReady(album.id, items),
+      })
     pushChanged(album.id)
     return { album: getAlbumRow(album.id)!, ...counters }
   })

@@ -84,7 +84,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })()
   }, [refreshAll])
 
-  // 主进程推送：扫描进度 / 文件系统变化
+  // 主进程推送：扫描进度 / 文件系统变化 / 缩略图批量就绪
   React.useEffect(() => {
     const offProgress = api.onScanProgress((p) => {
       setProgress(p.done >= p.total && p.phase === 'thumb' ? null : p)
@@ -92,9 +92,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const offFs = api.onFsChanged(() => {
       void refreshAll()
     })
+    // 缩略图就绪：按 id 原位合并（受影响旅行才建新数组），照片墙/堆叠逐步点亮不整页刷新；
+    // 同时广播渲染层事件，持有本地照片副本的页面（旅行页）自行合并
+    const offThumbs = api.onThumbsReady((payload) => {
+      const patch = new Map(payload.photos.map((u) => [u.id, u]))
+      setTrips((prev) => {
+        let changed = false
+        const next = prev.map((t) => {
+          if (!t.photos.some((p) => patch.has(p.id))) return t
+          changed = true
+          return {
+            ...t,
+            photos: t.photos.map((p) => {
+              const u = patch.get(p.id)
+              return u
+                ? { ...p, thumbStatus: 'ready' as const, thumbUrl: u.thumbUrl, width: u.width ?? p.width, height: u.height ?? p.height }
+                : p
+            }),
+          }
+        })
+        return changed ? next : prev
+      })
+      window.dispatchEvent(new CustomEvent('gallery:thumbs-ready', { detail: payload }))
+    })
     return () => {
       offProgress()
       offFs()
+      offThumbs()
     }
   }, [refreshAll])
 

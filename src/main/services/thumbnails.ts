@@ -32,9 +32,20 @@ const queues = new Map<string, { jobs: QueueJob[]; running: number; cancelled: b
 const inflight = new Map<string, Promise<void>>()
 let progressWindow: BrowserWindow | null = null
 
+export interface ThumbReadyItem {
+  id: string
+  thumbUrl: string
+  width: number | null
+  height: number | null
+}
+
 export interface ThumbHooks {
   progress(p: ScanProgress): void
+  /** 批量就绪推送：渲染层按 id 增量点亮卡片（照片墙不整页刷新、不回退原图） */
+  ready?(items: ThumbReadyItem[]): void
 }
+
+const thumbUrlOf = (photoId: string): string => `gallery-media://t/${photoId}.webp`
 
 /**
  * 为相册中所有 pending 照片生成缩略图（并发队列，向渲染层推送进度）。
@@ -78,11 +89,27 @@ async function runThumbQueue(albumId: string, albumName: string, hooks: ThumbHoo
 
     q.jobs = pending.map((p) => ({ photoId: p.id, albumId }))
 
+    // 就绪批量缓冲：300ms 或 40 张择一触发，避免逐张推送打爆 IPC
+    let readyBuf: ThumbReadyItem[] = []
+    let lastReadyFlush = 0
+    const flushReady = (force = false): void => {
+      if (!hooks.ready || readyBuf.length === 0) return
+      const now = Date.now()
+      if (!force && now - lastReadyFlush < 300 && readyBuf.length < 40) return
+      hooks.ready(readyBuf)
+      readyBuf = []
+      lastReadyFlush = now
+    }
+
     const worker = async (): Promise<void> => {
       while (q.jobs.length > 0 && !q.cancelled) {
         const job = q.jobs.shift()!
         try {
-          await generateOne(job.photoId)
+          const item = await generateOne(job.photoId)
+          if (item) {
+            readyBuf.push(item)
+            flushReady()
+          }
         } catch {
           // 单张失败不影响整体
         }
@@ -94,6 +121,7 @@ async function runThumbQueue(albumId: string, albumName: string, hooks: ThumbHoo
     q.running = CONCURRENCY
     await Promise.all(Array.from({ length: CONCURRENCY }, worker))
     q.running = 0
+    flushReady(true)
     hooks.progress({ albumId, albumName, phase: 'thumb', done, total })
   }
 }
@@ -103,12 +131,12 @@ export function cancelThumbsForAlbum(albumId: string): void {
   if (q) q.cancelled = true
 }
 
-/** 单张缩略图：图片走 sharp；视频走隐藏渲染页截帧，失败落占位图 */
-async function generateOne(photoId: string): Promise<void> {
+/** 单张缩略图：图片走 sharp；视频走隐藏渲染页截帧，失败落占位图。成功返回就绪描述符 */
+async function generateOne(photoId: string): Promise<ThumbReadyItem | null> {
   const photo = getPhotoRow(photoId)
-  if (!photo) return
+  if (!photo) return null
   const root = getAlbumPath(photo.albumId)
-  if (!root) return
+  if (!root) return null
   const abs = join(root, photo.relPath)
 
   try {
@@ -116,7 +144,7 @@ async function generateOne(photoId: string): Promise<void> {
   } catch {
     // 文件已不在：标记失败，等待增量校对清理
     setPhotoThumbStatus(photoId, 'failed')
-    return
+    return null
   }
 
   try {
@@ -139,31 +167,33 @@ async function generateOne(photoId: string): Promise<void> {
       }
       setPhotoDimensions(photoId, out.width, out.height)
       setPhotoThumbStatus(photoId, 'ready')
-    } else {
-      // 视频：隐藏窗口截帧（不引入 ffmpeg）
-      const frame = await captureVideoFrame(`gallery-media://m/${photo.albumId}/${encodeURIComponent(photo.relPath)}`)
-      let buffer: Buffer
-      let width = 400
-      let height = 300
-      if (frame) {
-        const pipeline = sharp(frame).resize(THUMB_SIZE, THUMB_SIZE, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        const meta = await pipeline.metadata()
-        width = meta.width ?? width
-        height = meta.height ?? height
-        buffer = await pipeline.webp({ quality: 82 }).toBuffer()
-      } else {
-        // 兜底占位图（暖棕底 + ▶）
-        buffer = await placeholderThumb()
-      }
-      await fs.writeFile(thumbPath(photoId), buffer)
-      setPhotoDimensions(photoId, width, height)
-      setPhotoThumbStatus(photoId, 'ready')
+      return { id: photoId, thumbUrl: thumbUrlOf(photoId), width: out.width, height: out.height }
     }
+    // 视频：隐藏窗口截帧（不引入 ffmpeg）
+    const frame = await captureVideoFrame(`gallery-media://m/${photo.albumId}/${encodeURIComponent(photo.relPath)}`)
+    let buffer: Buffer
+    let width = 400
+    let height = 300
+    if (frame) {
+      const pipeline = sharp(frame).resize(THUMB_SIZE, THUMB_SIZE, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      const meta = await pipeline.metadata()
+      width = meta.width ?? width
+      height = meta.height ?? height
+      buffer = await pipeline.webp({ quality: 82 }).toBuffer()
+    } else {
+      // 兜底占位图（暖棕底 + ▶）
+      buffer = await placeholderThumb()
+    }
+    await fs.writeFile(thumbPath(photoId), buffer)
+    setPhotoDimensions(photoId, width, height)
+    setPhotoThumbStatus(photoId, 'ready')
+    return { id: photoId, thumbUrl: thumbUrlOf(photoId), width, height }
   } catch {
     setPhotoThumbStatus(photoId, 'failed')
+    return null
   }
 }
 

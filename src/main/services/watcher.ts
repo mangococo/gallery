@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { getAlbumRow } from '../db'
 import { scanAlbum } from './scanner'
-import { generateThumbsForAlbum } from './thumbnails'
+import { generateThumbsForAlbum, type ThumbReadyItem } from './thumbnails'
 import type { ScanProgress } from '../../shared/types'
 
 let watcher: FSWatcher | null = null
@@ -15,6 +15,8 @@ let watchSeq = 0
 export interface WatchHooks {
   progress(p: ScanProgress): void
   changed(albumId: string): void
+  /** 缩略图批量就绪（透传给渲染层增量点亮，见 ipc.ts pushThumbsReady） */
+  thumbsReady?(items: ThumbReadyItem[]): void
 }
 
 /** 事件路径是否落在相册内的隐藏文件/隐藏目录里（.DS_Store、编辑器临时目录等，扫描本来就会跳过）。
@@ -77,6 +79,7 @@ async function rescanNow(albumId: string, hooks: WatchHooks): Promise<void> {
       if (counters) {
         await generateThumbsForAlbum(albumId, getAlbumRow(albumId)?.name ?? '', {
           progress: hooks.progress,
+          ready: hooks.thumbsReady,
         })
         hooks.changed(albumId)
       }
