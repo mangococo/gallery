@@ -50,6 +50,8 @@ import {
   listPhotosOfTrip,
   searchTripHits,
   getStats,
+  snapTakenAtRanges,
+  applyTripDateRecalc,
 } from './db'
 import { scanAlbum } from './services/scanner'
 import { mediaTypeOf } from './services/scanner'
@@ -333,6 +335,8 @@ export function registerIpcHandlers(): void {
 
     const importedIds: string[] = []
     const failed: { name: string; reason: string }[] = []
+    // 变更前快照：导入会扩大目标旅行的照片集合，收尾据此重算日期
+    const dateSnap = snapTakenAtRanges([tripId])
     for (const src of paths) {
       const base = basename(src)
       const type = mediaTypeOf(base)
@@ -377,6 +381,8 @@ export function registerIpcHandlers(): void {
     if (importedIds.length === 0 && failed.length > 0) {
       throw new Error(`全部 ${failed.length} 个文件导入失败：${failed[0].name}（${failed[0].reason}）`)
     }
+    // 旅行日期自动重算（导入成功至少一张才可能改变照片集合）
+    if (importedIds.length > 0) applyTripDateRecalc(dateSnap)
     // 只返回本次新增的照片与失败清单
     const photos = importedIds
       .map((id) => getPhotoRow(id))
@@ -385,7 +391,11 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC.photosDelete, async (_e, photoId: string) => {
+    // 变更前快照：删除缩小所属旅行的照片集合，收尾据此重算日期
+    const photo = getPhotoRow(photoId)
+    const dateSnap = photo ? snapTakenAtRanges([photo.tripId]) : null
     await trashPhoto(photoId)
+    if (dateSnap) applyTripDateRecalc(dateSnap)
     const p = getPhotoRowIncludingTrashed(photoId)
     if (p) pushChanged(p.albumId)
   })
@@ -460,6 +470,8 @@ export function registerIpcHandlers(): void {
       const renames: { from: string; to: string }[] = []
       const updates: { id: string; tripId: string; fileName: string; relPath: string }[] = []
       let fileMissingCount = 0
+      // 变更前快照：移动会同时改变源/目标旅行的照片集合，收尾据此重算日期
+      const dateSnap = snapTakenAtRanges([...validated.sourceTripIds, targetTrip.id])
       try {
         for (const p of validated.photos) {
           const srcAbs = join(album.path, p.relPath)
@@ -506,6 +518,9 @@ export function registerIpcHandlers(): void {
       )) {
         updateTripRow(plan.tripId, { coverPhotoId: plan.coverPhotoId })
       }
+
+      // 旅行日期自动重算：源/目标旅行的照片集合已变化（「对齐即自动」，手动值不动）
+      applyTripDateRecalc(dateSnap)
 
       pushChanged(album.id)
       const fresh = getTripRow(targetTrip.id)!
