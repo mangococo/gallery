@@ -350,6 +350,12 @@ const TripPage: React.FC = () => {
     setSelectionMode(true)
   }
 
+  /** 框选提交：普通拖拽替换选择，⌘/Ctrl 拖拽并入现有选择（空集=清空手势） */
+  const handleMarqueeSelect = (ids: Set<string>, additive: boolean) => {
+    if (ids.size > 0) setSelectionMode(true)
+    setSelectedIds((prev) => (additive ? new Set([...prev, ...ids]) : ids))
+  }
+
   // ESC 退出多选（灯箱/弹窗打开时不抢——它们已认领更高的 Esc 处理权）
   const selectionEscRef = useEscClaim(selectionMode)
   React.useEffect(() => {
@@ -998,6 +1004,7 @@ const TripPage: React.FC = () => {
               selectionMode={selectionMode}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
+              onMarqueeSelect={handleMarqueeSelect}
               onPhotoContextMenu={handlePhotoContextMenu}
               onWallContextMenu={handleWallContextMenu}
               density={wallDensity}
