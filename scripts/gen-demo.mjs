@@ -667,6 +667,21 @@ if (process.platform === 'darwin' && existsSync('/usr/bin/sips')) {
   }
 }
 
+// 2.8 平铺相册（#2 验收）：根目录直接放 3 张图、无任何子目录——
+// 注册时应触发「创建默认旅行并归档」确认流程（flat-root 由 21-flat-adopt 链路使用）
+{
+  const FLAT = join(ROOT, 'flat-root')
+  rmSync(FLAT, { recursive: true, force: true })
+  mkdirSync(FLAT, { recursive: true })
+  for (let i = 0; i < 3; i++) {
+    const seed = Math.floor(rngee() * 1e9)
+    const svg = kyoto.scene(seed, i)
+    const jpeg = await sharp(Buffer.from(svg)).jpeg({ quality: 80, mozjpeg: true }).toBuffer()
+    writeFileSync(join(FLAT, `FLAT_00${i + 1}.jpg`), withExifBytes(jpeg, `2026:08:01 09:0${i}:00`, 37.5665, 126.978))
+  }
+  console.log('flat-root ✓ (3 张平铺图)')
+}
+
 // 3. 预置演示 userData：schema 与 src/main/db.ts migrate() 保持一致 + 浅色主题/窗口尺寸
 const db = new Database(join(USERDATA, 'gallery.db'))
 db.pragma('journal_mode = WAL')

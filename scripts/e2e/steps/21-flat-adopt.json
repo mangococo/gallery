@@ -1,0 +1,53 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"平铺归档链路（#2）：根目录平铺图片预检 → 确认弹窗 UI → 取消=零落库 → 确认=建默认旅行+移动+入库 → 根目录清空 → 重扫稳定。前置：gen-demo 的 flat-root（3 张平铺图，无子目录）；弹窗经 E2E 事件注入点驱动（原生目录对话框无法自动化）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 2600
+  },
+  {
+    "name": "02-probe-flat",
+    "wait": 500,
+    "log": true,
+    "script": "const FLAT = '/tmp/gallery-demo/flat-root'; const probe = await window.api.probeFlatMedia(FLAT); if (probe.fileCount !== 3) throw new Error('平铺预检数量不对: ' + probe.fileCount); if (!probe.sample.some(n => n.startsWith('FLAT_'))) throw new Error('样例文件名不对: ' + JSON.stringify(probe.sample)); const albums = await window.api.listAlbums(); if (albums.length !== 1) throw new Error('预检不应注册相册，实际 ' + albums.length + ' 个'); window.__e2e = { flatPath: FLAT }; return probe"
+  },
+  {
+    "name": "03-open-dialog",
+    "wait": 600,
+    "script": "const st = window.__e2e; const probe = await window.api.probeFlatMedia(st.flatPath); window.dispatchEvent(new CustomEvent('gallery:open-adopt-dialog', { detail: { path: st.flatPath, fileCount: probe.fileCount, sample: probe.sample, suggestedName: '未整理的照片' } })); await new Promise(r => setTimeout(r, 500)); const dlg = document.querySelector('[data-testid=adopt-flat-dialog]'); if (!dlg) throw new Error('确认弹窗未出现'); if (!dlg.textContent.includes('3 张直接存放的照片')) throw new Error('平铺数量文案缺失'); if (!dlg.textContent.includes('FLAT_001.jpg')) throw new Error('样例文件未展示'); const input = dlg.querySelector('[data-testid=adopt-flat-name]'); if (!input || input.value !== '未整理的照片') throw new Error('默认旅行名不对: ' + (input && input.value)); 'dialog-open-ok'"
+  },
+  {
+    "name": "04-dialog-shot",
+    "wait": 300
+  },
+  {
+    "name": "05-cancel-zero-side-effects",
+    "wait": 700,
+    "script": "document.querySelector('[data-testid=adopt-flat-cancel]').click(); await new Promise(r => setTimeout(r, 600)); if (document.querySelector('[data-testid=adopt-flat-dialog]')) throw new Error('取消后弹窗未关闭'); const albums = await window.api.listAlbums(); if (albums.length !== 1) throw new Error('拒绝后不应注册相册，实际 ' + albums.length); if (!document.body.textContent.includes('已取消导入')) throw new Error('取消 toast 缺失'); const probe = await window.api.probeFlatMedia(window.__e2e.flatPath); if (probe.fileCount !== 3) throw new Error('拒绝后文件被移动了！'); 'cancel-clean-ok'"
+  },
+  {
+    "name": "06-confirm-adopt",
+    "wait": 900,
+    "script": "const st = window.__e2e; const probe = await window.api.probeFlatMedia(st.flatPath); window.dispatchEvent(new CustomEvent('gallery:open-adopt-dialog', { detail: { path: st.flatPath, fileCount: probe.fileCount, sample: probe.sample, suggestedName: '未整理的照片' } })); await new Promise(r => setTimeout(r, 500)); const setV = (el, v) => { Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); }; setV(document.querySelector('[data-testid=adopt-flat-name]'), 'E2E 平铺归档'); document.querySelector('[data-testid=adopt-flat-confirm]').click(); let album = null; for (let i = 0; i < 25; i++) { const albums = await window.api.listAlbums(); album = albums.find(a => a.path === st.flatPath); if (album) break; await new Promise(r => setTimeout(r, 400)); } if (!album) throw new Error('归档后相册未注册'); window.__e2e.albumId = album.id; 'adopt-submitted'"
+  },
+  {
+    "name": "07-adopt-verified",
+    "wait": 1200,
+    "log": true,
+    "script": "const st = window.__e2e; let trip = null; for (let i = 0; i < 20; i++) { const trips = await window.api.listTrips(st.albumId); trip = trips.find(t => t.title === 'E2E 平铺归档'); if (trip && trip.photos.length === 3) break; await new Promise(r => setTimeout(r, 400)); } if (!trip) throw new Error('默认旅行未创建'); if (trip.photos.length !== 3) throw new Error('归档照片数不对: ' + trip.photos.length); for (const p of trip.photos) { if (!p.relPath.startsWith('E2E 平铺归档/')) throw new Error('照片未落到旅行目录: ' + p.relPath); } const probe = await window.api.probeFlatMedia(st.flatPath); if (probe.fileCount !== 0) throw new Error('根目录仍有平铺文件: ' + probe.fileCount); return { title: trip.title, photos: trip.photos.length, relPaths: trip.photos.map(p => p.relPath) }"
+  },
+  {
+    "name": "08-timeline-shot",
+    "wait": 1500,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('E2E 平铺归档')); if (!h) throw new Error('时间线未出现归档旅行（相册切换可能未生效）'); 'timeline-ok'"
+  },
+  {
+    "name": "09-rescan-stability",
+    "wait": 1000,
+    "script": "const st = window.__e2e; await window.api.rescanAlbum(st.albumId); await new Promise(r => setTimeout(r, 1500)); const trips = await window.api.listTrips(st.albumId); if (trips.length !== 1) throw new Error('重扫后旅行数漂移: ' + trips.length); if (trips[0].photos.length !== 3) throw new Error('重扫后照片数漂移: ' + trips[0].photos.length); const probe = await window.api.probeFlatMedia(st.flatPath); if (probe.fileCount !== 0) throw new Error('重扫后根目录出现平铺文件'); 'rescan-stable-ok'"
+  }
+]

@@ -76,7 +76,8 @@ for f in "$STEPS_DIR"/*.json; do
     "GALLERY_USER_DATA=$WORK/userdata"
     "GALLERY_E2E_ALBUM=$DEMO_ROOT/我的旅行"
     "GALLERY_E2E_STEPS=$f"
-    "GALLERY_E2E_DIR=$WORK/shots-$name")
+    "GALLERY_E2E_DIR=$WORK/shots-$name"
+    "GALLERY_E2E_FLAT_ALBUM=$DEMO_ROOT/flat-root")
   if [ "$name" = "07-export-journal" ]; then
     rm -rf "$WORK/exports"
     mkdir -p "$WORK/exports"
