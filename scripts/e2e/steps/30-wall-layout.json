@@ -1,0 +1,41 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"排列方式链路（#10）：旅行页默认时间序（grid 行优先，视觉序=数据序）→ 灯箱导航同序 → 切填充回归瀑布流 → 首页默认填充/跟随共享偏好 → 与密度联动 → 持久化。前置：album-large。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 1500
+  },
+  {
+    "name": "02-trip-default-timeline",
+    "wait": 600,
+    "log": true,
+    "script": "let h = null; for (let i = 0; i < 75; i++) { h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大相册压力测试')); if (h) break; await new Promise(r => setTimeout(r, 400)); } if (!h) throw new Error('找不到大相册旅行（30s）'); h.click(); let wall = null; for (let i = 0; i < 40; i++) { wall = document.querySelector('[data-testid=photo-wall]'); if (wall) break; await new Promise(r => setTimeout(r, 400)); } if (!wall) throw new Error('墙未渲染（15s）——React 崩溃或加载卡死'); for (let i = 0; i < 25; i++) { if (wall.querySelectorAll(':scope > div').length >= 6) break; await new Promise(r => setTimeout(r, 400)); } if (wall.dataset.layout !== 'timeline') throw new Error('旅行页默认应为时间序: ' + wall.dataset.layout); if (getComputedStyle(wall).display !== 'grid') throw new Error('时间序应为 grid 行优先: ' + getComputedStyle(wall).display); const cards = [...wall.querySelectorAll(':scope > div')].filter(c => c.querySelector('img')); if (cards.length < 6) throw new Error('可渲染卡片不足: ' + cards.length); const first = cards[0].getBoundingClientRect(); const second = cards[1].getBoundingClientRect(); if (Math.abs(first.top - second.top) > 4 || second.left <= first.left) throw new Error('行优先阅读序被破坏（前两张应同一行从左到右）'); 'timeline-default-ok'"
+  },
+  {
+    "name": "03-timeline-shot",
+    "wait": 300
+  },
+  {
+    "name": "04-lightbox-follows-order",
+    "wait": 500,
+    "script": "const wall = document.querySelector('[data-testid=photo-wall]'); const cards = [...wall.querySelectorAll(':scope > div')].filter(c => c.querySelector('img')); cards[2].querySelector('img').click(); await new Promise(r => setTimeout(r, 700)); const lb = document.querySelector('.fixed.inset-0.z-50'); if (!lb) throw new Error('灯箱未打开'); const posEl = [...lb.querySelectorAll('.washi-label')].map(el => el.textContent.trim()).find(t => /^\\d+ \\/ \\d+$/.test(t)); if (!posEl) throw new Error('位置指示缺失'); const idx = parseInt(posEl.split('/')[0].trim(), 10); if (idx !== 3) throw new Error('灯箱序号与点击位置不一致: ' + posEl); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' })); await new Promise(r => setTimeout(r, 400)); const posEl2 = [...document.querySelector('.fixed.inset-0.z-50').querySelectorAll('.washi-label')].map(el => el.textContent.trim()).find(t => /^\\d+ \\/ \\d+$/.test(t)); if (parseInt(posEl2.split('/')[0].trim(), 10) !== 2) throw new Error('← 导航未按时间序: ' + posEl2); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 400)); 'lightbox-order-ok'"
+  },
+  {
+    "name": "05-switch-to-fill",
+    "wait": 600,
+    "script": "document.querySelector('[data-testid=wall-layout-fill]').click(); await new Promise(r => setTimeout(r, 500)); const wall = document.querySelector('[data-testid=photo-wall]'); if (wall.dataset.layout !== 'fill') throw new Error('切填充未生效'); if (getComputedStyle(wall).display === 'grid') throw new Error('填充模式不应是 grid'); if (!wall.className.includes('columns-')) throw new Error('填充应回归 columns 瀑布流'); 'fill-ok'"
+  },
+  {
+    "name": "06-home-shared-pref",
+    "wait": 400,
+    "script": "const brand = document.querySelector('button[title=回到主页]'); if (!brand) throw new Error('找不到主页按钮'); brand.click(); await new Promise(r => setTimeout(r, 900)); document.querySelector('[data-testid=home-view-wall]').click(); await new Promise(r => setTimeout(r, 600)); const wall = document.querySelector('[data-testid=photo-wall]'); if (wall.dataset.layout !== 'fill') throw new Error('首页应跟随共享偏好 fill: ' + wall.dataset.layout); document.querySelector('[data-testid=wall-layout-timeline]').click(); await new Promise(r => setTimeout(r, 500)); const w2 = document.querySelector('[data-testid=photo-wall]'); if (w2.dataset.layout !== 'timeline' || getComputedStyle(w2).display !== 'grid') throw new Error('首页时间序切换未生效'); if (localStorage.getItem('gallery.wall_layout') !== 'timeline') throw new Error('偏好未持久化'); 'home-shared-ok'"
+  },
+  {
+    "name": "07-home-timeline-shot",
+    "wait": 300
+  }
+]
