@@ -1,0 +1,28 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"混排互不阻塞链路（#4）：图片池与视频池分离——同一时刻批量导入 60 图 + 8 视频，图片全部就绪时间不得晚于视频（慢视频不得饿死图片任务）。源用不可变 album-small 快照。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 2600
+  },
+  {
+    "name": "02-import-mixed",
+    "wait": 800,
+    "log": true,
+    "script": "const SRC_I = ['/tmp/gallery-demo/album-small/dali-erhai-2026/DSC050001.jpg', '/tmp/gallery-demo/album-small/dali-erhai-2026/DSC050009.jpg', '/tmp/gallery-demo/album-small/dali-erhai-2026/DSC050017.jpg']; const SRC_V = ['/tmp/gallery-demo/album-small/dali-erhai-2026/VID_0001.mp4', '/tmp/gallery-demo/album-small/dali-erhai-2026/VID_0002.mp4']; const imgTrip = await window.api.createTrip({ title: '混排图片池', startDate: '2026-09-03', endDate: '2026-09-04' }); const vidTrip = await window.api.createTrip({ title: '混排视频池', startDate: '2026-09-03', endDate: '2026-09-04' }); const imgs = []; for (let i = 0; i < 20; i++) imgs.push(...SRC_I); const vids = []; for (let i = 0; i < 4; i++) vids.push(...SRC_V); const r1 = await window.api.importPhotos(imgTrip.id, imgs); const r2 = await window.api.importPhotos(vidTrip.id, vids); if (r1.photos.length !== 60) throw new Error('图片导入数量不对: ' + r1.photos.length); if (r2.photos.length !== 8) throw new Error('视频导入数量不对: ' + r2.photos.length + ' 失败' + r2.failed.length); window.__e2e = { imgTripId: imgTrip.id, vidTripId: vidTrip.id, t0: Date.now() }; return { images: r1.photos.length, videos: r2.photos.length }"
+  },
+  {
+    "name": "03-pool-order",
+    "wait": 1000,
+    "log": true,
+    "script": "const st = window.__e2e; let tImg = null; let tVid = null; for (let i = 0; i < 300; i++) { const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const it = trips.find(t => t.id === st.imgTripId); const vt = trips.find(t => t.id === st.vidTripId); if (it && !tImg && it.photos.length === 60 && it.photos.every(p => p.thumbStatus === 'ready')) tImg = Date.now() - st.t0; if (vt && !tVid && vt.photos.length === 8 && vt.photos.every(p => p.thumbStatus === 'ready')) tVid = Date.now() - st.t0; if (tImg !== null && tVid !== null) break; await new Promise(r => setTimeout(r, 400)); } if (tImg === null) throw new Error('60 张图片缩略图未全部就绪（300s 内）'); if (tVid === null) throw new Error('8 个视频海报未全部就绪（300s 内）'); if (tImg > tVid + 500) throw new Error('图片池被视频饿死：图片 ' + tImg + 'ms vs 视频 ' + tVid + 'ms'); return { imgAllReadyMs: tImg, vidAllReadyMs: tVid }"
+  },
+  {
+    "name": "04-final-shot",
+    "wait": 600
+  }
+]

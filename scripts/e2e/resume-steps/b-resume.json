@@ -1,0 +1,18 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"续跑阶段 B（#4）：同一 userData 重启——阶段 A 中断的 pending 缩略图应自动续跑补齐（不重复生成已就绪项、无重复照片行）。\""
+  },
+  {
+    "name": "01-resumed",
+    "wait": 3000,
+    "log": true,
+    "script": "const albumId = await window.api.getActiveAlbumId(); let trip = null; for (let i = 0; i < 240; i++) { const trips = await window.api.listTrips(albumId); trip = trips.find(t => t.title === '续跑验证'); if (trip && trip.photos.length === 600 && trip.photos.every(p => p.thumbStatus === 'ready')) break; await new Promise(r => setTimeout(r, 500)); } if (!trip) throw new Error('续跑旅行缺失'); if (trip.photos.length !== 600) throw new Error('重启后照片数漂移（重复入库？）: ' + trip.photos.length); if (!trip.photos.every(p => p.thumbStatus === 'ready')) throw new Error('中断的缩略图没有续跑补齐'); return { photos: trip.photos.length, allReady: true }"
+  },
+  {
+    "name": "02-resumed-shot",
+    "wait": 600
+  }
+]
