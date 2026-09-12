@@ -1,0 +1,57 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"照片墙旅行筛选链路（#5）：筛选树展开/折叠 → 选旅行只显示该旅行照片（计数同步）→ 灯箱范围一致 → 全部恢复 → 折叠保留选择 → 与侧栏收藏筛选叠加（筛除时明确空态）→ 恢复。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 2600
+  },
+  {
+    "name": "02-open-wall-and-panel",
+    "wait": 700,
+    "log": true,
+    "script": "document.querySelector('[data-testid=home-view-wall]').click(); await new Promise(r => setTimeout(r, 600)); const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('照片墙未渲染'); if (document.querySelector('[data-testid=wall-trip-filter-panel]')) throw new Error('筛选树默认应折叠'); document.querySelector('[data-testid=wall-trip-filter-toggle]').click(); await new Promise(r => setTimeout(r, 300)); const panel = document.querySelector('[data-testid=wall-trip-filter-panel]'); if (!panel) throw new Error('筛选树未展开'); const chips = [...panel.querySelectorAll('[data-testid=wall-trip-filter-item]')]; const albumId = await window.api.getActiveAlbumId(); const trips = await window.api.listTrips(albumId); const withPhotos = trips.filter(t => t.photos.length > 0); if (chips.length !== withPhotos.length) throw new Error('筛选树旅行数不对: ' + chips.length + ' 期望 ' + withPhotos.length); window.__e2e = { total: trips.reduce((a, t) => a + t.photos.length, 0), kyoto: trips.find(t => t.title.includes('京都')), city: trips.find(t => t.title.includes('城市夜行手册')) }; return { chips: chips.length, total: window.__e2e.total }"
+  },
+  {
+    "name": "03-select-trip",
+    "wait": 600,
+    "log": true,
+    "script": "const st = window.__e2e; const chips = [...document.querySelectorAll('[data-testid=wall-trip-filter-item]')]; const kyotoChip = chips.find(c => c.textContent.includes('京都')); if (!kyotoChip) throw new Error('找不到京都筛选项'); kyotoChip.click(); await new Promise(r => setTimeout(r, 500)); const wall = document.querySelector('[data-testid=photo-wall]'); const cards = wall.children.length; if (cards !== st.kyoto.photos.length) throw new Error('筛选后卡片数不对: ' + cards + ' 期望 ' + st.kyoto.photos.length); const counter = document.querySelector('[data-testid=wall-trip-filter-toggle]').textContent; if (!counter.includes('京都')) throw new Error('折叠态未显示当前选择: ' + counter); const countText = document.body.textContent; if (!countText.includes(st.kyoto.photos.length + ' / ' + st.total)) throw new Error('计数文案未同步为 X / Y'); return { cards, expect: st.kyoto.photos.length }"
+  },
+  {
+    "name": "04-filtered-shot",
+    "wait": 300
+  },
+  {
+    "name": "05-lightbox-scope",
+    "wait": 700,
+    "script": "const st = window.__e2e; const img = document.querySelector('[data-testid=photo-wall] img'); if (!img) throw new Error('筛选后没有可点击照片'); img.click(); await new Promise(r => setTimeout(r, 600)); const lb = document.querySelector('[data-testid=lightbox-root]'); if (!lb) throw new Error('灯箱未打开'); for (let i = 0; i < st.kyoto.photos.length + 2; i++) { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' })); await new Promise(r => setTimeout(r, 120)); } await new Promise(r => setTimeout(r, 400)); const strip = document.querySelector('[data-testid=lightbox-filmstrip]'); if (!strip) throw new Error('胶片条缺失'); const thumbs = strip.children.length; if (thumbs !== st.kyoto.photos.length) throw new Error('灯箱范围与筛选不一致: ' + thumbs + ' 期望 ' + st.kyoto.photos.length); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 500)); if (document.querySelector('[data-testid=lightbox-root]')) throw new Error('灯箱未关闭'); 'lightbox-scope-ok'"
+  },
+  {
+    "name": "06-reset-all",
+    "wait": 500,
+    "script": "const st = window.__e2e; document.querySelector('[data-testid=wall-trip-filter-all]').click(); await new Promise(r => setTimeout(r, 500)); const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall) throw new Error('恢复全部后墙缺失'); if (wall.children.length < st.total) throw new Error('恢复全部后卡片不足: ' + wall.children.length + ' / ' + st.total); 'reset-ok'"
+  },
+  {
+    "name": "07-collapse-keeps-selection",
+    "wait": 500,
+    "script": "const st = window.__e2e; const chips = [...document.querySelectorAll('[data-testid=wall-trip-filter-item]')]; const kyotoChip = chips.find(c => c.textContent.includes('京都')); kyotoChip.click(); await new Promise(r => setTimeout(r, 400)); document.querySelector('[data-testid=wall-trip-filter-toggle]').click(); await new Promise(r => setTimeout(r, 300)); if (document.querySelector('[data-testid=wall-trip-filter-panel]')) throw new Error('筛选树未折叠'); const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall || wall.children.length !== st.kyoto.photos.length) throw new Error('折叠后选择未保留: ' + (wall && wall.children.length)); 'collapse-keep-ok'"
+  },
+  {
+    "name": "08-compose-with-sidebar-favorite",
+    "wait": 700,
+    "script": "const chips = [...document.querySelectorAll('[data-testid=wall-trip-filter-item]')]; if (chips.length === 0) { document.querySelector('[data-testid=wall-trip-filter-toggle]').click(); await new Promise(r => setTimeout(r, 300)); } const cityChip = [...document.querySelectorAll('[data-testid=wall-trip-filter-item]')].find(c => c.textContent.includes('城市夜行手册')); if (!cityChip) throw new Error('找不到城市夜行手册筛选项'); cityChip.click(); await new Promise(r => setTimeout(r, 500)); const favBtn = [...document.querySelectorAll('aside button')].find(b => b.textContent.trim().startsWith('收藏')); if (!favBtn) throw new Error('侧栏收藏入口缺失'); favBtn.click(); await new Promise(r => setTimeout(r, 800)); const emptyHint = document.body.textContent.includes('这次旅行没有可展示的照片'); const wall = document.querySelector('[data-testid=photo-wall]'); if (!emptyHint) throw new Error('非收藏旅行 + 收藏筛选：应显示明确空态（墙=' + (wall ? wall.children.length : '无') + '）'); 'compose-ok'"
+  },
+  {
+    "name": "09-restore",
+    "wait": 400,
+    "script": "const st = window.__e2e; document.querySelector('[data-testid=wall-trip-filter-clear]').click(); await new Promise(r => setTimeout(r, 500)); const favBtn = [...document.querySelectorAll('aside button')].find(b => b.textContent.trim().startsWith('收藏')); if (favBtn) { favBtn.click(); await new Promise(r => setTimeout(r, 700)); } const wall = document.querySelector('[data-testid=photo-wall]'); if (!wall || wall.children.length < st.total) throw new Error('恢复后未显示全部: ' + (wall && wall.children.length) + ' / ' + st.total); const t = document.querySelector('[data-testid=wall-trip-filter-toggle]').textContent; if (!t.includes('全部')) throw new Error('应回到全部: ' + t); 'restored'"
+  },
+  {
+    "name": "10-final-shot",
+    "wait": 400
+  }
+]
