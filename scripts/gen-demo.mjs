@@ -10,7 +10,7 @@
  */
 import sharp from 'sharp'
 import piexif from 'piexifjs'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, renameSync } from 'fs'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
 import Database from 'better-sqlite3'
@@ -620,6 +620,21 @@ if (process.platform === 'darwin' && existsSync('/usr/bin/sips')) {
     } else {
       console.log(`${heicName} ✗ sips 转换失败`)
     }
+  }
+
+  // 2.6b 伪装扩展名 HEIC（#33 链路验收用）：HEIC 内容 + .jpg 扩展名——
+  // 复刻微信转存文件（IM 只留旧扩展名不改内容）；解码分流必须靠内容嗅探才不漏网
+  const srcJpg = names[0]
+  const tmpHeic = join(dir, 'wx-tmp-convert.heic')
+  const disguised = `img_wx${srcJpg.replace(/\D/g, '').slice(-6)}.jpg`
+  const res = spawnSync('/usr/bin/sips', ['-s', 'format', 'heic', join(dir, srcJpg), '--out', tmpHeic], { stdio: 'ignore' })
+  if (res.status === 0 && existsSync(tmpHeic)) {
+    renameSync(tmpHeic, join(dir, disguised))
+    settings.photoCaptions[disguised] = '微信伪装样张（HEIC 内容 .jpg 扩展名）'
+    console.log(`${disguised} ✓ (sips 转换 + 改名)`)
+  } else {
+    console.log(`${disguised} ✗ sips 转换失败`)
+    rmSync(tmpHeic, { force: true })
   }
   writeFileSync(join(dir, '.settings.json'), JSON.stringify(settings, null, 2))
 }

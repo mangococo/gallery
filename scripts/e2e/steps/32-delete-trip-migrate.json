@@ -1,0 +1,64 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"删除旅行迁移链路：删除带照片旅行 → 专用弹窗（默认「一并移入回收站」，可切「迁移到其他旅行」）→ 选目标旅行 → 迁移并删除 → 时间线源旅行消失、目标旅行计数增加 → 目标旅行页照片数吻合 → Esc 取消不删 → 默认直删路径（带照片）回归。前置：小相册（run-all 默认）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-note-state",
+    "wait": 500,
+    "log": true,
+    "script": "const cardOf = (title) => { const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes(title)); if (!h) return null; return h.closest('.relative.flex'); }; const kyoto = cardOf('京都 · 岚山秋色'); const iceland = cardOf('冰岛环线 · 极光与黑沙'); if (!kyoto || !iceland) throw new Error('时间线找不到源/目标旅行卡'); const countOf = (card) => { const m = card.textContent.match(/(\\d+) 张照片/); if (!m) throw new Error('卡片未显示照片数'); return +m[1]; }; window.__mig = { kyotoCount: countOf(kyoto), icelandCount: countOf(iceland) }; if (window.__mig.kyotoCount <= 0) throw new Error('源旅行无照片，链路无意义'); return window.__mig"
+  },
+  {
+    "name": "03-open-dialog",
+    "wait": 500,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都 · 岚山秋色')); const btn = h?.closest('.relative.flex')?.querySelector('button[title=\"删除这次旅行\"]'); if (!btn) throw new Error('找不到时间线删除按钮'); btn.click(); await new Promise(r => setTimeout(r, 700)); const dlg = document.querySelector('[data-testid=delete-trip-backdrop]'); if (!dlg) throw new Error('删除旅行专用弹窗未出现'); if (!document.querySelector('[data-testid=delete-trip-option-delete]')) throw new Error('默认「一并移入回收站」选项缺失'); if (!document.querySelector('[data-testid=delete-trip-option-migrate]')) throw new Error('「迁移到其他旅行」选项缺失'); const confirmBtn = document.querySelector('[data-testid=delete-trip-confirm]'); if (!confirmBtn || confirmBtn.textContent.trim() !== '移入回收站' || confirmBtn.disabled) throw new Error('默认模式确认按钮异常: ' + (confirmBtn && confirmBtn.textContent)); 'dialog-ok'"
+  },
+  {
+    "name": "04-choose-migrate",
+    "wait": 500,
+    "log": true,
+    "script": "document.querySelector('[data-testid=delete-trip-option-migrate]').click(); await new Promise(r => setTimeout(r, 300)); const list = document.querySelector('[data-testid=delete-trip-target-list]'); if (!list) throw new Error('选择迁移目标列表未展开'); const items = [...document.querySelectorAll('[data-testid=delete-trip-target-item]')]; if (items.some(i => i.textContent.includes('京都 · 岚山秋色'))) throw new Error('候选列表不应包含被删除旅行本身'); const iceland = items.find(i => i.textContent.includes('冰岛环线')); if (!iceland) throw new Error('候选列表缺少冰岛旅行'); iceland.click(); await new Promise(r => setTimeout(r, 300)); if (iceland.getAttribute('data-selected') !== 'true') throw new Error('目标旅行未选中'); const confirmBtn = document.querySelector('[data-testid=delete-trip-confirm]'); if (confirmBtn.textContent.trim() !== '迁移并删除' || confirmBtn.disabled) throw new Error('迁移模式确认按钮异常'); return { candidates: items.length }"
+  },
+  {
+    "name": "05-migrate-dialog-shot",
+    "wait": 300
+  },
+  {
+    "name": "06-confirm-migrate",
+    "wait": 500,
+    "log": true,
+    "script": "const confirmBtn = document.querySelector('[data-testid=delete-trip-confirm]'); confirmBtn.click(); await new Promise(r => setTimeout(r, 3200)); if (document.querySelector('[data-testid=delete-trip-backdrop]')) throw new Error('确认后弹窗未关闭'); const gone = ![...document.querySelectorAll('h3')].some(el => el.textContent.includes('京都 · 岚山秋色')); if (!gone) throw new Error('时间线仍存在已删除旅行'); const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('冰岛环线')); if (!h) throw new Error('目标旅行消失'); const card = h.closest('.relative.flex'); const m = card.textContent.match(/(\\d+) 张照片/); const expect = window.__mig.icelandCount + window.__mig.kyotoCount; if (!m || +m[1] !== expect) throw new Error('迁移后目标旅行计数不符: ' + (m && m[1]) + ' 期望 ' + expect); window.__mig.merged = +m[1]; return { merged: +m[1] }"
+  },
+  {
+    "name": "07-verify-target-trip",
+    "wait": 500,
+    "log": true,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('冰岛环线')); h.click(); await new Promise(r => setTimeout(r, 1800)); const m = document.body.textContent.match(/(\\d+) 张照片/); if (!m || +m[1] !== window.__mig.merged) throw new Error('旅行页照片计数不符: ' + (m && m[1]) + ' 期望 ' + window.__mig.merged); const wallCount = document.querySelectorAll('[data-photo-id]').length; if (wallCount !== window.__mig.merged) throw new Error('照片墙卡片数不符: ' + wallCount + ' 期望 ' + window.__mig.merged); return { tripPhotos: +m[1], wallCards: wallCount }"
+  },
+  {
+    "name": "08-target-trip-shot",
+    "wait": 400
+  },
+  {
+    "name": "09-cancel-path",
+    "wait": 500,
+    "script": "const back = [...document.querySelectorAll('header button')].find(b => b.textContent.includes('返回')); back.click(); await new Promise(r => setTimeout(r, 1400)); const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大理 · 洱海边的风')); const btn = h?.closest('.relative.flex')?.querySelector('button[title=\"删除这次旅行\"]'); if (!btn) throw new Error('找不到大理旅行删除按钮'); btn.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=delete-trip-backdrop]')) throw new Error('弹窗未出现'); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await new Promise(r => setTimeout(r, 400)); if (document.querySelector('[data-testid=delete-trip-backdrop]')) throw new Error('Esc 未关闭弹窗'); if (![...document.querySelectorAll('h3')].some(el => el.textContent.includes('大理 · 洱海边的风'))) throw new Error('取消后旅行被误删'); 'cancel-ok'"
+  },
+  {
+    "name": "10-direct-delete-with-photos",
+    "wait": 500,
+    "log": true,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大理 · 洱海边的风')); const btn = h?.closest('.relative.flex')?.querySelector('button[title=\"删除这次旅行\"]'); btn.click(); await new Promise(r => setTimeout(r, 700)); if (!document.querySelector('[data-testid=delete-trip-backdrop]')) throw new Error('弹窗未出现'); const confirmBtn = document.querySelector('[data-testid=delete-trip-confirm]'); if (confirmBtn.textContent.trim() !== '移入回收站') throw new Error('默认按钮文案异常: ' + confirmBtn.textContent); confirmBtn.click(); await new Promise(r => setTimeout(r, 3000)); if (document.querySelector('[data-testid=delete-trip-backdrop]')) throw new Error('确认后弹窗未关闭'); const gone = ![...document.querySelectorAll('h3')].some(el => el.textContent.includes('大理 · 洱海边的风')); if (!gone) throw new Error('默认直删路径：旅行未被删除'); 'direct-delete-ok'"
+  },
+  {
+    "name": "11-final-shot",
+    "wait": 400
+  }
+]

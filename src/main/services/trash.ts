@@ -19,6 +19,8 @@ import {
   markPhotoTrashed,
   markTripTrashed,
   restorePhotoRow,
+  snapTakenAtRanges,
+  applyTripDateRecalc,
   restoreTripRows,
   updatePhotoFileName,
   updateTripRow,
@@ -287,9 +289,13 @@ export async function restoreItems(
       if (await pathAccessible(slotAbs)) {
         await fs.rename(slotAbs, join(targetDir, fileName))
       }
+      // 变更前快照：恢复会扩大所属旅行的照片集合，收尾据此重算日期
+      // （taken_at 为软删前的原值，恢复前后推导范围可直接对比）
+      const dateSnap = snapTakenAtRanges([photo.trip_id])
       // 槽位无文件（记录型删除）也恢复记录，缺文件状态交给增量校对
       restorePhotoRow(photoId)
       updatePhotoFileName(photoId, fileName, `${tripNow.folderName}/${fileName}`)
+      applyTripDateRecalc(dateSnap)
       result.photosCount++
       notify?.(album.id)
     } catch (err) {

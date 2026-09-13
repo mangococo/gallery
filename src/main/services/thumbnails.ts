@@ -4,7 +4,7 @@ import { promises as fs } from 'fs'
 import sharp from 'sharp'
 import type { PhotoDTO, ScanProgress } from '../../shared/types'
 import { getAlbumPath, listPendingThumbPhotos, markThumbResults } from '../db'
-import { decodeHeicRaw, isHeicFamily } from './heic'
+import { decodeHeicRaw, isHeicFamily, isHeifFile } from './heic'
 import {
   splitThumbJobs,
   resolveImageConcurrency,
@@ -162,8 +162,10 @@ const generateImageThumb: ItemGenerator = async (photo, albumRoot) => {
         .webp({ quality: 82 })
         .toFile(thumbPath(photo.id))
     } catch (err) {
-      // sharp 的 libheif 无 HEVC 解码插件（实测）：HEIC 回退 WASM 解码后重走管线
-      if (!isHeicFamily(photo.fileName)) throw err
+      // sharp 的 libheif 无 HEVC 解码插件（实测）：HEIC 回退 WASM 解码后重走管线。
+      // 判定以内容嗅探为准、扩展名为辅——微信转存常见「HEIC 内容 + .jpg 扩展名」
+      const heif = isHeicFamily(photo.fileName) || (await isHeifFile(abs))
+      if (!heif) throw err
       const raw = await decodeHeicRaw(abs)
       if (!raw) throw err
       out = await sharp(raw.data, { raw: { width: raw.width, height: raw.height, channels: 4 } })
@@ -171,7 +173,8 @@ const generateImageThumb: ItemGenerator = async (photo, albumRoot) => {
         .webp({ quality: 82 })
         .toFile(thumbPath(photo.id))
     }
-  } catch {
+  } catch (err) {
+    console.warn(`[thumb] 图片缩略图失败 ${photo.fileName}:`, err instanceof Error ? err.message : err)
     return null
   }
   return { id: photo.id, thumbUrl: thumbUrlOf(photo.id), width: out.width, height: out.height }

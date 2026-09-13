@@ -9,6 +9,7 @@ import TrashPage from './pages/TrashPage'
 import CommandPalette from './components/CommandPalette'
 import DropImportLayer from './components/DropImport'
 import { FeedbackHost } from './components/feedback'
+import { DeleteTripDialogHost } from './components/DeleteTripDialog'
 import ContextMenuHost from './components/ContextMenu'
 
 /** 应用外壳：左侧常驻侧栏 + 右侧内容区（方案 §5.1） */
@@ -39,6 +40,8 @@ function Shell() {
       <CommandPalette />
       {/* toast / 确认弹窗宿主 */}
       <FeedbackHost />
+      {/* 删除旅行确认弹窗宿主（带照片迁移选项） */}
+      <DeleteTripDialogHost />
       {/* 右键上下文菜单宿主（在反馈层之下、页面内容之上） */}
       <ContextMenuHost />
     </div>

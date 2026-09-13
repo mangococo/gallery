@@ -282,12 +282,16 @@ const HomePage: React.FC = () => {
     const trip = trips.find((t) => t.id === tripId)
     if (!trip) return
     setDeletingTripId(tripId)
-    const deleted = await confirmAndDeleteTrip({
-      id: trip.id,
-      title: trip.title,
-      photoCount: trip.photos?.length || 0,
-      status: trip.status,
-    })
+    const deleted = await confirmAndDeleteTrip(
+      {
+        id: trip.id,
+        title: trip.title,
+        photoCount: trip.photos?.length || 0,
+        status: trip.status,
+        photoIds: (trip.photos ?? []).map((p) => p.id),
+      },
+      { candidateTrips: trips },
+    )
     if (deleted) await refreshAll()
     setDeletingTripId(null)
   }
@@ -383,6 +387,12 @@ const HomePage: React.FC = () => {
       return next
     })
     setWallSelectionMode(true)
+  }
+
+  /** 框选提交：普通拖拽替换选择，⌘/Ctrl 拖拽并入现有选择（空集=清空手势） */
+  const handleWallMarqueeSelect = (ids: Set<string>, additive: boolean) => {
+    if (ids.size > 0) setWallSelectionMode(true)
+    setSelectedIds((prev) => (additive ? new Set([...prev, ...ids]) : ids))
   }
 
   const handleWallToggleFavorite = async (photoId: string, favorite: boolean) => {
@@ -763,6 +773,7 @@ const HomePage: React.FC = () => {
                 selectionMode={wallSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelect={handleWallToggleSelect}
+                onMarqueeSelect={handleWallMarqueeSelect}
                 onPhotoContextMenu={handleWallPhotoContextMenu}
                 density={wallDensity}
                 layout={wallLayout}

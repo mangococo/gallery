@@ -4,6 +4,7 @@ import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { normalizeTagNames } from '../shared/tags'
 import { needsTripsRebuild, rebuildTripsWithoutTableUnique } from './services/migrations'
+import { planTripDateRecalc, type TakenAtRange } from './services/trip-dates'
 import { collectMatches, compareHits, rankOf } from '../shared/search'
 import type { Album, PhotoDTO, PhotoType, SearchHit, SearchMatchIn, ThumbStatus, TripDTO } from '../shared/types'
 
@@ -580,6 +581,42 @@ export function getEarliestTakenAtOfTrip(tripId: string): number | null {
     .prepare('SELECT MIN(taken_at) AS min FROM photos WHERE trip_id = ? AND taken_at IS NOT NULL AND deleted_at IS NULL')
     .get(tripId) as { min: number | null }
   return r.min
+}
+
+// ---------- 旅行日期自动重算（「对齐即自动」策略，决策见 services/trip-dates.ts） ----------
+
+/** 旅行照片集合（未删除）的 takenAt 范围；无有效照片两端为 null */
+export function getTakenAtRangeOfTrip(tripId: string): TakenAtRange {
+  const r = db
+    .prepare(
+      'SELECT MIN(taken_at) AS min, MAX(taken_at) AS max FROM photos WHERE trip_id = ? AND taken_at IS NOT NULL AND deleted_at IS NULL',
+    )
+    .get(tripId) as { min: number | null; max: number | null }
+  return { min: r.min, max: r.max }
+}
+
+/** 变更前快照：照片集合变化前对受影响旅行抓一次推导范围（重复 id 自动去重） */
+export function snapTakenAtRanges(tripIds: Iterable<string>): Map<string, TakenAtRange> {
+  const snap = new Map<string, TakenAtRange>()
+  for (const id of new Set(tripIds)) snap.set(id, getTakenAtRangeOfTrip(id))
+  return snap
+}
+
+/**
+ * 变更后重算：对照快照与当前照片集合推导范围，按「对齐即自动」策略更新
+ * 旅行开始/结束日期（空字段填充、自动字段跟随、手动字段不动）。
+ */
+export function applyTripDateRecalc(snap: Map<string, TakenAtRange>): void {
+  for (const [tripId, before] of snap) {
+    const trip = getTripRow(tripId)
+    if (!trip) continue
+    const patch = planTripDateRecalc(
+      { startDate: trip.startDate, endDate: trip.endDate },
+      before,
+      getTakenAtRangeOfTrip(tripId),
+    )
+    if (patch) updateTripRow(tripId, patch)
+  }
 }
 
 /** 未填开始日期的旅行（回填后推断日期用） */

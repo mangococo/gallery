@@ -12,7 +12,7 @@
   {
     "name": "02-open-map",
     "wait": 800,
-    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); await new Promise(r => setTimeout(r, 1000)); const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '地图'); if (!b) throw new Error('地图 tab 缺失'); b.click(); await new Promise(r => setTimeout(r, 800)); const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 10) throw new Error('标记数不对: ' + markers.length); if (!document.body.textContent.includes('张定位照片')) throw new Error('定位照片计数角标缺失'); 'map-open-ok'"
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('京都')); if (!h) throw new Error('找不到京都'); h.click(); await new Promise(r => setTimeout(r, 1000)); const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '地图'); if (!b) throw new Error('地图 tab 缺失'); b.click(); await new Promise(r => setTimeout(r, 800)); const markers = document.querySelectorAll('.map-marker'); if (markers.length !== 11) throw new Error('标记数不对（应为 11）: ' + markers.length); if (!document.body.textContent.includes('张定位照片')) throw new Error('定位照片计数角标缺失'); 'map-open-ok'"
   },
   {
     "name": "03-tiles-real",

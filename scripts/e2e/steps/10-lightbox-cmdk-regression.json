@@ -22,12 +22,12 @@
   {
     "name": "04-lightbox-open",
     "wait": 800,
-    "script": "if (!document.body.textContent.includes('1 / 10')) throw new Error('信息栏计数不对'); if (!document.querySelector('img[src*=\"gallery-media://t/\"], img[src*=\"media\"]')) {} const strip = document.querySelectorAll('.fixed img').length; if (strip < 8) throw new Error('胶片条缺失'); 'lightbox-ok'"
+    "script": "if (!document.body.textContent.includes('1 / 11')) throw new Error('信息栏计数不对'); if (!document.querySelector('img[src*=\"gallery-media://t/\"], img[src*=\"media\"]')) {} const strip = document.querySelectorAll('.fixed img').length; if (strip < 8) throw new Error('胶片条缺失'); 'lightbox-ok'"
   },
   {
     "name": "05-arrow-right",
     "wait": 700,
-    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' })); await new Promise(r => setTimeout(r, 300)); if (!document.body.textContent.includes('2 / 10')) throw new Error('右键切换失败'); 'nav-ok'"
+    "script": "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' })); await new Promise(r => setTimeout(r, 300)); if (!document.body.textContent.includes('2 / 11')) throw new Error('右键切换失败'); 'nav-ok'"
   },
   {
     "name": "06-zoom-in-out",
@@ -37,7 +37,7 @@
   {
     "name": "07-filmstrip-jump",
     "wait": 900,
-    "script": "const thumbs = [...document.querySelectorAll('[data-testid=lightbox-filmstrip] button')]; if (thumbs.length < 4) throw new Error('胶片条按钮不足'); thumbs[3].click(); await new Promise(r => setTimeout(r, 300)); if (!document.body.textContent.includes('4 / 10')) throw new Error('胶片条跳转失败'); 'strip-ok'"
+    "script": "const thumbs = [...document.querySelectorAll('[data-testid=lightbox-filmstrip] button')]; if (thumbs.length < 4) throw new Error('胶片条按钮不足'); thumbs[3].click(); await new Promise(r => setTimeout(r, 300)); if (!document.body.textContent.includes('4 / 11')) throw new Error('胶片条跳转失败'); 'strip-ok'"
   },
   {
     "name": "08-close-lightbox",

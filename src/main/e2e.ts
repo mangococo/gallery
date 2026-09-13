@@ -18,6 +18,18 @@ interface E2EStep {
   click?: { x?: number; y?: number; selector?: string }
   /** 真实鼠标移动（触发 hover 态）；支持 selector */
   move?: { x?: number; y?: number; selector?: string }
+  /**
+   * 真实鼠标拖拽（按下 → 插值移动 → 释放，框选链路用）。
+   * from/to 均支持 selector（取元素中心）或绝对视口坐标。
+   */
+  drag?: {
+    from: { x?: number; y?: number; selector?: string }
+    to: { x?: number; y?: number; selector?: string }
+    /** 起终点插值步数（默认 10） */
+    steps?: number
+    /** 修饰键（'meta' = macOS ⌘ / 'control' 等），按住全程 */
+    modifiers?: string[]
+  }
 }
 
 async function resolvePoint(
@@ -47,6 +59,28 @@ async function sendClick(win: Electron.BrowserWindow, x: number, y: number): Pro
   await new Promise((r) => setTimeout(r, 60))
   win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
   await new Promise((r) => setTimeout(r, 60))
+}
+
+async function sendDrag(
+  win: Electron.BrowserWindow,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  steps = 10,
+  modifiers: string[] = [],
+): Promise<void> {
+  const mods = modifiers as Electron.InputEvent['modifiers']
+  win.webContents.sendInputEvent({ type: 'mouseMove', x: from.x, y: from.y, modifiers: mods })
+  await new Promise((r) => setTimeout(r, 80))
+  win.webContents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1, modifiers: mods })
+  await new Promise((r) => setTimeout(r, 80))
+  for (let i = 1; i <= steps; i++) {
+    const x = Math.round(from.x + ((to.x - from.x) * i) / steps)
+    const y = Math.round(from.y + ((to.y - from.y) * i) / steps)
+    win.webContents.sendInputEvent({ type: 'mouseMove', x, y, modifiers: mods })
+    await new Promise((r) => setTimeout(r, 24))
+  }
+  win.webContents.sendInputEvent({ type: 'mouseUp', x: to.x, y: to.y, button: 'left', clickCount: 1, modifiers: mods })
+  await new Promise((r) => setTimeout(r, 120))
 }
 
 /**
@@ -99,6 +133,11 @@ export async function runE2EIfEnabled(win: Electron.BrowserWindow): Promise<void
       if (step.click) {
         const p = await resolvePoint(win, step.click)
         await sendClick(win, p.x, p.y)
+      }
+      if (step.drag) {
+        const from = await resolvePoint(win, step.drag.from)
+        const to = await resolvePoint(win, step.drag.to)
+        await sendDrag(win, from, to, step.drag.steps, step.drag.modifiers)
       }
       let value: unknown
       if (step.script) {

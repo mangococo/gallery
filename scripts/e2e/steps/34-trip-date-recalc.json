@@ -1,0 +1,92 @@
+[
+  {
+    "name": "_meta",
+    "wait": 1,
+    "log": true,
+    "script": "return \"旅行日期自动重算（「对齐即自动」）：多选 2 张 05-01 照片迁入新建旅行 → 新旅行日期自动填充 2026.05.01—05.01、大理 startDate 自动顺延 05.02（endDate 05.04 为手动值锁定不动）→ 迁回一张 → 大理回摆 05.01。前置：gen-demo 演示数据（大理 6 图 EXIF 05-01×2/05-02×2/05-03×2，settings 日期 05-01~05-04）。\""
+  },
+  {
+    "name": "01-home",
+    "wait": 3200
+  },
+  {
+    "name": "02-open-dali",
+    "wait": 2200,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大理')); if (!h) throw new Error('找不到大理'); h.click(); 'ok'"
+  },
+  {
+    "name": "03-dali-baseline",
+    "wait": 1200,
+    "script": "const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (!m || Number(m[1]) !== 8) throw new Error('大理应 8 张（6 图+2 视频），实际 ' + (m && m[1])); const header = document.body.textContent; if (!header.includes('2026.05.01 — 2026.05.04')) throw new Error('大理初始日期应为 2026.05.01 — 2026.05.04: ' + header.slice(0, 200)); 'baseline-ok'"
+  },
+  {
+    "name": "04-multiselect-two-may1",
+    "wait": 600,
+    "script": "const cardOf = (cap) => { const el = [...document.querySelectorAll('main [role=\"button\"]')].find(x => x.textContent.startsWith(cap)); if (!el) throw new Error('找不到卡片 ' + cap); return el.closest('.group'); }; const a = cardOf('洱西的水面'); const b = cardOf('才村码头'); a.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const sel = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('选择多张')); if (!sel) throw new Error('选择多张菜单缺失'); sel.click(); await new Promise(r => setTimeout(r, 200)); b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); await new Promise(r => setTimeout(r, 300)); const bar = document.querySelector('[data-testid=selection-bar]'); if (!bar || !bar.textContent.includes('已选 2 张')) throw new Error('多选失败'); 'selected'"
+  },
+  {
+    "name": "05-selection-shot",
+    "wait": 300
+  },
+  {
+    "name": "06-bar-move-create-trip",
+    "wait": 500,
+    "script": "const bar = document.querySelector('[data-testid=selection-bar]'); const mv = [...bar.querySelectorAll('button')].find(b => b.textContent.trim() === '移动'); if (!mv) throw new Error('工具条移动按钮缺失'); mv.click(); await new Promise(r => setTimeout(r, 300)); const dlg = document.querySelector('[data-testid=move-dialog]'); if (!dlg) throw new Error('移动对话框未打开'); const create = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('新建旅行')); create.click(); await new Promise(r => setTimeout(r, 300)); 'creating'"
+  },
+  {
+    "name": "07-new-trip-form",
+    "wait": 400
+  },
+  {
+    "name": "08-submit-move",
+    "wait": 1800,
+    "script": "const dlg = document.querySelector('[data-testid=move-dialog]'); const inp = dlg.querySelector('input[placeholder^=\"给新旅行起个名字\"]'); if (!inp) throw new Error('标题输入缺失'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(inp, '日期重算之旅'); inp.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 200)); const go = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('创建并移入 2')); if (!go) throw new Error('创建并移入按钮缺失'); go.click(); await new Promise(r => setTimeout(r, 1500)); if (document.querySelector('[data-testid=move-dialog]')) throw new Error('对话框未关闭'); 'moved'"
+  },
+  {
+    "name": "09-dali-dates-recalc",
+    "wait": 1400,
+    "script": "const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (Number(m[1]) !== 6) throw new Error('迁出后大理应 6 张，实际 ' + m[1]); const text = document.body.textContent; if (!text.includes('2026.05.02 — 2026.05.04')) throw new Error('大理日期应为 2026.05.02 — 2026.05.04（startDate 顺延 + endDate 手动锁定），实际：' + (text.match(/2026\\.05\\.\\d+ — 2026\\.05\\.\\d+/) || ['无'])[0]); 'dali-recalc-ok'"
+  },
+  {
+    "name": "10-dali-header-shot",
+    "wait": 400
+  },
+  {
+    "name": "11-back-home",
+    "wait": 1000,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '返回'); b.click(); await new Promise(r => setTimeout(r, 900)); 'home'"
+  },
+  {
+    "name": "12-home-cards-dates",
+    "wait": 500,
+    "script": "const cardOf = (title) => { const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes(title)); if (!h) throw new Error('找不到 ' + title); return h.closest('.relative.flex'); }; const dali = cardOf('大理'); const fresh = cardOf('日期重算之旅'); const daliDate = dali.querySelector('.washi-label')?.textContent; const freshDate = fresh.querySelector('.washi-label')?.textContent; if (daliDate !== '2026.05.02') throw new Error('大理卡片日期应 2026.05.02，实际 ' + daliDate); if (freshDate !== '2026.05.01') throw new Error('新旅行卡片日期应 2026.05.01（自动填充），实际 ' + freshDate); return { daliDate, freshDate }"
+  },
+  {
+    "name": "13-home-cards-shot",
+    "wait": 400
+  },
+  {
+    "name": "14-open-fresh-trip",
+    "wait": 1400,
+    "script": "const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('日期重算之旅')); h.click(); await new Promise(r => setTimeout(r, 800)); const text = document.body.textContent; if (!text.includes('2026.05.01 — 2026.05.01')) throw new Error('新旅行日期应为 2026.05.01 — 2026.05.01'); if (!text.includes('2 张照片')) throw new Error('新旅行应 2 张'); 'fresh-trip-ok'"
+  },
+  {
+    "name": "15-move-one-back",
+    "wait": 500,
+    "script": "const cap = [...document.querySelectorAll('main [role=\"button\"]')].find(el => el.textContent.startsWith('洱西的水面')); if (!cap) throw new Error('找不到洱西的水面'); const card = cap.closest('.group'); card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 })); await new Promise(r => setTimeout(r, 250)); const item = [...document.querySelectorAll('.ctx-menu-panel [role=menuitem]')].find(el => el.textContent.includes('移动到旅行')); if (!item) throw new Error('移动菜单项缺失'); item.click(); await new Promise(r => setTimeout(r, 300)); const dlg = document.querySelector('[data-testid=move-dialog]'); if (!dlg) throw new Error('移动对话框未打开'); const row = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('大理') && !b.disabled); if (!row) throw new Error('大理目标行缺失'); row.click(); await new Promise(r => setTimeout(r, 200)); const go = [...dlg.querySelectorAll('button')].find(b => b.textContent.includes('移动 1')); go.click(); await new Promise(r => setTimeout(r, 1400)); 'moved-back'"
+  },
+  {
+    "name": "16-fresh-trip-after",
+    "wait": 800,
+    "script": "const m = document.querySelector('main').textContent.match(/(\\d+) 张照片/); if (Number(m[1]) !== 1) throw new Error('迁出后新旅行应 1 张，实际 ' + m[1]); const text = document.body.textContent; if (!text.includes('2026.05.01 — 2026.05.01')) throw new Error('新旅行日期应保持 2026.05.01 — 2026.05.01（剩才村码头同为 05-01）'); 'fresh-after-ok'"
+  },
+  {
+    "name": "17-back-home-final",
+    "wait": 1000,
+    "script": "const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '返回'); b.click(); await new Promise(r => setTimeout(r, 900)); const h = [...document.querySelectorAll('h3')].find(el => el.textContent.includes('大理')); const daliDate = h.closest('.relative.flex').querySelector('.washi-label')?.textContent; if (daliDate !== '2026.05.01') throw new Error('迁回后大理日期应回摆 2026.05.01，实际 ' + daliDate); 'dali-back-ok'"
+  },
+  {
+    "name": "18-final-shot",
+    "wait": 400
+  }
+]

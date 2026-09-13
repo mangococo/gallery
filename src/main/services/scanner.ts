@@ -5,7 +5,6 @@ import type { ScanProgress } from '../../shared/types'
 import {
   fillPhotoCaptionIfEmpty,
   getAlbumRow,
-  getEarliestTakenAtOfTrip,
   getPhotoIdByTripAndName,
   getTagsOfTrip,
   getTripIdByFolder,
@@ -18,12 +17,14 @@ import {
   getSetting,
   setSetting,
   setTagsOfTrip,
+  snapTakenAtRanges,
+  applyTripDateRecalc,
   deletePhotoRow,
   updatePhotoFileMeta,
   updateTripRow,
 } from '../db'
 import { resolvePhotoTakenAt, readExifGps } from './exif'
-import { buildCaptionMap, compareFileNames, msToLocalDate, planReconciliation } from './reconcile'
+import { buildCaptionMap, compareFileNames, planReconciliation } from './reconcile'
 import { mediaTypeOf } from '../../shared/media'
 
 // 旧引用兼容（ipc.ts 等处从 scanner 取 mediaTypeOf）
@@ -202,6 +203,13 @@ async function reconcileTrip(
   const dbFiles = listPhotoFilesOfTrip(tripId)
   const plan = planReconciliation(diskFiles, dbFiles)
 
+  // 照片集合有变化（新文件入库/记录清理/替换重读 EXIF）→ 变更前先抓日期推导快照，
+  // 收尾按「对齐即自动」重算旅行日期（决策见 trip-dates.ts）
+  const dateSnap =
+    plan.inserts.length > 0 || plan.removed.length > 0 || plan.replaced.length > 0
+      ? snapTakenAtRanges([tripId])
+      : null
+
   // 入库新文件：拍摄时间优先 EXIF DateTimeOriginal，回退 mtime；图片顺带读 GPS
   for (const disk of plan.inserts) {
     const type = mediaTypeOf(disk.name)!
@@ -259,14 +267,9 @@ async function reconcileTrip(
     if (coverId) updateTripRow(tripId, { coverPhotoId: coverId })
   }
 
-  // 旅行开始日期推断：用户未填时用照片最早拍摄日期补齐（绝不覆盖已填值）
-  if (diskFiles.size > 0) {
-    const trip = getTripRow(tripId)
-    if (trip && !trip.startDate) {
-      const earliest = getEarliestTakenAtOfTrip(tripId)
-      if (earliest !== null) updateTripRow(tripId, { startDate: msToLocalDate(earliest) })
-    }
-  }
+  // 旅行日期自动重算：空字段填充、自动字段跟随新照片范围（含 endDate），
+  // 手动值不动——取代此前「只在 startDate 为空时补最早拍摄日期」的窄逻辑
+  if (dateSnap) applyTripDateRecalc(dateSnap)
 }
 
 function makeProgressThrottler(push: ScanHooks['progress']): (p: ScanProgress) => void {
